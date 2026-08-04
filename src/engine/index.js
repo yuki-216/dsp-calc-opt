@@ -1,0 +1,261 @@
+/**
+ * 核心计算引擎主入口
+ * 职责：整合DAG、SCC、单位成本（系数表+矩阵求逆）、缩放模块
+ */
+
+import { buildItemGraph, tarjanSCC } from './dag.js';
+import { expandInSCCOrder } from './unit-cost.js';
+import { aggregateResourceUsage } from './scale.js';
+
+/**
+ * 核心计算引擎
+ */
+export class CoreEngine {
+  static VERSION = 'current';
+
+  constructor(gameData, schemeData, settings = {}, sprayCosts = null) {
+    this.gameData = gameData;
+    this.schemeData = schemeData;
+    this.settings = settings;
+    this.sprayCosts = sprayCosts;
+    this.recipeMap = new Map();
+    this.graph = null;
+    this.edges = [];
+    this.sccs = [];
+    this.proliferatorEdgeKeys = new Set();
+  }
+
+  /**
+   * 获取配方数据
+   * @param {string|number} recipeId - 配方ID
+   * @returns {Object} 配方数据
+   */
+  getRecipeById(recipeId) {
+    return this.recipeMap.get(String(recipeId));
+  }
+
+  /**
+   * 初始化引擎
+   * @param {Array} needs - 需求列表
+   * @param {Object} recipes - 配方数据
+   */
+  initialize(needs, recipes) {
+    // 构建配方映射（确保键是字符串类型）
+    for (const [id, recipe] of Object.entries(recipes)) {
+      this.recipeMap.set(String(id), recipe);
+    }
+
+    // 1. 构建物品图（BFS从需求出发，使用用户选择的主配方）
+    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts);
+    this.graph = result.graph;
+    this.edges = result.edges;
+    this.proliferatorEdgeKeys = result.proliferatorEdgeKeys || new Set();
+
+    // 2. SCC算法识别所有SCC（包括单节点和循环组）
+    // Tarjan输出顺序：拓扑逆序（第一个SCC是最顶层需求，最后一个SCC是最底层资源）
+    this.sccs = tarjanSCC(this.graph, this.edges);
+  }
+
+  /**
+   * 主计算函数（系数表 + 矩阵求逆方案）
+   * @param {Array} needs - 需求列表
+   * @param {Object} recipes - 配方数据
+   * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
+   */
+  calculate(needs, recipes) {
+    // 性能计时（已禁用）
+    // const timings = {
+    //   initialize: 0,
+    //   createSolution: 0,
+    //   buildCosts: 0,
+    //   expandSCC: 0,
+    //   matrixInverse: 0,
+    //   substitute: 0,
+    //   extractSolution: 0,
+    //   extractResults: 0
+    // };
+
+    // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
+    // let t0 = performance.now();
+    this.initialize(needs, recipes);
+    // timings.initialize = performance.now() - t0;
+
+    // 2. 创建虚拟"解"物品和虚拟配方
+    // t0 = performance.now();
+    const SOLUTION_ID = '__solution__';
+    const solutionNode = {
+      id: SOLUTION_ID,
+      name: '解',
+      recipeId: null,
+      directCost: {},
+      dependents: [],
+      inputs: [],
+      outputs: []
+    };
+
+    // 虚拟配方：需求表中的物品作为输入，产出1个"解"
+    // 注意：这里用物品数量（没有$前缀），不是执行次数
+    for (const need of needs) {
+      solutionNode.directCost[need.id] = need.count;
+
+      // 补上依赖边：需求物品的dependents包含解
+      const needNode = this.graph.get(need.id);
+      if (needNode && !needNode.dependents.includes(SOLUTION_ID)) {
+        needNode.dependents.push(SOLUTION_ID);
+      }
+    }
+
+    // 将"解"添加到图中
+    this.graph.set(SOLUTION_ID, solutionNode);
+    // timings.createSolution = performance.now() - t0;
+
+    // 3. 计算所有物品的直接成本（系数表）
+    // t0 = performance.now();
+    const costs = new Map();
+    const byproductMap = new Map(); // 独立的副产物映射
+    for (const [itemId, node] of this.graph) {
+      // 直接使用节点已有的 directCost（BFS阶段已计算）
+      costs.set(itemId, node.directCost || { [`$${itemId}`]: 1 });
+      byproductMap.set(itemId, new Set(node.byproducts || []));
+    }
+    // 添加 solution 的成本
+    costs.set(SOLUTION_ID, solutionNode.directCost);
+    const directCosts = {};
+    for (const [k, v] of costs) directCosts[k] = { ...v };
+    // console.log('[calculate] 直接成本:', directCosts);
+    // timings.buildCosts = performance.now() - t0;
+
+    // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
+    // t0 = performance.now();
+    const sccTimings = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
+    // timings.expandSCC = performance.now() - t0;
+    // timings.matrixInverse = sccTimings.matrixInverse;
+    // timings.substitute = sccTimings.substitute;
+
+    // 5. 获取"解"的成本并缩放
+    // t0 = performance.now();
+    let solutionCost = costs.get(SOLUTION_ID);
+    // console.log('[calculate] 解的成本:', solutionCost);
+
+    const recipeExecutions = {};
+    const surplusByproducts = {};
+    const resourceUsage = {};
+    let energyCost = 0; // 生产设备耗电
+    let minerEnergyCost = 0; // 采集设备耗电
+
+    if (solutionCost) {
+      // "解"的成本是生产1个"解"需要的资源
+      // 由于"解"的虚拟配方是 需求物品*数量 -> 解*1
+      // 所以解的成本已经是按需求量缩放后的结果
+      for (const [key, coeff] of Object.entries(solutionCost)) {
+        if (key.startsWith('$')) {
+          const execItem = key.slice(1);
+          // 特殊处理耗电键
+          if (execItem === '__factory_power__') {
+            energyCost = coeff;
+          } else if (execItem === '__miner_power__') {
+            minerEnergyCost = coeff;
+          } else {
+            resourceUsage[execItem] = (resourceUsage[execItem] || 0) + coeff;
+            recipeExecutions[execItem] = (recipeExecutions[execItem] || 0) + coeff;
+          }
+        } else if (coeff < 0) {
+          resourceUsage[key] = (resourceUsage[key] || 0) + coeff;
+          surplusByproducts[key] = (surplusByproducts[key] || 0) + coeff;
+        } else {
+          resourceUsage[key] = (resourceUsage[key] || 0) + coeff;
+        }
+      }
+    }
+
+    const totalEnergyCost = energyCost + minerEnergyCost;
+    // console.log('[新引擎] 生产设备耗电:', energyCost);
+    // console.log('[新引擎] 采集设备耗电:', minerEnergyCost);
+    // console.log('[新引擎] 总耗电:', totalEnergyCost);
+
+    // 6. 计算设备数量
+    const buildingDetails = {};
+    const buildingList = {};
+
+    for (const [itemId, execCount] of Object.entries(recipeExecutions)) {
+      if (execCount <= 0) continue;
+
+      // 从图中获取节点
+      const node = this.graph.get(itemId);
+      if (!node || !node.buildingPower) {
+        continue;
+      }
+
+      const { factoryName, singleExecBuildNumber } = node.buildingPower;
+
+      // 根据执行次数计算实际设备数
+      const buildNumber = execCount * singleExecBuildNumber;
+
+      // 保存详情
+      buildingDetails[itemId] = {
+        factoryName,
+        设备数量: buildNumber,
+        执行次数: execCount,
+        单次执行设备数: singleExecBuildNumber
+      };
+
+      // 汇总建筑数量
+      const ceilBuildNumber = Math.ceil(buildNumber);
+      if (ceilBuildNumber > 0) {
+        buildingList[factoryName] = (buildingList[factoryName] || 0) + ceilBuildNumber;
+      }
+    }
+
+    // console.log('[新引擎-设备计算] buildingDetails:', JSON.parse(JSON.stringify(buildingDetails)));
+    // console.log('[新引擎-设备计算] buildingList:', buildingList);
+    // timings.extractSolution = performance.now() - t0;
+
+    // t0 = performance.now();
+    // 提取自消耗系数和副产物来源
+    const selfConsumption = {};
+    const byproductSources = {};  // {物品: {来源物品: 每单位净产出的副产物量}}
+    for (const [itemId, node] of this.graph) {
+      if (node.selfConsumption && node.selfConsumption > 0) {
+        selfConsumption[itemId] = node.selfConsumption;
+      }
+      // 从 directCost 提取副产物（负系数项）
+      if (node.directCost) {
+        for (const [key, coeff] of Object.entries(node.directCost)) {
+          if (key.startsWith('$') || coeff >= 0) continue;
+          if (!byproductSources[key]) byproductSources[key] = {};
+          byproductSources[key][itemId] = (byproductSources[key][itemId] || 0) + Math.abs(coeff);
+        }
+      }
+    }
+
+    const aggregated = aggregateResourceUsage(new Map([[SOLUTION_ID, { resourceUsage }]]));
+    aggregated.recipeExecutions = recipeExecutions;
+    aggregated.surplusByproducts = surplusByproducts;
+    aggregated.buildingDetails = buildingDetails;
+    aggregated.buildingList = buildingList;
+    aggregated.selfConsumption = selfConsumption;
+    aggregated.byproductSources = byproductSources;
+    aggregated.energyCost = energyCost;
+    aggregated.minerEnergyCost = minerEnergyCost;
+    aggregated.totalEnergyCost = totalEnergyCost;
+    // aggregated.timings = timings;
+    // timings.extractResults = performance.now() - t0;
+
+    // 输出内部计时（已禁用）
+    // console.log('[新引擎内部计时]', {
+    //   '1.初始化(图构建+SCC)': timings.initialize.toFixed(2) + ' ms',
+    //   '2.创建虚拟解': timings.createSolution.toFixed(2) + ' ms',
+    //   '3.直接成本计算': timings.buildCosts.toFixed(2) + ' ms',
+    //   '4.SCC展开': timings.expandSCC.toFixed(2) + ' ms',
+    //   '  ├─矩阵求逆': (timings.matrixInverse || 0).toFixed(2) + ' ms',
+    //   '  └─代入展开': (timings.substitute || 0).toFixed(2) + ' ms',
+    //   '5.提取解决方案': timings.extractSolution.toFixed(2) + ' ms',
+    //   '6.结果聚合': timings.extractResults.toFixed(2) + ' ms',
+    //   '总计': (timings.initialize + timings.createSolution + timings.buildCosts + timings.expandSCC + timings.extractSolution + timings.extractResults).toFixed(2) + ' ms'
+    // });
+
+    return aggregated;
+  }
+}
+
+export default CoreEngine;
