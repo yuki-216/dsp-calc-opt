@@ -98,7 +98,7 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
   if (onLog) {
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
     onLog(`需求数量: ${needs.length}`);
-    onLog(`设置: proliferate_itself=${settings.proliferate_itself}, acc_rate=${settings.acc_rate}, inc_rate=${settings.inc_rate}`);
+    onLog(`设置: proliferate_itself=${settings.proliferate_itself}`);
   }
 
   const initialResult = calculatePower(gameData, schemeData, settings, needs);

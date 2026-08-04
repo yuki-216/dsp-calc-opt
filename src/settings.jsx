@@ -13,8 +13,6 @@ export function Settings() {
     let percent_val = {
         mining_efficiency_large: Math.round(settings.mining_efficiency_large * 100),
         mining_speed_multiple: Math.round(settings.mining_speed_multiple * 100),
-        acc_rate: Math.round(settings.acc_rate * 100),
-        inc_rate: Math.round(settings.inc_rate * 100),
     }
 
     function change_int_setting(e, name, minVal) {
@@ -176,24 +174,6 @@ export function Settings() {
                     <button onClick={e => change_bool_setting(e, "proliferate_itself")}>
                         {settings.proliferate_itself ? "改为禁用" : "改为启用"}</button>
                 </td>
-            </tr>
-            <tr>
-                <td>增产剂加速效率修正</td>
-                <td className="ps-2">
-                    <input type="number" value={percent_val["acc_rate"]} step={5}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_percent_setting(e, "acc_rate", 1)}/>
-                </td>
-                <td className="ps-2">{"%"}</td>
-            </tr>
-            <tr>
-                <td>增产剂增产效率修正</td>
-                <td className="ps-2">
-                    <input type="number" value={percent_val["inc_rate"]} step={5}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_percent_setting(e, "inc_rate", 1)}/>
-                </td>
-                <td className="ps-2">{"%"}</td>
             </tr>
             </tbody>
         </table>

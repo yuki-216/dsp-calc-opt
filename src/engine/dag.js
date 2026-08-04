@@ -213,7 +213,7 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
               if (proEffect) {
                 if (proMode === 1) {
                   // 加速模式：净产出 * 加速效果
-                  const accEffect = (proEffect["加速效果"] || 1) * (settings?.acc_rate || 1);
+                  const accEffect = proEffect["加速效果"] || 1;
                   const oldOutput = netOutput;
                   netOutput *= accEffect;
                   // console.log(`[设备计算] ${itemId}: 加速模式, 加速效果=${accEffect.toFixed(4)}, 净产出=${oldOutput.toFixed(4)}*${accEffect.toFixed(4)}=${netOutput.toFixed(4)}`);

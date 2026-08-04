@@ -34,8 +34,6 @@ const DEFAULT_SETTINGS = {
     fixed_num: 2,
     stack_research_lab: 15,
     proliferate_itself: true,
-    acc_rate: 1.0,
-    inc_rate: 1.0,
 
     mineralize_list: []
 };
