@@ -96,7 +96,7 @@ function AppWithContexts({needs_list, set_needs_list}) {
             <NeedsList needs_list={needs_list} set_needs_list={set_needs_list}
                        set_show_ore_popup={set_show_ore_popup}
                        set_show_building_popup={set_show_building_popup}/>
-            <BatchSetting/>
+            <BatchSetting needs_list={needs_list}/>
         </div>
         {/* 结果区域：填充剩余高度，独立滚动 */}
         <div className="app-result-area">

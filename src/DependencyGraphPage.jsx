@@ -143,7 +143,8 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
 
     // BFS 从出度=0（最终产物，不被任何东西依赖）开始
     const dagDepth = new Map();
-    let frontier = dag_nodes.filter(n => dagNodeOutDegree.get(n.id) === 0).map(n => n.id);
+    const initialFrontier = dag_nodes.filter(n => dagNodeOutDegree.get(n.id) === 0).map(n => n.id);
+    let frontier = [...initialFrontier];
 
     let depth = 0;
     while (frontier.length > 0) {
@@ -163,6 +164,19 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
     const maxDagDepth = depth - 1;
     const sccVisualLayer = new Map();
     dagDepth.forEach((d, id) => sccVisualLayer.set(id, maxDagDepth - d));
+
+    // 调试日志
+    const isolatedNodes = dag_nodes.filter(n => {
+        const hasEdge = dag_edges.some(e => e.from_id === n.id || e.to_id === n.id);
+        return !hasEdge;
+    });
+    console.log('[layout_graph] scc_groups count:', scc_groups.length);
+    console.log('[layout_graph] dag_nodes count:', dag_nodes.length);
+    console.log('[layout_graph] dag_edges count:', dag_edges.length);
+    console.log('[layout_graph] isolated nodes (no edges):', isolatedNodes.length);
+    console.log('[layout_graph] dagDepth count:', dagDepth.size);
+    console.log('[layout_graph] initial frontier (outDegree=0) count:', initialFrontier.length);
+    console.log('[layout_graph] maxDagDepth:', maxDagDepth);
 
     // 物品层级映射，多节点 SCC +2 偏移
     const item_layer = new Map();

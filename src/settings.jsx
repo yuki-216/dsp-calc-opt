@@ -1,7 +1,9 @@
-import {useContext} from 'react';
+import {useContext, useState, useCallback, useRef, useEffect} from 'react';
 import {CompactModeContext, DefaultSettingsContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
 import {pro_mode_class} from './result.jsx';
+import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
+import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -241,12 +243,75 @@ function FactorySelect({factory, list, icon_size}) {
                                         onChange={set_factory} no_gap={true} icon_size={icon_size}/>;
 }
 
-export function BatchSetting() {
+export function BatchSetting({needs_list}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const compact_mode = useContext(CompactModeContext);
     let game_data = global_state.game_data;
     let scheme_data = global_state.scheme_data;
+
+    // 优化器状态
+    const [isOptimizing, setIsOptimizing] = useState(false);
+    const [optimProgress, setOptimProgress] = useState({ current: 0, total: 0, message: '' });
+    const [optimResult, setOptimResult] = useState(null);
+    const [optimLogs, setOptimLogs] = useState([]);
+    const [showLogs, setShowLogs] = useState(true);
+    const logContainerRef = useRef(null);
+
+    // 自动滚动到底部
+    useEffect(() => {
+        if (logContainerRef.current && showLogs) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [optimLogs, showLogs]);
+
+    // 运行优化
+    const runOptimization = useCallback(() => {
+        const needsArray = Object.entries(needs_list || {}).map(([id, count]) => ({ id, name: id, count }));
+        if (needsArray.length === 0) {
+            alert('请先添加需求物品');
+            return;
+        }
+
+        setIsOptimizing(true);
+        setOptimResult(null);
+        setOptimLogs([]);
+        setOptimProgress({ current: 0, total: 0, message: '正在初始化...' });
+
+        // 使用 setTimeout 让 UI 有时间更新
+        setTimeout(() => {
+            try {
+                const logs = [];
+                const result = optimizeProliferatorStrategy(
+                    game_data,
+                    scheme_data,
+                    global_state.settings,
+                    needsArray,
+                    (current, total, message) => {
+                        setOptimProgress({ current, total, message });
+                    },
+                    (message) => {
+                        logs.push(message);
+                        setOptimLogs([...logs]);
+                    }
+                );
+
+                setOptimResult(result);
+                setOptimLogs([...logs]);
+
+                // 应用优化结果
+                if (result.changes.length > 0) {
+                    set_scheme_data(result.optimalScheme);
+                }
+            } catch (e) {
+                console.error('优化失败:', e);
+                setOptimLogs(prev => [...prev, `\n优化失败: ${e.message}`]);
+                alert('优化失败: ' + e.message);
+            } finally {
+                setIsOptimizing(false);
+            }
+        }, 50);
+    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data]);
 
     // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
     let pro_num = 0;
@@ -309,20 +374,69 @@ export function BatchSetting() {
         {value: 1, label: "加速", className: pro_mode_class[1]},
     ];
 
-    return <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
-        <small className="fw-bold">批量预设</small>
-        <div className="d-flex pro-mode-toggle">
-            {promode_options.map(({value, label, className}) => (
-                <div key={value}
-                     className={`pro-mode-option ${pro_mode == value ? 'pro-mode-active' : ''} ${className || ''}`}
-                     onClick={() => change_pro_mode(value)}>
-                    {label}
-                </div>
-            ))}
+    return <>
+        <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
+            <small className="fw-bold">批量预设</small>
+            <div className="d-flex pro-mode-toggle">
+                {promode_options.map(({value, label, className}) => (
+                    <div key={value}
+                         className={`pro-mode-option ${pro_mode == value ? 'pro-mode-active' : ''} ${className || ''}`}
+                         onClick={() => change_pro_mode(value)}>
+                        {label}
+                    </div>
+                ))}
+            </div>
+            <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
+                                         onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
+                                         icon_size={mob_icon}/>
+            {factory_doms}
+            <button
+                className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                onClick={runOptimization}
+                disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
+                title={isOptimizing ? '优化进行中...' : '按 SCC 正序自动优化增产策略（最小化总耗电）'}
+            >
+                <FaMagic/>
+                <span className="compact-hide-text">
+                    {isOptimizing ? `优化中 ${optimProgress.current}/${optimProgress.total}` : '自动优化'}
+                </span>
+            </button>
         </div>
-        <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
-                                     onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
-                                     icon_size={mob_icon}/>
-        {factory_doms}
-    </div>;
+        {optimLogs.length > 0 && (
+            <div className="mt-2 border rounded p-2" style={{maxWidth: '800px'}}>
+                <div className="d-flex align-items-center justify-content-between mb-1">
+                    <small className="fw-bold">优化日志</small>
+                    <button
+                        className="btn btn-sm btn-link p-0 text-decoration-none"
+                        onClick={() => setShowLogs(!showLogs)}
+                    >
+                        {showLogs ? <><FaChevronUp/> 收起</> : <><FaChevronDown/> 展开</>}
+                    </button>
+                </div>
+                {showLogs && (
+                    <pre
+                        ref={logContainerRef}
+                        className="mb-0 small"
+                        style={{
+                            maxHeight: '300px',
+                            overflowY: 'auto',
+                            fontFamily: 'monospace',
+                            fontSize: '12px',
+                            lineHeight: '1.4',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all'
+                        }}
+                    >
+                        {optimLogs.join('\n')}
+                    </pre>
+                )}
+            </div>
+        )}
+    </>;
+}
+
+function formatPower(value) {
+    if (value >= 1e6) return (value / 1e6).toFixed(2) + ' GW';
+    if (value >= 1e3) return (value / 1e3).toFixed(2) + ' MW';
+    return value.toFixed(2) + ' kW';
 }
