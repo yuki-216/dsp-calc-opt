@@ -134,7 +134,9 @@ export function ContextProvider({children}) {
         return new CoreEngine(game_info.game_data, scheme_data, settings, global_state.sprayCosts);
     }, [game_info, scheme_data, settings]);  // 移除 global_state.sprayCosts 依赖，避免数组引用变化导致重复创建
 
-    // 主引擎计算函数（不直接更新状态，避免渲染期间调用 setState）
+    const [engineGraphData, setEngineGraphData] = useState(null);
+
+    // 主引擎计算函数
     const engineCalculate = useMemo(() => {
         return function(needs_dict) {
             // needs_dict 格式: {物品名: 数量}，转换为数组格式
@@ -144,28 +146,18 @@ export function ContextProvider({children}) {
                 count
             }));
             const result = engine.calculate(needsArray, game_info.game_data.recipe_data);
-            // 将图数据暂存到 ref，后续在 useEffect 中同步到 state
+            // 计算完成后直接更新图数据状态
             if (engine.graph && engine.edges) {
-                engineGraphDataRef.current = {
+                setEngineGraphData({
                     edges: engine.edges,
                     sccs: engine.sccs || [],
                     graph: engine.graph,
                     proliferatorEdgeKeys: engine.proliferatorEdgeKeys || new Set()
-                };
+                });
             }
             return result;
         };
     }, [engine, game_info]);
-
-    // 在渲染完成后同步图数据到 state
-    useEffect(() => {
-        if (engineGraphDataRef.current) {
-            setEngineGraphData(engineGraphDataRef.current);
-        }
-    }, [engineCalculate]); // 只在 engineCalculate 变化时执行
-
-    const [engineGraphData, setEngineGraphData] = useState(null);
-    const engineGraphDataRef = useRef(null);
 
     // 临时占位：提供空的 validation context 以避免其他组件报错
     const validationContext = {

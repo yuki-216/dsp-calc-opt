@@ -2,44 +2,8 @@ import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'rea
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink} from 'react-icons/fa';
 import {GameInfoContext, GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
-import {tarjanSCC} from './engine/graph-utils.js';
+import {tarjanSCC, compressToDag, dagTopologicalSort} from './engine/graph-utils.js';
 import './DependencyGraph.css';
-
-/**
- * SCC → DAG 压缩
- * @param {Array<Set>} sccGroups - SCC 分组
- * @param {Array} edges - 边列表 [{from, to}]
- * @returns {Object} {dagNodes, dagEdges, nodeToScc}
- */
-function compressToDag(sccGroups, edges) {
-    const nodeToScc = new Map();
-    sccGroups.forEach((scc, idx) => {
-        scc.forEach(item => nodeToScc.set(item, idx));
-    });
-
-    const dagNodes = sccGroups.map((scc, idx) => ({
-        id: idx,
-        members: [...scc],
-        is_scc: scc.size > 1
-    }));
-
-    const dagEdgeSet = new Set();
-    const dagEdges = [];
-
-    edges.forEach(({from, to}) => {
-        const fromScc = nodeToScc.get(from);
-        const toScc = nodeToScc.get(to);
-        if (fromScc === undefined || toScc === undefined) return;
-        if (fromScc === toScc) return;
-        const edgeKey = `${fromScc}->${toScc}`;
-        if (!dagEdgeSet.has(edgeKey)) {
-            dagEdgeSet.add(edgeKey);
-            dagEdges.push({from_id: fromScc, to_id: toScc});
-        }
-    });
-
-    return {dagNodes, dagEdges, nodeToScc};
-}
 
 const STORAGE_KEY_DELETED = 'dependency_graph_deleted_items';
 const STORAGE_KEY_POSITIONS = 'dependency_graph_custom_positions';
@@ -128,69 +92,12 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
     const scc_groups = precomputed_sccs || tarjanSCC(items, edges);
     const {dagNodes: dag_nodes, dagEdges: dag_edges, nodeToScc: node_to_scc} = compressToDag(scc_groups, edges);
 
-    // 4. 反向拓扑排序（出度=0 先出队，自然实现下移优化）
-    //    边 {from_id: 产物SCC, to_id: 原料SCC}，to_id 被依赖次数 = 该节点的"出度"
-    const dagNodeOutDegree = new Map();
-    dag_nodes.forEach(n => dagNodeOutDegree.set(n.id, 0));
-    dag_edges.forEach(({to_id}) => dagNodeOutDegree.set(to_id, dagNodeOutDegree.get(to_id) + 1));
+    // 4. Kahn 拓扑排序（入度=0 先出队，原料在 layer 0，产物在高层）
+    //    dagTopologicalSort 返回 scc_id → 层级映射（layer 0=原料，layer max=产物）
+    const sccVisualLayer = dagTopologicalSort(dag_nodes, dag_edges);
 
-    // 反向邻接表：原料SCC → 依赖它的产物SCC
-    const dagReverseAdj = new Map();
-    dag_nodes.forEach(n => dagReverseAdj.set(n.id, []));
-    dag_edges.forEach(({from_id, to_id}) => {
-        dagReverseAdj.get(to_id).push(from_id);
-    });
-
-    // BFS 从出度=0（最终产物，不被任何东西依赖）开始
-    const dagDepth = new Map();
-    const initialFrontier = dag_nodes.filter(n => dagNodeOutDegree.get(n.id) === 0).map(n => n.id);
-    let frontier = [...initialFrontier];
-
-    let depth = 0;
-    while (frontier.length > 0) {
-        const nextFrontier = [];
-        frontier.forEach(id => {
-            if (dagDepth.has(id)) return;
-            dagDepth.set(id, depth);
-            dagReverseAdj.get(id).forEach(depId => {
-                if (!dagDepth.has(depId)) nextFrontier.push(depId);
-            });
-        });
-        depth++;
-        frontier = nextFrontier;
-    }
-
-    // 反转深度为视觉层级：depth 0（最终产物）→ 最大层（下方），depth max（原矿）→ 层 0（上方）
-    const maxDagDepth = depth - 1;
-    const sccVisualLayer = new Map();
-    dagDepth.forEach((d, id) => sccVisualLayer.set(id, maxDagDepth - d));
-
-    // 调试日志
-    const isolatedNodes = dag_nodes.filter(n => {
-        const hasEdge = dag_edges.some(e => e.from_id === n.id || e.to_id === n.id);
-        return !hasEdge;
-    });
-    console.log('[layout_graph] scc_groups count:', scc_groups.length);
-    console.log('[layout_graph] dag_nodes count:', dag_nodes.length);
-    console.log('[layout_graph] dag_edges count:', dag_edges.length);
-    console.log('[layout_graph] isolated nodes (no edges):', isolatedNodes.length);
-    console.log('[layout_graph] dagDepth count:', dagDepth.size);
-    console.log('[layout_graph] initial frontier (outDegree=0) count:', initialFrontier.length);
-    console.log('[layout_graph] maxDagDepth:', maxDagDepth);
-
-    // 物品层级映射，多节点 SCC +2 偏移
-    const item_layer = new Map();
-    const cycle_items = [];
-    scc_groups.forEach((scc, scc_idx) => {
-        const base_layer = sccVisualLayer.get(scc_idx) ?? 0;
-        const layer = scc.size > 1 ? base_layer + 2 : base_layer;
-        scc.forEach(item => {
-            item_layer.set(item, layer);
-            if (scc.size > 1) cycle_items.push(item);
-        });
-    });
-    const cycle_set = new Set(cycle_items);
-
+    // 构建邻接关系（自环边跳过）
+    // 边方向 {from: 产物, to: 原料}，children=下游产物，parents=上游原料
     const children = new Map();
     const parents = new Map();
     const in_degree = new Map();
@@ -211,7 +118,36 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         out_degree.set(to, out_degree.get(to) + 1);
     });
 
-    // 5. 构建层级映射
+    // 5. 物品初始层级映射，多节点 SCC +2 偏移
+    const item_layer = new Map();
+    const cycle_items = [];
+    scc_groups.forEach((scc, scc_idx) => {
+        const base_layer = sccVisualLayer.get(scc_idx) ?? 0;
+        const layer = scc.size > 1 ? base_layer + 2 : base_layer;
+        scc.forEach(item => {
+            item_layer.set(item, layer);
+            if (scc.size > 1) cycle_items.push(item);
+        });
+    });
+    const cycle_set = new Set(cycle_items);
+
+    // 6. 下移优化：按 SCC 逆拓扑序（产物在前），尝试增大层级直到遇到产物同层
+    //    循环物品不参与下移（保持 +2 偏移）
+    //    目标：拉大原料与产物的间距，减少引线交叉
+    for (const scc of scc_groups) {
+        for (const item of scc) {
+            if (cycle_set.has(item)) continue;
+            const child_items = children.get(item) || [];
+            if (child_items.length === 0) continue;
+            const min_child_layer = Math.min(...child_items.map(c => item_layer.get(c) ?? 0));
+            const max_allowed = min_child_layer - 1;
+            if (max_allowed > (item_layer.get(item) ?? 0)) {
+                item_layer.set(item, max_allowed);
+            }
+        }
+    }
+
+    // 7. 构建层级映射
     const layers_map = new Map();
     item_layer.forEach((layer, item) => {
         if (!layers_map.has(layer)) layers_map.set(layer, []);
@@ -332,7 +268,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             // 首层节点按矿石顺序排列
             let sorted_layer_items = layer_items;
             if (layer_order === 0) {
-                const default_order = ['铜矿', '铁矿', '石矿', '硅矿', '原油', '煤矿', '钛矿'];
+                const default_order = ['铁矿', '铜矿', '石矿', '硅矿', '原油', '煤矿', '钛矿'];
                 sorted_layer_items = [...layer_items].sort((a, b) => {
                     const index_a = default_order.indexOf(a);
                     const index_b = default_order.indexOf(b);
@@ -1179,9 +1115,9 @@ export function DependencyGraphPage({onBack, needs_list}) {
     }, [game_data, item_data, scheme_data]);
 
     const filtered_graph = useMemo(() => {
-        // 仅需求模式
+        // 仅需求模式（复用核心计算数据）
         if (show_needs_only && needs_list && Object.keys(needs_list).length > 0 && engineGraphData) {
-            // 直接复用核心计算的边和SCC（边和SCC来自同一个BFS过程）
+            // 直接复用核心计算的边（过滤已删除物品）
             const filtered_edges = engineGraphData.edges.filter(e =>
                 !deleted_items.has(e.from) && !deleted_items.has(e.to)
             );
@@ -1191,12 +1127,23 @@ export function DependencyGraphPage({onBack, needs_list}) {
                 filtered_items.add(e.to);
             });
 
-            // 从核心计算的SCC中过滤已删除物品
+            // 从核心计算的SCC中过滤已删除物品，且只保留存在于 filtered_items 中的物品
             const filtered_sccs = engineGraphData.sccs
-                .map(scc => new Set([...scc].filter(item => !deleted_items.has(item))))
+                .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
                 .filter(scc => scc.size > 0);
 
-            return {edges: filtered_edges, items: filtered_items, proliferator_edges: new Set(), sccs: filtered_sccs};
+            // 复用核心计算的增产剂边标记（过滤已删除边）
+            const filtered_proliferator_edges = new Set();
+            if (engineGraphData.proliferatorEdgeKeys) {
+                engineGraphData.proliferatorEdgeKeys.forEach(key => {
+                    const [from, to] = key.split('->');
+                    if (!deleted_items.has(from) && !deleted_items.has(to)) {
+                        filtered_proliferator_edges.add(key);
+                    }
+                });
+            }
+
+            return {edges: filtered_edges, items: filtered_items, proliferator_edges: filtered_proliferator_edges, sccs: filtered_sccs};
         }
 
         // 全部配方模式：从全量数据中过滤已删除物品

@@ -90,6 +90,9 @@ export function ItemSelect({item, set_item, text, btn_class, icon}) {
 
     useEffect(() => {
         ref_modal.current = new Modal(ref.current);
+        ref.current.addEventListener('hidden.bs.modal', () => {
+            document.activeElement?.blur();
+        });
     }, [ref]);
 
     btn_class = btn_class || "btn-outline-primary";

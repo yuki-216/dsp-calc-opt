@@ -204,6 +204,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         if (ore_modal_ref.current) {
             ore_modal_instance.current = new Modal(ore_modal_ref.current);
             ore_modal_ref.current.addEventListener('hidden.bs.modal', () => {
+                document.activeElement?.blur();
                 set_show_ore_popup(false);
             });
         }
@@ -213,6 +214,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         if (building_modal_ref.current) {
             building_modal_instance.current = new Modal(building_modal_ref.current);
             building_modal_ref.current.addEventListener('hidden.bs.modal', () => {
+                document.activeElement?.blur();
                 set_show_building_popup(false);
             });
         }
