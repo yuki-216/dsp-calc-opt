@@ -246,14 +246,7 @@ DependencyGraphPage.jsx
 ├── build_dependency_graph() - 构建全量依赖关系数据（全部配方模式）
 │   ├── 遍历配方的所有产物（含副产物）连接到原料，recipe_handled 去重
 │   └── 增产剂消耗：若配方配置了增产剂，将增产剂作为额外原料加入
-├── build_needs_graph() - BFS 驱动构建依赖图（仅需求模式）
-│   ├── 从需求物品出发，BFS 逐层追溯原料配方
-│   ├── 副产物加入 reachable 但不入队（不追溯其配方）
-│   ├── 边和物品在遍历过程中直接构建，一步到位
-│   └── reachable Set 保证物品不重复，edge_set 保证边不重复
-├── tarjan_scc() - Tarjan 强连通分量算法
-├── compress_to_dag() - SCC 分组压缩为 DAG
-├── dag_topological_sort() - DAG 拓扑排序（层级划分）
+├── tarjanSCC() / compressToDag() / dagTopologicalSort() - 从 graph-utils.js 导入
 ├── layout_graph() - 布局算法主函数（SCC 版本）
 │   ├── Tarjan SCC 分解
 │   ├── DAG 压缩 + 拓扑排序

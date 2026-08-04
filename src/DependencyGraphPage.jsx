@@ -179,7 +179,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         }
     });
 
-    // 7. 动态层间距（90px-135px，根据引线密度调整）
+    // 8. 动态层间距（90px-135px，根据引线密度调整）
     const MIN_LAYER_GAP = 90;
     const MAX_LAYER_GAP = 135;
 
@@ -233,7 +233,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
     let final_canvas_width = effective_page_width;
     let final_canvas_height = Math.max(canvas_height, current_y + MARGIN_Y);
 
-    // 8. 初始位置分配（含首层矿石排序）
+    // 9. 初始位置分配（含首层矿石排序）
     function assign_positions() {
         const available_width = effective_page_width - MARGIN_X * 2;
 
@@ -300,7 +300,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         });
     }
 
-    // 9. 重心法优化（两遍遍历）
+    // 10. 重心法优化（两遍遍历）
     function assign_positions_by_barycenter() {
         const NODE_WIDTH = 56;
         const MIN_GAP = NODE_WIDTH + 4;
@@ -548,7 +548,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             });
         });
 
-        // 10. SCC 中心定位：找最大空隙放置
+        // 11. SCC 中心定位：找最大空隙放置
         const NODE_R = 32;
         const scc_by_layer = new Map();
         scc_info.forEach(scc => {
@@ -624,7 +624,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             });
         });
 
-        // 11. SCC 水平排列布局，收集包围盒用于后续推挤
+        // 12. SCC 水平排列布局，收集包围盒用于后续推挤
         const scc_bboxes = new Map();
         scc_info.forEach(scc => {
             const center = scc_center_positions.get(scc.id);
@@ -655,7 +655,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             });
         });
 
-        // 12. 第二遍：从下到上，处理延迟节点，循环组整体推挤
+        // 13. 第二遍：从下到上，处理延迟节点，循环组整体推挤
         if (deferred_nodes.length > 0) {
             const deferred_by_layer = new Map();
             deferred_nodes.forEach(item => {
@@ -729,7 +729,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             });
         }
 
-        // 13. 全局检查：确保非循环节点不与循环组重叠
+        // 14. 全局检查：确保非循环节点不与循环组重叠
         const all_scc_bboxes = [];
         scc_info.forEach(scc => {
             const center = scc_center_positions.get(scc.id);
