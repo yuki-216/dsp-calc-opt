@@ -38,38 +38,24 @@ npm run build
 
 ## 核心模块
 
-### 数据加载 (GameData.jsx)
+### 数据加载 (game_data.jsx)
 
 - 加载 Vanilla.json（原版游戏数据）
 - 解析配方、物品、设施数据
 - 构建物品ID映射表
+- GameInfo 类预处理游戏数据
+- GlobalState 类封装计算状态
 
-### 核心计算 (global_state.jsx)
+### 计算引擎 (src/engine/)
 
-- 构建物品依赖图
-- 拓扑排序 + LP求解器调用
-- 计算生产需求
-
-计算流程：
-```
-用户需求 → 构建物品图 → 拓扑排序 →
-  ↓
-简单物品：迭代计算
-复杂物品：LP求解
-  ↓
-输出结果
-```
-
-### 新计算引擎 (src/engine/)
-
-三段式计算架构，用矩阵求逆替代LP求解器：
+两段式计算架构，用矩阵求逆替代LP求解器：
 
 ```
-用户需求 → DAG层级计算 → 单位成本计算 → 按需求量放大 →
-  ↓           ↓              ↓              ↓
-BFS构建图   SCC检测      系数表+矩阵求逆   需求×单位成本
-  ↓           ↓              ↓              ↓
-依赖图      循环组         成本展开        资源汇总
+用户需求 → DAG层级计算 → 单位成本计算 → 结果汇总
+  ↓           ↓              ↓            ↓
+BFS构建图   SCC检测      系数表+矩阵求逆  资源/设备/电力
+  ↓           ↓              ↓            ↓
+依赖图      循环组         成本展开      最终结果
 ```
 
 **关键设计**：
@@ -90,10 +76,12 @@ BFS构建图   SCC检测      系数表+矩阵求逆   需求×单位成本
 |------|------|------|
 | NeedsList | 需求列表管理 | needs_list.jsx |
 | Result | 结果显示 | result.jsx |
-| BatchSetting | 批量预设 | batch_setting.jsx |
+| BatchSetting | 批量预设 | settings.jsx |
 | Settings | 设置面板 | settings.jsx |
 | Recipe | 配方显示 | recipe.jsx |
 | ItemSelect | 物品选择 | item_select.jsx |
+| ItemIcon | 图标显示 | ui_components.jsx |
+| Header | 顶部导航 | ui_components.jsx |
 
 ### 循环处理机制（旧）
 

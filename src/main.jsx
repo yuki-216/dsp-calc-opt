@@ -1,9 +1,7 @@
 import React, {useState} from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
-import {Header} from './header.jsx';
-import {IconStyles} from './icon.jsx';
-import {ThemeProvider} from './ThemeContext.jsx';
+import {Header, IconStyles, ThemeProvider} from './ui_components.jsx';
 import {ContextProvider} from './contexts.jsx';
 import {DependencyGraphPage} from './DependencyGraphPage.jsx';
 
@@ -52,7 +50,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // PWA registration requires Service Worker support — skip entirely on legacy
 // browsers (e.g. IE11) so the rest of the app still renders.
 if ('serviceWorker' in navigator) {
-    import('./reload_prompt.jsx').then(({ReloadPrompt}) => {
+    import('./ui_components.jsx').then(({ReloadPrompt}) => {
         ReactDOM.createRoot(document.getElementById('pwa-prompt')).render(
             <ThemeProvider>
                 <ReloadPrompt/>

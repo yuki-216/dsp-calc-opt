@@ -1,33 +1,13 @@
 import {useContext, useEffect, useRef, useState} from 'react';
-import {FaRegSave, FaRegFolderOpen, FaTrash, FaPlusCircle, FaPlusSquare, FaGem, FaIndustry} from 'react-icons/fa';
-import {GameInfoContext, GlobalStateContext, SettingsSetterContext} from './contexts';
-import {ItemIcon} from './icon';
+import {FaRegSave, FaRegFolderOpen, FaTrash, FaPlusCircle, FaGem, FaIndustry} from 'react-icons/fa';
+import {GameInfoContext, GlobalStateContext} from './contexts';
+import {ItemIcon} from './ui_components';
 import {ItemSelect} from './item_select';
-
-function get_item_data(game_data) {
-    //通过读取配方表得到配方中涉及的物品信息，item_data中的键名为物品名，键值为
-    //此物品在计算器中的id与用于生产此物品的配方在配方表中的序号
-    var item_data = {};
-    var i = 0;
-    for (var num = 0; num < game_data.recipe_data.length; num++) {
-        for (var item in game_data.recipe_data[num].产物) {
-            if (!(item in item_data)) {
-                item_data[item] = [i];
-                i++;
-            }
-            item_data[item].push(num);
-        }
-    }
-    return item_data;
-}
 
 export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_show_building_popup}) {
     const global_state = useContext(GlobalStateContext);
     const count_ref = useRef(60);
-    const set_settings = useContext(SettingsSetterContext);
-    let game_data = global_state.game_data;
-    let item_data = get_item_data(game_data);
-    let natural_production_line = global_state.settings.natural_production_line;
+    let item_data = global_state.item_data;
     let needs_doms = Object.entries(needs_list).map(([item, count]) => {
         function edit_count(e) {
             let new_needs_list = structuredClone(needs_list);
@@ -64,17 +44,6 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
         set_needs_list(new_needs_list);
     }
 
-    function add_npl(item) {
-        let new_npl = structuredClone(natural_production_line);
-        let count = Number(count_ref.current.value);
-        new_npl.push({
-            "目标物品": item,
-            "目标产量": count,
-            "建筑数量": 10, "配方id": 1, "增产剂等级": 0, "增产模式": 0, "建筑": 0
-        });
-        set_settings({"natural_production_line": new_npl});
-    }
-
     const is_min = global_state.settings.is_time_unit_minute;
 
     return <>
@@ -90,9 +59,6 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
                 </button>
                 <ItemSelect text="添加需求物品" set_item={add_need}
                             icon={<FaPlusCircle className="compact-show"/>}/>
-                <ItemSelect text="添加现有产线" set_item={add_npl}
-                            icon={<FaPlusSquare className="compact-show"/>}
-                            btn_class="btn btn-sm btn-outline-success text-nowrap"/>
             </div>
 
             {Object.keys(needs_list).length == 0 ||

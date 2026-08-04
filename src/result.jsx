@@ -2,8 +2,7 @@ import {useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
 import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext} from './contexts';
-import {ItemIcon} from './icon';
-import {NplRows} from './natural_production_line';
+import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
 
@@ -256,7 +255,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     // TODO refactor to a simple list
     let mineralize_list = settings.mineralize_list;
-    let natural_production_line = settings.natural_production_line;
     // 主引擎计算
     const engineResult = useMemo(() => {
         console.log("CALCULATING (CoreEngine)");
@@ -481,8 +479,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         </tr>);
     }
 
-    // 注：natural_production_line 的建筑和耗电已由引擎计算，无需前端重复累积
-
     let building_rows = Object.entries(building_list).map(([building, count]) => (
         <tr key={building}>
             <td className="d-flex align-items-center text-nowrap">
@@ -565,7 +561,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </tr>
             </thead>
             <tbody className="table-group-divider">
-            <NplRows/>
             {result_table_rows}
             </tbody>
         </table>

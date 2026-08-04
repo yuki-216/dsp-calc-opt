@@ -1,11 +1,10 @@
 /**
  * 核心计算引擎主入口
- * 职责：整合DAG、SCC、单位成本（系数表+矩阵求逆）、缩放模块
+ * 职责：整合DAG、SCC、单位成本（系数表+矩阵求逆）
  */
 
 import { buildItemGraph, tarjanSCC } from './dag.js';
 import { expandInSCCOrder } from './unit-cost.js';
-import { aggregateResourceUsage } from './scale.js';
 
 /**
  * 核心计算引擎
@@ -63,25 +62,10 @@ export class CoreEngine {
    * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
    */
   calculate(needs, recipes) {
-    // 性能计时（已禁用）
-    // const timings = {
-    //   initialize: 0,
-    //   createSolution: 0,
-    //   buildCosts: 0,
-    //   expandSCC: 0,
-    //   matrixInverse: 0,
-    //   substitute: 0,
-    //   extractSolution: 0,
-    //   extractResults: 0
-    // };
-
     // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
-    // let t0 = performance.now();
     this.initialize(needs, recipes);
-    // timings.initialize = performance.now() - t0;
 
     // 2. 创建虚拟"解"物品和虚拟配方
-    // t0 = performance.now();
     const SOLUTION_ID = '__solution__';
     const solutionNode = {
       id: SOLUTION_ID,
@@ -107,10 +91,8 @@ export class CoreEngine {
 
     // 将"解"添加到图中
     this.graph.set(SOLUTION_ID, solutionNode);
-    // timings.createSolution = performance.now() - t0;
 
     // 3. 计算所有物品的直接成本（系数表）
-    // t0 = performance.now();
     const costs = new Map();
     const byproductMap = new Map(); // 独立的副产物映射
     for (const [itemId, node] of this.graph) {
@@ -120,22 +102,12 @@ export class CoreEngine {
     }
     // 添加 solution 的成本
     costs.set(SOLUTION_ID, solutionNode.directCost);
-    const directCosts = {};
-    for (const [k, v] of costs) directCosts[k] = { ...v };
-    // console.log('[calculate] 直接成本:', directCosts);
-    // timings.buildCosts = performance.now() - t0;
 
     // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-    // t0 = performance.now();
-    const sccTimings = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
-    // timings.expandSCC = performance.now() - t0;
-    // timings.matrixInverse = sccTimings.matrixInverse;
-    // timings.substitute = sccTimings.substitute;
+    expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
 
     // 5. 获取"解"的成本并缩放
-    // t0 = performance.now();
     let solutionCost = costs.get(SOLUTION_ID);
-    // console.log('[calculate] 解的成本:', solutionCost);
 
     const recipeExecutions = {};
     const surplusByproducts = {};
@@ -169,9 +141,6 @@ export class CoreEngine {
     }
 
     const totalEnergyCost = energyCost + minerEnergyCost;
-    // console.log('[新引擎] 生产设备耗电:', energyCost);
-    // console.log('[新引擎] 采集设备耗电:', minerEnergyCost);
-    // console.log('[新引擎] 总耗电:', totalEnergyCost);
 
     // 6. 计算设备数量
     const buildingDetails = {};
@@ -206,11 +175,6 @@ export class CoreEngine {
       }
     }
 
-    // console.log('[新引擎-设备计算] buildingDetails:', JSON.parse(JSON.stringify(buildingDetails)));
-    // console.log('[新引擎-设备计算] buildingList:', buildingList);
-    // timings.extractSolution = performance.now() - t0;
-
-    // t0 = performance.now();
     // 提取自消耗系数和副产物来源
     const selfConsumption = {};
     const byproductSources = {};  // {物品: {来源物品: 每单位净产出的副产物量}}
@@ -228,7 +192,7 @@ export class CoreEngine {
       }
     }
 
-    const aggregated = aggregateResourceUsage(new Map([[SOLUTION_ID, { resourceUsage }]]));
+    const aggregated = { resourceUsage };
     aggregated.recipeExecutions = recipeExecutions;
     aggregated.surplusByproducts = surplusByproducts;
     aggregated.buildingDetails = buildingDetails;
@@ -238,21 +202,6 @@ export class CoreEngine {
     aggregated.energyCost = energyCost;
     aggregated.minerEnergyCost = minerEnergyCost;
     aggregated.totalEnergyCost = totalEnergyCost;
-    // aggregated.timings = timings;
-    // timings.extractResults = performance.now() - t0;
-
-    // 输出内部计时（已禁用）
-    // console.log('[新引擎内部计时]', {
-    //   '1.初始化(图构建+SCC)': timings.initialize.toFixed(2) + ' ms',
-    //   '2.创建虚拟解': timings.createSolution.toFixed(2) + ' ms',
-    //   '3.直接成本计算': timings.buildCosts.toFixed(2) + ' ms',
-    //   '4.SCC展开': timings.expandSCC.toFixed(2) + ' ms',
-    //   '  ├─矩阵求逆': (timings.matrixInverse || 0).toFixed(2) + ' ms',
-    //   '  └─代入展开': (timings.substitute || 0).toFixed(2) + ' ms',
-    //   '5.提取解决方案': timings.extractSolution.toFixed(2) + ' ms',
-    //   '6.结果聚合': timings.extractResults.toFixed(2) + ' ms',
-    //   '总计': (timings.initialize + timings.createSolution + timings.buildCosts + timings.expandSCC + timings.extractSolution + timings.extractResults).toFixed(2) + ' ms'
-    // });
 
     return aggregated;
   }

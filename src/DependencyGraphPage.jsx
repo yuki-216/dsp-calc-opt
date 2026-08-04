@@ -1,7 +1,7 @@
 import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'react';
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink} from 'react-icons/fa';
 import {GameInfoContext, GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
-import {ItemIcon} from './icon.jsx';
+import {ItemIcon} from './ui_components.jsx';
 import {tarjanSCC} from './engine/graph-utils.js';
 import './DependencyGraph.css';
 

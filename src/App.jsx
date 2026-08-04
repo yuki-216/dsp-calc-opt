@@ -1,5 +1,4 @@
 import {useContext, useEffect, useRef, useState} from 'react';
-import {BatchSetting} from './batch_setting.jsx';
 import {
     GameInfoContext,
     GameInfoSetterContext,
@@ -9,11 +8,11 @@ import {
 import {NeedsList, NeedsListStorage} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {init_scheme_data, SchemeStorage} from './scheme_data.jsx';
-import {Settings} from './settings.jsx';
+import {Settings, BatchSetting} from './settings.jsx';
 import {
     default_game_data,
     vanilla_game_version
-} from "./GameData.jsx";
+} from "./game_data.jsx";
 import {FaTrashAlt, FaCog} from 'react-icons/fa';
 
 function safe_parse_json(str) {

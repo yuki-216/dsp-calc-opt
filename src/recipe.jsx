@@ -1,5 +1,5 @@
 import React, {useRef, useState, useEffect} from 'react';
-import {ItemIcon} from './icon';
+import {ItemIcon} from './ui_components';
 
 // compact/narrow 模式下自适应截断图标的子组件
 function CompactRecipeIcons({input_entries, time, icon_size, gap}) {

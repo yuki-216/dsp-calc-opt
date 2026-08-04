@@ -17,6 +17,7 @@
 | 2026-07-26 | 新增新计算引擎（DAG+SCC+矩阵求逆），替代旧引擎（拓扑排序+LP） |
 | 2026-07-31 | 代码清理：删除未使用文件，优化性能，统一建筑倍率计算 |
 | 2026-07-31 | 引擎优化：多来源物品识别、延迟展开、循环组矩阵求逆优化 |
+| 2026-08-04 | 代码整合：合并文件减少数量，删除 scale.js，清理注释代码 |
 
 ---
 
@@ -27,31 +28,23 @@ src/
 ├── main.jsx                    # 应用入口，渲染多个React根节点
 ├── App.jsx                     # 主应用组件，整体布局
 ├── contexts.jsx                # React Context定义，全局状态管理
-├── global_state.jsx            # 核心计算逻辑（GameInfo、GlobalState类）
-├── GameData.jsx                # 游戏数据加载与转换
+├── game_data.jsx               # 游戏数据加载与转换（GameData + GlobalState）
 ├── scheme_data.jsx             # 配方方案管理与存储
 ├── needs_list.jsx              # 需求列表管理
 ├── result.jsx                  # 结果显示与计算调用
-├── batch_setting.jsx           # 批量预设（增产剂、建筑）
-├── settings.jsx                # 设置面板（采矿参数等）
+├── settings.jsx                # 设置面板 + 批量预设（Settings + BatchSetting）
 ├── recipe.jsx                  # 配方显示组件
-├── icon.jsx                    # 图标组件（精灵图定位）
+├── ui_components.jsx           # UI组件（图标、主题、头部、PWA提示）
 ├── item_select.jsx             # 物品选择弹窗
-├── header.jsx                  # 顶部导航栏
-├── ThemeContext.jsx             # 主题上下文（深色/浅色）
-├── natural_production_line.jsx  # 现有产线管理
 ├── DependencyGraphPage.jsx      # 依赖图页面
 ├── ui_components/
 │   └── auto_sized_input.jsx    # 自适应输入框组件
-├── engine/                     # 新计算引擎（主引擎）
+├── engine/                     # 计算引擎
 │   ├── index.js                # 主入口（CoreEngine类）
 │   ├── dag.js                  # DAG层级计算（BFS构建图）
-│   ├── scc.js                  # Tarjan SCC算法
+│   ├── graph-utils.js          # 图算法工具（Tarjan SCC、拓扑排序）
 │   ├── unit-cost.js            # 系数表成本计算+矩阵求解
-│   ├── scale.js                # 按需求量缩放
 │   └── matrix.js               # 稀疏矩阵求逆
-├── engine-v1/                  # 基准版本（带调试日志，用于验证优化）
-│   └── ...
 └── engine-compare/             # 双引擎对比验证
     └── index.js                # EngineComparator类
 ```
@@ -146,19 +139,18 @@ ContextProvider
 
 ### 4.1 计算引擎架构
 
-**双引擎架构**：
-- `engine/` — 主引擎（优化版本，用于生产环境）
-- `engine-v1/` — 基准版本（带调试日志，用于验证优化正确性）
-- `engine-compare/` — 对比验证器
+**引擎结构**：
+- `engine/` — 计算引擎（DAG+SCC+矩阵求逆）
+- `engine-compare/` — 对比验证器（用于验证优化正确性）
 
-**三段式计算架构**：
+**两段式计算架构**：
 
 ```
-用户需求 → DAG层级计算 → 单位成本计算 → 按需求量放大 →
-  ↓           ↓              ↓              ↓
-BFS构建图   SCC检测      系数表+矩阵求逆   需求×单位成本
-  ↓           ↓              ↓              ↓
-依赖图      循环组         成本展开        资源汇总
+用户需求 → DAG层级计算 → 单位成本计算 → 结果汇总
+  ↓           ↓              ↓            ↓
+BFS构建图   SCC检测      系数表+矩阵求逆  资源/设备/电力
+  ↓           ↓              ↓            ↓
+依赖图      循环组         成本展开      最终结果
 ```
 
 ### 4.2 核心类（CoreEngine）
@@ -166,21 +158,21 @@ BFS构建图   SCC检测      系数表+矩阵求逆   需求×单位成本
 ```javascript
 class CoreEngine {
   static VERSION = 'current';
-  
-  constructor(gameData, schemeData, settings)
+
+  constructor(gameData, schemeData, settings, sprayCosts)
   initialize(needs, recipes)  // 构建图+SCC检测
-  calculate(needs, recipes)   // 主计算函数
+  calculate(needs, recipes)   // 主计算函数，返回完整结果
 }
 ```
 
 ### 4.3 计算流程
 
 1. **DAG层级计算**（dag.js）：BFS从需求出发构建依赖图
-2. **SCC检测**（scc.js）：Tarjan算法识别强连通分量（循环组）
+2. **SCC检测**（graph-utils.js）：Tarjan算法识别强连通分量（循环组）
 3. **单位成本计算**（unit-cost.js）：系数表追踪成本，按SCC顺序展开
    - 单节点SCC：直接代入依赖方
    - 多节点SCC（循环组）：构建矩阵，求逆求解
-4. **按需求量放大**（scale.js）：需求量 × 单位成本 = 总资源消耗
+4. **结果汇总**（index.js）：从虚拟"解"物品提取资源消耗、设备数量、电力等
 
 ### 4.4 系数表设计
 
@@ -286,7 +278,7 @@ for (const [itemId, count] of outputRecipeIndices) {
 
 ---
 
-## 6. 数据层分析（GameData.jsx）
+## 6. 数据层分析（game_data.jsx）
 
 ### 6.1 数据来源
 
@@ -307,6 +299,17 @@ game_data = {
     game_name: ""          // 游戏名称
 }
 ```
+
+### 6.3 核心类
+
+**GameInfo类**：游戏数据预处理
+- `init_item_data()` — 构建物品→配方映射
+- `init_icon_layout()` — 构建图标网格布局
+
+**GlobalState类**：计算状态封装
+- 从 GameInfo 获取 game_data、item_data
+- 存储 scheme_data、settings
+- 预计算 sprayCosts（增产剂喷涂成本）
 
 ### 6.3 配方数据结构
 
@@ -330,7 +333,7 @@ recipe_data[i] = {
 
 ---
 
-## 7. 图标系统（icon.jsx）
+## 7. 图标系统（ui_components.jsx）
 
 ### 7.1 精灵图加载
 

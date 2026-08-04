@@ -2,7 +2,7 @@ import {Modal} from 'bootstrap';
 import {useContext, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {CompactModeContext, GameInfoContext} from './contexts.jsx';
-import {ItemIcon} from './icon';
+import {ItemIcon} from './ui_components';
 import fuzzysort from 'fuzzysort'
 import {pinyin} from 'pinyin-pro';
 

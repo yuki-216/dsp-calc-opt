@@ -3,7 +3,7 @@
  * 职责：将物品关系转换为DAG并计算拓扑层级
  */
 
-import { ApplyBuildingMultiplier } from '../global_state.jsx';
+import { ApplyBuildingMultiplier } from '../game_data.jsx';
 import { tarjanSCC as sharedTarjanSCC } from './graph-utils.js';
 
 // 浮点精度控制：四舍五入统一使用此精度

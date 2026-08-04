@@ -1,9 +1,8 @@
 import {createContext, useEffect, useState, useMemo, useRef} from 'react';
-import {GameInfo, GlobalState} from './global_state';
+import {GameInfo, GlobalState} from './game_data';
 import {init_scheme_data} from './scheme_data';
-import {default_game_data} from "./GameData.jsx";
+import {default_game_data} from "./game_data.jsx";
 import {useSetState} from "ahooks";
-// import {EngineComparator} from './engine-compare/index.js';  // 双引擎验证已禁用
 import {CoreEngine} from './engine/index.js';
 
 /** set_game_name_and_data(game_name, game_data) */
@@ -38,8 +37,7 @@ const DEFAULT_SETTINGS = {
     acc_rate: 1.0,
     inc_rate: 1.0,
 
-    mineralize_list: [],
-    natural_production_line: []
+    mineralize_list: []
 };
 export const DefaultSettingsContext = createContext(DEFAULT_SETTINGS);
 
@@ -88,10 +86,6 @@ export function ContextProvider({children}) {
             if (!(key in DEFAULT_SETTINGS)) {
                 delete merged[key];
             }
-        }
-        // 清理 delete arr[i] 导致的 null 空洞
-        if (Array.isArray(merged.natural_production_line)) {
-            merged.natural_production_line = merged.natural_production_line.filter(e => e != null);
         }
         return merged;
     });
@@ -170,74 +164,8 @@ export function ContextProvider({children}) {
         }
     }, [engineCalculate]); // 只在 engineCalculate 变化时执行
 
-    // 双引擎验证相关（已禁用）
-    // const [validationEnabled, setValidationEnabled] = useState(() => {
-    //     const saved = safe_parse_json(localStorage.getItem("validation_enabled"));
-    //     return saved === true;
-    // });
-    // const [validationResult, setValidationResult] = useState(null);
     const [engineGraphData, setEngineGraphData] = useState(null);
     const engineGraphDataRef = useRef(null);
-    // const lastValidSchemeData = useRef(structuredClone(scheme_data));
-
-    // // 创建对比验证器（仅在启用时创建）
-    // let comparator = null;
-    // if (validationEnabled) {
-    //     try {
-    //         comparator = new EngineComparator(game_info.game_data, scheme_data, settings, global_state.sprayCosts);
-    //     } catch (e) {
-    //         console.warn("创建对比验证器失败:", e);
-    //     }
-    // }
-
-    // // 验证函数（复用已计算的新引擎结果）
-    // async function runValidation(needs_list, currentResult = null) {
-    //     if (!comparator) return null;
-    //
-    //     // 如果没有需求，跳过验证
-    //     if (!needs_list || Object.keys(needs_list).length === 0) {
-    //         setValidationResult(null);
-    //         return null;
-    //     }
-    //
-    //     try {
-    //         // 如果有已计算的结果，复用它；否则重新计算
-    //         const result = currentResult
-    //             ? await comparator.compareWithResult(needs_list, currentResult, { verbose: true })
-    //             : await comparator.compare(needs_list, { verbose: true });
-    //         setValidationResult(result);
-    //         // 验证成功，保存当前方案数据
-    //         lastValidSchemeData.current = structuredClone(scheme_data);
-    //         return result;
-    //     } catch (e) {
-    //         console.warn("验证失败:", e);
-    //         setValidationResult({ match: false, details: { error: e.message } });
-    //         // 验证失败（如矩阵无法求解），回滚到上次有效方案
-    //         if (e.message.includes("矩阵奇异")) {
-    //             alert("配方选择导致循环无法求解，已自动恢复上一次有效的配方选择。");
-    //             set_scheme_data(structuredClone(lastValidSchemeData.current));
-    //         }
-    //         return null;
-    //     }
-    // }
-
-    // // 切换验证状态
-    // function toggleValidation() {
-    //     const newValue = !validationEnabled;
-    //     setValidationEnabled(newValue);
-    //     localStorage.setItem("validation_enabled", JSON.stringify(newValue));
-    //     if (!newValue) {
-    //         setValidationResult(null);
-    //     }
-    // }
-
-    // const validationContext = {
-    //     enabled: validationEnabled,
-    //     result: validationResult,
-    //     toggle: toggleValidation,
-    //     runValidation,
-    //     comparator
-    // };
 
     // 临时占位：提供空的 validation context 以避免其他组件报错
     const validationContext = {
