@@ -285,6 +285,72 @@ function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, re
 }
 
 /**
+ * 单物品优化
+ * 遍历物品所有可用增产选择，选择使总耗电最小的策略并持久化。
+ * 适用于非循环组的独立物品优化。
+ *
+ * @param {string} item - 物品ID
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} settings - 设置
+ * @param {Array} needs - 需求列表
+ * @param {Object} baseSchemeData - 基础方案数据
+ * @param {Map} resolved - 持久化策略存储
+ * @param {Function} onLog - 日志回调
+ */
+export function optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, onLog = null) {
+  // 1. 检查是否已确定
+  if (resolved.has(item)) {
+    return;
+  }
+
+  // 2. 获取物品节点
+  const recipeData = gameData.recipe_data || [];
+  const itemToRecipe = new Map();
+  for (let i = 0; i < recipeData.length; i++) {
+    const outputs = Object.keys(recipeData[i]['产物'] || {});
+    for (const output of outputs) {
+      if (!itemToRecipe.has(output)) {
+        itemToRecipe.set(output, i);
+      }
+    }
+  }
+
+  const recipeIndex = itemToRecipe.get(item);
+  if (recipeIndex === undefined) {
+    resolved.set(item, { strategy: { level: 0, mode: 0, name: '无' }, cost: 0 });
+    return;
+  }
+
+  const recipe = recipeData[recipeIndex];
+  const choices = getAvailableChoices(recipe);
+
+  // 3. 遍历所有增产选择
+  let bestChoice = { level: 0, mode: 0, name: '无' };
+  let bestCost = Infinity;
+
+  for (const choice of choices) {
+    // 创建临时的 schemeData
+    const tempSchemeData = structuredClone(baseSchemeData);
+    tempSchemeData.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+    tempSchemeData.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+
+    // 计算成本
+    const result = calculatePower(gameData, tempSchemeData, settings, needs);
+    const cost = result.totalEnergyCost;
+
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestChoice = choice;
+    }
+  }
+
+  // 4. 持久化
+  resolved.set(item, { strategy: bestChoice, cost: bestCost });
+
+  if (onLog) onLog(`${item} 最优策略: ${bestChoice.name}, 耗电: ${formatPowerValue(bestCost)}`);
+}
+
+/**
  * 增产策略优化器主函数
  *
  * 按 SCC 正序（原矿→产物）遍历每个物品，尝试所有增产选择，
