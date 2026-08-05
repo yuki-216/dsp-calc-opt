@@ -623,7 +623,7 @@ export function applyOptimizedStrategies(resolved, schemeData, graph) {
  * @param {number} value - 电力值 (kW)
  * @returns {string} 格式化后的字符串
  */
-function formatPowerValue(value) {
+export function formatPowerValue(value) {
   if (value >= 1e6) return (value / 1e6).toFixed(2) + ' GW';
   if (value >= 1e3) return (value / 1e3).toFixed(2) + ' MW';
   return value.toFixed(2) + ' kW';
