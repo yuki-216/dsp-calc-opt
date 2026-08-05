@@ -12,6 +12,7 @@
 
 import { CoreEngine } from './index.js';
 import { GlobalState } from '../game_data.jsx';
+import { tarjanSCC } from './graph-utils.js';
 
 /**
  * 增产选择常量
@@ -77,6 +78,88 @@ function getAvailableChoices(recipe) {
   }
 
   return choices;
+}
+
+/**
+ * 检测物品所属的循环组
+ * @param {string} item - 物品ID
+ * @param {Map} graph - 物品图
+ * @param {Array} edges - 边集合
+ * @returns {Set<string>} 循环组成员集合（如果不在循环组中，返回只包含自己的Set）
+ */
+function findCycleGroup(item, graph, edges) {
+  // 使用 Tarjan 算法计算 SCC
+  const sccList = tarjanSCC(graph.keys(), edges);
+
+  // 找到包含 item 的 SCC
+  for (const scc of sccList) {
+    if (scc.has(item)) {
+      return scc;
+    }
+  }
+
+  // 不在任何 SCC 中，返回只包含自己的Set
+  return new Set([item]);
+}
+
+/**
+ * 生成循环组成员组合的key
+ * @param {Set<string>|Array<string>} groupMembers - 循环组成员
+ * @returns {string} 排序后的JSON字符串，如 '["MK1","MK2","金刚石"]'
+ */
+function getGroupKey(groupMembers) {
+  return JSON.stringify([...groupMembers].sort());
+}
+
+/**
+ * 生成所有组合
+ * @param {Array<string>} items - 物品列表
+ * @param {Array} choices - 增产选择列表
+ * @returns {Array<Array>} 所有组合
+ */
+function generateCombinations(items, choices) {
+  if (items.length === 0) {
+    return [[]];
+  }
+
+  const [first, ...rest] = items;
+  const restCombinations = generateCombinations(rest, choices);
+
+  const result = [];
+  for (const choice of choices) {
+    for (const restComb of restCombinations) {
+      result.push([choice, ...restComb]);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 获取物品的依赖列表
+ * @param {string} item - 物品ID
+ * @param {Map} graph - 物品图
+ * @returns {Array<string>} 依赖物品列表
+ */
+function getDependencies(item, graph) {
+  const node = graph.get(item);
+  if (!node || !node.directCost) return [];
+
+  const deps = [];
+  for (const [key, coeff] of Object.entries(node.directCost)) {
+    if (key.startsWith('$')) continue;
+    if (coeff <= 0) continue;
+
+    // 检查依赖是否存在
+    if (!graph.has(key)) {
+      console.warn(`[自动优化] 依赖缺失: ${item} -> ${key}，跳过该依赖`);
+      continue;
+    }
+
+    deps.push(key);
+  }
+
+  return deps;
 }
 
 /**
