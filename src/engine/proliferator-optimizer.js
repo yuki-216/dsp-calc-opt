@@ -15,21 +15,6 @@ import { GlobalState } from '../game_data.jsx';
 import { tarjanSCC } from './graph-utils.js';
 
 /**
- * 增产选择常量
- * 每个可增产配方有 7 种选择：
- * {无, MK1加速, MK1增产, MK2加速, MK2增产, MK3加速, MK3增产}
- */
-const PROLIFERATOR_CHOICES = [
-  { level: 0, mode: 0, name: '无' },
-  { level: 1, mode: 1, name: 'MK1加速' },
-  { level: 1, mode: 2, name: 'MK1增产' },
-  { level: 2, mode: 1, name: 'MK2加速' },
-  { level: 2, mode: 2, name: 'MK2增产' },
-  { level: 3, mode: 1, name: 'MK3加速' },
-  { level: 3, mode: 2, name: 'MK3增产' },
-];
-
-/**
  * 计算给定方案下的总耗电
  * @param {Object} gameData - 游戏数据
  * @param {Object} schemeData - 方案数据
@@ -112,21 +97,22 @@ function getGroupKey(groupMembers) {
 }
 
 /**
- * 生成所有组合
+ * 生成所有组合（每个物品有独立的选择列表）
  * @param {Array<string>} items - 物品列表
- * @param {Array} choices - 增产选择列表
+ * @param {Array<Array>} choicesPerItem - 每个物品对应的增产选择列表
  * @returns {Array<Array>} 所有组合
  */
-function generateCombinations(items, choices) {
+function generateCombinations(items, choicesPerItem) {
   if (items.length === 0) {
     return [[]];
   }
 
   const [first, ...rest] = items;
-  const restCombinations = generateCombinations(rest, choices);
+  const [firstChoices, ...restChoices] = choicesPerItem;
+  const restCombinations = generateCombinations(rest, restChoices);
 
   const result = [];
-  for (const choice of choices) {
+  for (const choice of firstChoices) {
     for (const restComb of restCombinations) {
       result.push([choice, ...restComb]);
     }
@@ -247,8 +233,28 @@ function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, re
   // 4. 遍历所有组合
   const groupArray = [...group];
 
-  // 生成所有组合
-  const combinations = generateCombinations(groupArray, PROLIFERATOR_CHOICES);
+  // 获取每个物品的可用增产选择
+  const recipeData = gameData.recipe_data || [];
+  const itemToRecipe = new Map();
+  for (let i = 0; i < recipeData.length; i++) {
+    const outputs = Object.keys(recipeData[i]['产物'] || {});
+    for (const item of outputs) {
+      if (!itemToRecipe.has(item)) {
+        itemToRecipe.set(item, i);
+      }
+    }
+  }
+
+  // 获取每个物品的可用选择
+  const itemChoices = groupArray.map(item => {
+    const recipeIndex = itemToRecipe.get(item);
+    if (recipeIndex === undefined) return [{ level: 0, mode: 0, name: '无' }];
+    const recipe = recipeData[recipeIndex];
+    return getAvailableChoices(recipe);
+  });
+
+  // 生成所有组合（使用每个物品的实际可用选择）
+  const combinations = generateCombinations(groupArray, itemChoices);
 
   if (onLog) onLog(`循环组组合数: ${combinations.length}`);
 
