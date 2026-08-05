@@ -419,10 +419,11 @@ export function optimizeItem(item, gameData, settings, needs, baseSchemeData, re
 }
 
 /**
- * 增产策略优化器主函数
+ * 增产策略优化器主函数（重构后）
  *
- * 按 SCC 正序（原矿→产物）遍历每个物品，尝试所有增产选择，
- * 选择使总耗电最小的配置。确定后锁定，不再改变。
+ * 使用动态 SCC 遍历，按 SCC 正序（原矿→产物）遍历每个物品，
+ * 尝试所有增产选择，选择使总耗电最小的配置。
+ * 对于循环组，整体遍历所有组合。
  *
  * @param {Object} gameData - 游戏数据
  * @param {Object} schemeData - 当前方案数据
@@ -502,15 +503,22 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
     }
   }
 
-  // 4. 按 SCC 正序遍历，逐个物品优化
+  // 4. 创建持久化策略存储
+  const resolved = new Map();
+
+  // 5. 按 SCC 正序遍历，逐个物品优化（使用动态 SCC）
   let currentScheme = structuredClone(schemeData);
   let currentPower = initialPower;
   const changes = [];
   const totalCount = itemsToOptimize.length;
 
+  // 将 graph 和 edges 存储到 gameData 中，供后续使用
+  gameData.graph = initialResult.graph;
+  gameData.edges = initialResult.edges;
+
   for (let i = 0; i < itemsToOptimize.length; i++) {
     const item = itemsToOptimize[i];
-    const { itemId, recipeIndex, recipe, choices } = item;
+    const { itemId, recipeIndex } = item;
 
     // 报告进度
     if (onProgress) {
@@ -518,65 +526,39 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
     }
     if (onLog) onLog(`\n[${i + 1}/${totalCount}] 尝试优化: ${itemId}`);
 
-    // 获取当前配置
-    const currentLevel = currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] || 0;
-    const currentMode = currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] || 0;
+    // 使用动态 SCC 优化
+    optimizeItem(itemId, gameData, settings, needs, currentScheme, resolved, 0, onLog);
 
-    if (onLog) {
-      onLog(`  当前配置: 等级=${currentLevel}, 模式=${currentMode}`);
-      onLog(`  配方可选增产: ${recipe['增产']}`);
-    }
+    // 应用优化结果
+    const strategyInfo = resolved.get(itemId);
+    if (strategyInfo) {
+      const { strategy, cost } = strategyInfo;
+      const currentLevel = currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] || 0;
+      const currentMode = currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] || 0;
 
-    // 遍历所有选择，找耗电最小的
-    let bestChoice = null;
-    let bestPower = Infinity;
+      if (strategy.level !== currentLevel || strategy.mode !== currentMode) {
+        currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = strategy.level;
+        currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = strategy.mode;
+        currentPower = cost;
 
-    for (const choice of choices) {
-      // 临时修改方案
-      const tempScheme = structuredClone(currentScheme);
-      tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
-      tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+        changes.push({
+          itemId,
+          recipeIndex,
+          oldLevel: currentLevel,
+          oldMode: currentMode,
+          newLevel: strategy.level,
+          newMode: strategy.mode,
+          powerAfter: cost
+        });
 
-      // 重新计算（对所有选择都重新计算，确保比较使用精确值）
-      const result = calculatePower(gameData, tempScheme, settings, needs);
-      const power = result.totalEnergyCost;
-
-      if (choice.level === currentLevel && choice.mode === currentMode) {
-        if (onLog) onLog(`  ${choice.name}: ${formatPowerValue(power)} (当前)`);
+        if (onLog) onLog(`  ✓ 选择: ${strategy.name} (耗电 ${formatPowerValue(cost)})`);
       } else {
-        if (onLog) onLog(`  ${choice.name}: ${formatPowerValue(power)}`);
+        if (onLog) onLog(`  ✓ 保持: ${strategy.name} (耗电 ${formatPowerValue(cost)})`);
       }
-
-      // 有更小的就更新
-      if (power < bestPower) {
-        bestPower = power;
-        bestChoice = choice;
-      }
-    }
-
-    // 应用最佳选择
-    if (bestChoice.level !== currentLevel || bestChoice.mode !== currentMode) {
-      currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
-      currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
-      currentPower = bestPower;
-
-      changes.push({
-        itemId,
-        recipeIndex,
-        oldLevel: currentLevel,
-        oldMode: currentMode,
-        newLevel: bestChoice.level,
-        newMode: bestChoice.mode,
-        powerAfter: bestPower
-      });
-
-      if (onLog) onLog(`  ✓ 选择: ${bestChoice.name} (耗电 ${formatPowerValue(bestPower)})`);
-    } else {
-      if (onLog) onLog(`  ✓ 保持: ${bestChoice.name} (耗电 ${formatPowerValue(bestPower)})`);
     }
   }
 
-  // 5. 输出最终结果
+  // 6. 输出最终结果
   if (onLog) {
     onLog('\n========== 优化结果 ==========');
     onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
