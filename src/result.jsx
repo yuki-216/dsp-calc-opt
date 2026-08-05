@@ -69,9 +69,14 @@ export function RecipeSelect({item, choice, onChange, compact}) {
     }
 }
 
-export function ProNumSelect({choice, onChange, icon_size}) {
+export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
     const global_state = useContext(GlobalStateContext);
     let game_data = global_state.game_data;
+
+    // 检查配方是否有增产模式选项，如果没有则隐藏增产剂等级选择
+    let recipe_prolif = game_data.recipe_data[recipe_id]["增产"];
+    if (!recipe_prolif) return null;
+
     let pro_num_options = [{value: 0, label: "无"}];
     for (let i = 1; i < game_data.proliferator_data.length; i++) {
         if (game_data.proliferator_data[i]?.增产剂) {
@@ -471,7 +476,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             <td><ProModeSelect recipe_id={recipe_id} onChange={change_pro_mode}
                                choice={scheme_data.scheme_for_recipe[recipe_id]["增产模式"]}/></td>
             {/* 所选增产剂 */}
-            <td><ProNumSelect onChange={change_pro_num}
+            <td><ProNumSelect recipe_id={recipe_id} onChange={change_pro_num}
                               choice={scheme_data.scheme_for_recipe[recipe_id]["增产剂等级"]}
                               icon_size={mob_btn_icon}/></td>
             {/* 所选工厂种类 */}

@@ -214,6 +214,11 @@ class CoreEngine {
 - Mk.II: 1/24（普通）或 1/27（自增产）
 - Mk.III: 1/60（普通）或 1/74（自增产）
 
+**UI行为**：
+- 增产模式选择（ProModeSelect）：若配方无增产选项（`增产`字段为0），组件返回null隐藏
+- 增产剂等级选择（ProNumSelect）：若配方无增产模式选项，组件返回null隐藏
+- 原矿等无增产配方不会显示增产剂等级选择图标
+
 ### 4.7 建筑倍率（ApplyBuildingMultiplier）
 
 根据建筑类型应用不同的产出倍率：
