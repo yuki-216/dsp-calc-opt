@@ -351,6 +351,74 @@ export function optimizeSingleItem(item, gameData, settings, needs, baseSchemeDa
 }
 
 /**
+ * 单物品优化入口（递归）
+ * 按 SCC 正序递归处理前置依赖，然后对目标物品进行增产策略优化。
+ * 若物品属于循环组则整体遍历，否则单独遍历。
+ *
+ * @param {string} item - 物品ID
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} settings - 设置
+ * @param {Array} needs - 需求列表
+ * @param {Object} baseSchemeData - 基础方案数据
+ * @param {Map} resolved - 持久化策略存储
+ * @param {number} depth - 递归深度
+ * @param {Function} onLog - 日志回调
+ */
+export function optimizeItem(item, gameData, settings, needs, baseSchemeData, resolved, depth = 0, onLog = null) {
+  // 1. 检查是否已确定
+  if (resolved.has(item)) {
+    return;
+  }
+
+  // 2. 设置最大递归深度限制（防止无限递归）
+  const MAX_DEPTH = 100;
+  if (depth > MAX_DEPTH) {
+    console.error(`[自动优化] 递归深度超限: ${item}，可能存在无限循环`);
+    // 使用默认策略（无增产）
+    resolved.set(item, { strategy: { level: 0, mode: 0, name: '无' }, cost: Infinity });
+    return;
+  }
+
+  if (onLog) onLog(`${'  '.repeat(depth)}处理物品: ${item} (深度: ${depth})`);
+
+  // 3. 计算当前 SCC 顺序
+  const graph = gameData.graph;
+  const edges = gameData.edges;
+  const sccs = tarjanSCC(graph, edges);
+
+  // 4. 找到当前物品在 SCC 中的位置
+  const sccOrder = [];
+  for (const scc of sccs) {
+    for (const itemId of scc) {
+      sccOrder.push(itemId);
+    }
+  }
+
+  const itemIndex = sccOrder.indexOf(item);
+
+  // 5. 检查前置物品是否都已确定
+  for (let i = 0; i < itemIndex; i++) {
+    const prevItem = sccOrder[i];
+    if (!resolved.has(prevItem)) {
+      // 递归处理前置物品
+      if (onLog) onLog(`${'  '.repeat(depth)}前置物品 ${prevItem} 未确定，递归处理`);
+      optimizeItem(prevItem, gameData, settings, needs, baseSchemeData, resolved, depth + 1, onLog);
+    }
+  }
+
+  // 6. 检测是否属于循环组
+  const cycleGroup = findCycleGroup(item, graph, edges);
+
+  if (cycleGroup.size > 1) {
+    // 7. 循环组整体遍历
+    optimizeCycleGroup(cycleGroup, gameData, settings, needs, baseSchemeData, resolved, onLog);
+  } else {
+    // 8. 单物品遍历
+    optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, onLog);
+  }
+}
+
+/**
  * 增产策略优化器主函数
  *
  * 按 SCC 正序（原矿→产物）遍历每个物品，尝试所有增产选择，
