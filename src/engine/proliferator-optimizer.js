@@ -384,7 +384,7 @@ export function optimizeItem(item, gameData, settings, needs, baseSchemeData, re
   // 3. 计算当前 SCC 顺序
   const graph = gameData.graph;
   const edges = gameData.edges;
-  const sccs = tarjanSCC(graph, edges);
+  const sccs = tarjanSCC(graph.keys(), edges);
 
   // 4. 找到当前物品在 SCC 中的位置
   const sccOrder = [];
