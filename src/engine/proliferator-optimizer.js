@@ -207,6 +207,78 @@ function getDependencies(item, graph) {
 }
 
 /**
+ * 循环组整体遍历
+ * 对循环组内的所有成员进行组合遍历，选择总耗电最小的增产策略组合。
+ * 循环组是指 SCC 中包含多个成员的强连通分量，组内成员相互依赖，
+ * 必须同时确定增产策略才能得到最优解。
+ *
+ * @param {Set<string>} group - 循环组成员
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} settings - 设置
+ * @param {Array} needs - 需求列表
+ * @param {Object} baseSchemeData - 基础方案数据
+ * @param {Map} resolved - 持久化策略存储
+ * @param {Function} onLog - 日志回调
+ */
+function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, resolved, onLog = null) {
+  // 1. 生成循环组key
+  const groupKey = getGroupKey(group);
+
+  // 2. 检查是否已有持久化策略
+  if (resolved.has(groupKey)) {
+    if (onLog) onLog(`循环组 [${[...group].join(', ')}] 已有持久化策略，跳过`);
+    return;
+  }
+
+  if (onLog) onLog(`处理循环组: [${[...group].join(', ')}]`);
+
+  // 3. 检查循环组外部依赖是否都已确定
+  const graph = gameData.graph;
+  for (const item of group) {
+    const deps = getDependencies(item, graph);
+    for (const dep of deps) {
+      if (!group.has(dep) && !resolved.has(dep)) {
+        // 外部依赖未确定，SCC 正序遍历下不应出现此情况，记录警告
+        if (onLog) onLog(`警告: 循环组外部依赖 ${dep} 未确定`);
+      }
+    }
+  }
+
+  // 4. 遍历所有组合
+  const groupArray = [...group];
+
+  // 生成所有组合
+  const combinations = generateCombinations(groupArray, PROLIFERATOR_CHOICES);
+
+  if (onLog) onLog(`循环组组合数: ${combinations.length}`);
+
+  let bestCombination = null;
+  let bestCost = Infinity;
+
+  for (const combination of combinations) {
+    // 计算当前组合的总成本
+    const cost = calculateCombinationCost(combination, groupArray, gameData, settings, needs, baseSchemeData);
+
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestCombination = combination;
+    }
+  }
+
+  // 5. 持久化循环组策略
+  for (let i = 0; i < groupArray.length; i++) {
+    const item = groupArray[i];
+    const strategy = bestCombination[i];
+    resolved.set(item, { strategy, cost: bestCost });
+  }
+
+  // 6. 同时持久化循环组整体策略（用于后续复用）
+  resolved.set(groupKey, { strategies: bestCombination, cost: bestCost, members: groupArray });
+
+  if (onLog) onLog(`循环组最优策略: ${JSON.stringify(bestCombination.map(c => c.name))}, 耗电: ${formatPowerValue(bestCost)}`);
+}
+
+/**
  * 增产策略优化器主函数
  *
  * 按 SCC 正序（原矿→产物）遍历每个物品，尝试所有增产选择，
