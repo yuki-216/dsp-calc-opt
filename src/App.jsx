@@ -8,7 +8,7 @@ import {
 import {NeedsList, NeedsListStorage} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {init_scheme_data, SchemeStorage} from './scheme_data.jsx';
-import {Settings, BatchSetting} from './settings.jsx';
+import {Settings, BatchSetting, SCCDisplay} from './settings.jsx';
 import {
     default_game_data,
     vanilla_game_version
@@ -97,6 +97,7 @@ function AppWithContexts({needs_list, set_needs_list}) {
                        set_show_ore_popup={set_show_ore_popup}
                        set_show_building_popup={set_show_building_popup}/>
             <BatchSetting needs_list={needs_list}/>
+            <SCCDisplay/>
         </div>
         {/* 结果区域：填充剩余高度，独立滚动 */}
         <div className="app-result-area">

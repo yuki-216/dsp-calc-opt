@@ -193,21 +193,18 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
     let bestPower = Infinity;
 
     for (const choice of choices) {
-      let power;
+      // 临时修改方案
+      const tempScheme = structuredClone(currentScheme);
+      tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+      tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+
+      // 重新计算（对所有选择都重新计算，确保比较使用精确值）
+      const result = calculatePower(gameData, tempScheme, settings, needs);
+      const power = result.totalEnergyCost;
 
       if (choice.level === currentLevel && choice.mode === currentMode) {
-        // 当前选择，直接使用已知的耗电值
-        power = currentPower;
         if (onLog) onLog(`  ${choice.name}: ${formatPowerValue(power)} (当前)`);
       } else {
-        // 临时修改方案
-        const tempScheme = structuredClone(currentScheme);
-        tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
-        tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
-
-        // 重新计算
-        const result = calculatePower(gameData, tempScheme, settings, needs);
-        power = result.totalEnergyCost;
         if (onLog) onLog(`  ${choice.name}: ${formatPowerValue(power)}`);
       }
 
