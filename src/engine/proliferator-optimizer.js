@@ -136,6 +136,50 @@ function generateCombinations(items, choices) {
 }
 
 /**
+ * 计算循环组某个组合的总成本（复用现有完整计算）
+ * @param {Array} combination - 组合，每个元素是 {level, mode, name}
+ * @param {Array<string>} items - 循环组成员列表
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} settings - 设置
+ * @param {Array} needs - 需求列表
+ * @param {Object} baseSchemeData - 基础方案数据
+ * @returns {number} 总耗电（所有物品的总成本）
+ */
+export function calculateCombinationCost(combination, items, gameData, settings, needs, baseSchemeData) {
+  // 1. 创建临时的 schemeData，设置循环组内每个物品的增产策略
+  const tempSchemeData = structuredClone(baseSchemeData);
+
+  // 构建物品 -> 配方索引的映射
+  const recipeData = gameData.recipe_data || [];
+  const itemToRecipe = new Map();
+  for (let i = 0; i < recipeData.length; i++) {
+    const outputs = Object.keys(recipeData[i]['产物'] || {});
+    for (const item of outputs) {
+      if (!itemToRecipe.has(item)) {
+        itemToRecipe.set(item, i);
+      }
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const choice = combination[i];
+    const recipeIndex = itemToRecipe.get(item);
+
+    if (recipeIndex !== undefined && tempSchemeData.scheme_for_recipe[recipeIndex]) {
+      tempSchemeData.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+      tempSchemeData.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+    }
+  }
+
+  // 2. 调用现有的完整计算
+  const result = calculatePower(gameData, tempSchemeData, settings, needs);
+
+  // 3. 返回总耗电
+  return result.totalEnergyCost;
+}
+
+/**
  * 获取物品的依赖列表
  * @param {string} item - 物品ID
  * @param {Map} graph - 物品图
