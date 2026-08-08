@@ -463,7 +463,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                   ({fuelDataList.find(f => f.name === selectedFuel)?.heatValue || 0}MJ)
                 </small>
                 <small className="text-muted">
-                  ({(1 / (fuelRecipe.产物?.['电力'] || 1)).toFixed(2)}s)
+                  ({(fuelRecipe.产物?.['电力'] || 1).toFixed(2)}s)
                 </small>
               </div>
             </td>
