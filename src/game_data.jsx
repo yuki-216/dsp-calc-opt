@@ -35,6 +35,62 @@
 */
 
 /**
+ * 燃料数据定义
+ * 每个燃料包含：name(名称), heatValue(热值MJ), device(设备类型), restrict(增产限制)
+ */
+export const FUEL_DATA = [
+  { name: "无", heatValue: 0, device: "", restrict: "" },
+  { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
+  { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
+  { name: "原油", heatValue: 3.24, device: "火力发电厂", restrict: "只能增产" },
+  { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" },
+  { name: "氢", heatValue: 7.2, device: "火力发电厂", restrict: "只能增产" },
+  { name: "液氢燃料棒", heatValue: 43.2, device: "火力发电厂", restrict: "只能增产" },
+  { name: "氘核燃料棒", heatValue: 600, device: "微型聚变发电站", restrict: "只能增产" },
+  { name: "反物质燃料", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
+  { name: "奇异湮灭燃料棒", heatValue: 720000, device: "人造恒星", restrict: "只能加速" },
+  { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" },
+  { name: "蓄电池", heatValue: 540, device: "能量枢纽", restrict: "只能加速" },
+  { name: "增产剂Mk.I", heatValue: 2.592, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂Mk.2", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" }
+];
+
+/**
+ * 设备消耗速度（MW）
+ */
+export const DEVICE_POWER_CONSUMPTION = {
+  "火力发电厂": 2.16,
+  "微型聚变发电站": 15,
+  "人造恒星": 72,
+  "能量枢纽": 540
+};
+
+/**
+ * 获取燃料配方的增产限制（二进制编码）
+ * @param {string} restrict - 限制描述
+ * @returns {number} 增产编码：2=只能增产，1=只能加速
+ */
+function getFuelProliferatorCode(restrict) {
+  return restrict === "只能增产" ? 2 : 1;
+}
+
+/**
+ * 获取设施在 factory_data 中的索引
+ * @param {Object} data - game_data 对象
+ * @param {string} deviceName - 设备名称
+ * @returns {number} 设施索引
+ */
+function getFactoryIndex(data, deviceName) {
+  for (let i = 0; i < data.factory_data.length; i++) {
+    if (data.factory_data[i].some(f => f["名称"] === deviceName)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * 数组去重
  * @param {Array} arr - 输入数组
  * @returns {Array} 去重后的数组
@@ -206,11 +262,61 @@ export function get_game_data() {
         }
     ]
 
+    // 添加燃料配方
+    FUEL_DATA.forEach(fuel => {
+        if (fuel.name === "无") return;
+
+        const devicePower = DEVICE_POWER_CONSUMPTION[fuel.device];
+        if (!devicePower) return;
+
+        const factoryIndex = getFactoryIndex(data, fuel.device);
+        if (factoryIndex === -1) return;
+
+        const recipe = {
+            Type: 3,
+            原料: { [fuel.name]: 1 },
+            产物: { "电力": fuel.heatValue / devicePower },
+            设施: factoryIndex,
+            时间: 1,
+            增产: getFuelProliferatorCode(fuel.restrict),
+            isFuelRecipe: true,
+            fuelName: fuel.name
+        };
+        data.recipe_data.push(recipe);
+    });
+
     return data;
 }
 
 export function get_icon_by_item(item) {
     return default_game_data.item_icon_name[item];
+}
+
+/**
+ * 获取指定燃料的配方
+ * @param {string} fuelName - 燃料名称
+ * @returns {Object|null} 燃料配方对象，未找到返回 null
+ */
+export function getFuelRecipe(fuelName) {
+    if (!fuelName || fuelName === "无") return null;
+    return default_game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === fuelName) || null;
+}
+
+/**
+ * 判断配方是否为燃料配方
+ * @param {number} recipeIndex - 配方索引
+ * @returns {boolean}
+ */
+export function isFuelRecipe(recipeIndex) {
+    return default_game_data.recipe_data[recipeIndex]?.isFuelRecipe === true;
+}
+
+/**
+ * 获取所有燃料配方
+ * @returns {Array} 燃料配方数组
+ */
+export function getFuelRecipes() {
+    return default_game_data.recipe_data.filter(r => r.isFuelRecipe);
 }
 
 /**
