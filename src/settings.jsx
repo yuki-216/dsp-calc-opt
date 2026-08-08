@@ -3,7 +3,7 @@ import {CompactModeContext, DefaultSettingsContext, EngineGraphDataContext, Glob
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
 import {pro_mode_class} from './result.jsx';
 import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
-import {FaMagic, FaChevronDown, FaChevronUp, FaListOl, FaInfoCircle} from 'react-icons/fa';
+import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
 
 export function Settings() {
@@ -379,21 +379,6 @@ export function BatchSetting({needs_list}) {
 
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
-            <small className="fw-bold">自动优化可选增产剂</small>
-            <div className="d-flex" style={{gap: '2px'}}>
-                {[1, 2, 3].map(level => {
-                    const pro_data = game_data.proliferator_data[level];
-                    const is_selected = allowed_levels.includes(level);
-                    return <div key={level}
-                                className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
-                                    ${is_selected ? 'bg-success text-white' : 'bg-secondary text-white-50'}`}
-                                onClick={() => toggle_level(level)}
-                                title={`${pro_data?.名称 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
-                    >
-                        {pro_data?.名称 && <ItemIcon item={pro_data.名称} size={mob_icon || 32}/>}
-                    </div>;
-                })}
-            </div>
             <small className="fw-bold">批量预设</small>
             <div className="d-flex pro-mode-toggle">
                 {promode_options.map(({value, label, className}) => (
@@ -410,6 +395,21 @@ export function BatchSetting({needs_list}) {
                                              icon_size={mob_icon} rounded={true}/>
             </div>
             {factory_doms}
+            <small className="fw-bold">可选增产剂</small>
+            <div className="d-flex" style={{gap: '2px'}}>
+                {[1, 2, 3].map(level => {
+                    const pro_data = game_data.proliferator_data[level];
+                    const is_selected = allowed_levels.includes(level);
+                    return <div key={level}
+                                className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
+                                    ${is_selected ? 'bg-success text-white' : 'bg-secondary text-white-50'}`}
+                                onClick={() => toggle_level(level)}
+                                title={`${pro_data?.名称 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
+                    >
+                        {pro_data?.名称 && <ItemIcon item={pro_data.名称} size={mob_icon || 32}/>}
+                    </div>;
+                })}
+            </div>
             <button
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}
@@ -459,88 +459,4 @@ function formatPower(value) {
     if (value >= 1e6) return (value / 1e6).toFixed(2) + ' GW';
     if (value >= 1e3) return (value / 1e3).toFixed(2) + ' MW';
     return value.toFixed(2) + ' kW';
-}
-
-/**
- * SCC信息显示组件
- * 显示当前计算的SCC（强连通分量）顺序信息
- */
-export function SCCDisplay() {
-    const engineGraphData = useContext(EngineGraphDataContext);
-    const compact_mode = useContext(CompactModeContext);
-    const [showSCC, setShowSCC] = useState(false);
-
-    const sccs = engineGraphData?.sccs || [];
-    const hasSCC = sccs.length > 0;
-
-    // 将SCC转换为正序（从原矿到产物）
-    const sccsForward = [...sccs].reverse();
-
-    // 格式化SCC显示：将每个SCC中的物品用方括号包裹，用箭头连接
-    const formatSCCSequence = () => {
-        if (!hasSCC) return '无SCC数据';
-
-        return sccsForward.map((scc, index) => {
-            const items = [...scc];
-            // 使用逗号分隔，与proliferator-optimizer.js中的格式保持一致
-            return `[${items.join(',')}]`;
-        }).join(' → ');
-    };
-
-    const is_mobile = compact_mode === "mobile";
-    const buttonText = is_mobile ? 'SCC' : 'SCC顺序';
-
-    return (
-        <div className="mt-2">
-            <button
-                className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
-                onClick={() => setShowSCC(!showSCC)}
-                disabled={!hasSCC}
-                title={hasSCC ? '点击查看SCC（强连通分量）计算顺序' : '暂无SCC数据，请先添加需求物品并计算'}
-            >
-                <FaListOl/>
-                <span className="compact-hide-text">{buttonText}</span>
-                {hasSCC && (
-                    <span className="badge bg-info ms-1">{sccsForward.length}</span>
-                )}
-            </button>
-            {showSCC && hasSCC && (
-                <div className="mt-2 border rounded p-2" style={{maxWidth: '800px'}}>
-                    <div className="d-flex align-items-center justify-content-between mb-1">
-                        <small className="fw-bold">
-                            <FaInfoCircle className="me-1"/>
-                            SCC 正序（原矿 → 产物）
-                        </small>
-                        <button
-                            className="btn btn-sm btn-link p-0 text-decoration-none"
-                            onClick={() => setShowSCC(false)}
-                        >
-                            <FaChevronUp/> 收起
-                        </button>
-                    </div>
-                    <pre
-                        className="mb-0 small"
-                        style={{
-                            maxHeight: '300px',
-                            overflowY: 'auto',
-                            fontFamily: 'monospace',
-                            fontSize: '12px',
-                            lineHeight: '1.4',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-all'
-                        }}
-                    >
-                        {formatSCCSequence()}
-                    </pre>
-                    <div className="mt-1 text-muted" style={{fontSize: '11px'}}>
-                        <small>
-                            共 {sccsForward.length} 个SCC分组 |
-                            方括号 [] 表示循环依赖组 |
-                            箭头 → 表示依赖方向（从原料到产物）
-                        </small>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
 }

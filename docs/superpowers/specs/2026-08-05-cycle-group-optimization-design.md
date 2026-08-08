@@ -182,6 +182,7 @@ function optimizeCycleGroupRandom(group, ..., restarts=10):
 - 绿色背景表示已选中，灰色表示未选中
 - 可单独切换，至少保留一个等级
 - 设置保存到 `proliferate_allowed_levels`
+- 位置：自动优化按钮左侧
 
 ### 批量预设样式
 
@@ -193,6 +194,10 @@ function optimizeCycleGroupRandom(group, ..., restarts=10):
 
 - 增产剂等级选择：圆角图标样式
 - 建筑选择：圆角图标样式，移除文字展开行为
+
+### 已移除功能
+
+- SCC 顺序显示按钮（SCCDisplay 组件已删除）
 
 ---
 
