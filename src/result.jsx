@@ -401,6 +401,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
           if (fuelRecipeIndex < 0) return;
           set_scheme_data(old => {
             let newScheme = structuredClone(old);
+            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
             newScheme.scheme_for_recipe[fuelRecipeIndex]["增产模式"] = value;
             return newScheme;
           });
@@ -410,6 +411,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
           if (fuelRecipeIndex < 0) return;
           set_scheme_data(old => {
             let newScheme = structuredClone(old);
+            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
             newScheme.scheme_for_recipe[fuelRecipeIndex]["增产剂等级"] = value;
             return newScheme;
           });
@@ -419,6 +421,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
           if (fuelRecipeIndex < 0) return;
           set_scheme_data(old => {
             let newScheme = structuredClone(old);
+            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
             newScheme.scheme_for_recipe[fuelRecipeIndex]["建筑"] = value;
             return newScheme;
           });

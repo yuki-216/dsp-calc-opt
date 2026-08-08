@@ -109,7 +109,32 @@ export function SchemeStorage() {
     //读取生产策略
     function load(name) {
         if (all_scheme[name]) {
-            set_scheme_data(all_scheme[name]);
+            let loaded = structuredClone(all_scheme[name]);
+            // 迁移旧数据：确保 scheme_for_recipe 长度与 recipe_data 一致
+            const recipeLen = game_info.game_data.recipe_data.length;
+            const defaultEntry = {"建筑": 0, "增产剂等级": 0, "增产模式": 0};
+            if (!loaded.scheme_for_recipe) {
+                loaded.scheme_for_recipe = Array.from({length: recipeLen}, () => ({...defaultEntry}));
+            } else {
+                // 兼容旧数据：将增产点数转换为增产剂等级
+                for (const recipe of loaded.scheme_for_recipe) {
+                    if (recipe && recipe['增产点数'] !== undefined && recipe['增产剂等级'] === undefined) {
+                        recipe['增产剂等级'] = recipe['增产点数'];
+                        delete recipe['增产点数'];
+                    }
+                }
+                while (loaded.scheme_for_recipe.length < recipeLen) {
+                    loaded.scheme_for_recipe.push({...defaultEntry});
+                }
+                if (loaded.scheme_for_recipe.length > recipeLen) {
+                    loaded.scheme_for_recipe.length = recipeLen;
+                }
+            }
+            // 确保 selected_fuel 字段存在
+            if (!loaded.selected_fuel) {
+                loaded.selected_fuel = "无";
+            }
+            set_scheme_data(loaded);
         } else {
             alert(`未找到名为${name}的方案`);
         }
