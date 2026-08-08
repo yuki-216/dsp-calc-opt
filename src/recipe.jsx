@@ -82,7 +82,7 @@ export function Recipe({recipe, compact}) {
     function item_to_doms([item, count]) {
         const count_used = count >= 1
             ? Math.round(count * 100) / 100
-            : count.toFixed(findNonZeroPosition(count) + 2);
+            : count.toFixed(findNonZeroPosition(count) + 2).replace(/\.?0+$/, '');
         return <React.Fragment key={item}>
             <ItemIcon item={item} size={28}/>
             <span className="me-1 ssmall align-self-end">{count_used}</span>

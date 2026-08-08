@@ -444,7 +444,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             </div>
                         )}
                     </td>
-                    <td><Recipe recipe={fuelRecipe} compact={compact_mode}/></td>
+                    <td><div className="my-1 px-2 py-1"><Recipe recipe={fuelRecipe} compact={compact_mode}/></div></td>
                     <td>
                         {fuelRecipeIndex >= 0 && (
                             <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
