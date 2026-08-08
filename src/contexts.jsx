@@ -176,10 +176,12 @@ export function ContextProvider({children}) {
 
     // 燃料选择 setter
     const set_selected_fuel = useCallback((fuelName) => {
-        set_scheme_data(old => ({
-            ...old,
-            selected_fuel: fuelName
-        }));
+        set_scheme_data(prev => {
+            // 确保 prev 是对象且 selected_fuel 字段被正确更新
+            if (!prev || typeof prev !== 'object') return prev;
+            if (prev.selected_fuel === fuelName) return prev; // 值未变，跳过更新
+            return {...prev, selected_fuel: fuelName};
+        });
     }, [set_scheme_data]);
 
     function set_game_data(game_data) {

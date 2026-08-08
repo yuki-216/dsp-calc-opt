@@ -156,8 +156,9 @@ export function get_game_data() {
         data.item_grid[item.Name] = item["GridIndex"];
         data.item_icon_name[item.Name] = item["IconName"];
     })
-    // 手动添加"电力"图标的映射（电力不在items数据中，但精灵图中有）
+    // 手动添加"电力"图标映射和网格位置（电力不在items数据中，但精灵图中有）
     data.item_icon_name["电力"] = "电力";
+    data.item_grid["电力"] = 2601; // 放在空闲位置
 
     //data.recipe_data & data.factory_data
     function get_item_by_id(itemID) {
@@ -222,6 +223,20 @@ export function get_game_data() {
             factories.push(factory);
         }
         data.factory_data.push(factories);
+    }
+    // 手动添加发电设备到 factory_data（这些设备不在配方的 Factories 数组中，但燃料配方需要引用它们）
+    const powerBuildingNames = ["火力发电厂", "微型聚变发电站", "人造恒星"];
+    for (const name of powerBuildingNames) {
+        const exists = data.factory_data.some(group => group.some(f => f["名称"] === name));
+        if (!exists) {
+            const item = json_data.items.find(i => i.Name === name);
+            data.factory_data.push([{
+                "名称": name,
+                "耗能": (item?.WorkEnergyPerTick || 0) * 0.00006,
+                "倍率": item?.Speed || 1,
+                "占地": item?.Space || 0
+            }]);
+        }
     }
     //proliferator_effect - 简化为4个等级（0=不使用，1=Mk.I，2=Mk.II，3=Mk.III）
     data.proliferator_effect = [

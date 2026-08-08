@@ -391,7 +391,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
       if (fuelRecipe) {
         // 使用 getFuelData 获取完整的燃料数据（包含增产剂）
         const fuelDataList = getFuelData(game_data);
-        const deviceName = fuelDataList.find(f => f.name === selectedFuel)?.device;
+        const fuelData = fuelDataList.find(f => f.name === selectedFuel);
+        const deviceName = fuelData?.device;
         const devicePower = DEVICE_POWER_CONSUMPTION[deviceName];
         const deviceCount = devicePower ? totalEnergy / devicePower : 0;
 
