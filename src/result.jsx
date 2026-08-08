@@ -1,7 +1,8 @@
 import {useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
-import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext} from './contexts';
+import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext, FuelContext} from './contexts';
+import {getFuelRecipe, DEVICE_POWER_CONSUMPTION, FUEL_DATA} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
@@ -196,6 +197,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
     const validation = useContext(ValidationContext);
+    const selectedFuel = useContext(FuelContext);
     const is_compact = compact_mode !== "full";
     const is_mobile = compact_mode === "mobile";
     const mob_icon = is_mobile ? 20 : undefined;   // 总结面板/主图标
@@ -354,6 +356,128 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     ));
 
     let result_table_rows = [];
+
+    const RatioAdjustInput = ({value}) => {
+        let disp_value = value.toFixed(fixed_num);
+        let base_value = +disp_value;
+
+        function set_needs_in_row() {
+            return function (e_or_value) {
+                // Either an event [e] or a raw [value] is supported
+                if (base_value != 0) {
+                    let new_value = e_or_value.target ? e_or_value.target.value : e_or_value;
+                    let new_needs_list = {};
+                    for (let i in needs_list) {
+                        new_needs_list[i] = needs_list[i] * new_value / base_value;
+                    }
+                    set_needs_list(new_needs_list);
+                }
+            }
+        }
+
+        return <span data-tooltip="等比例调整需求" className="fast-tooltip">
+            <AutoSizedInput
+                delayed={true}
+                value={disp_value}
+                onChange={set_needs_in_row()}/>
+        </span>;
+    };
+
+    // 添加电力行（如果选择了燃料且有电力消耗）
+    if (selectedFuel && selectedFuel !== "无" && (energy_cost > 0 || miner_energy_cost > 0)) {
+      const totalEnergy = energy_cost + miner_energy_cost;
+      const fuelRecipe = getFuelRecipe(selectedFuel);
+
+      if (fuelRecipe) {
+        const deviceName = FUEL_DATA.find(f => f.name === selectedFuel)?.device;
+        const devicePower = DEVICE_POWER_CONSUMPTION[deviceName];
+        const deviceCount = devicePower ? totalEnergy / devicePower : 0;
+
+        // 获取燃料配方的增产设置
+        const fuelRecipeIndex = game_data.recipe_data.findIndex(r => r.isFuelRecipe && r.fuelName === selectedFuel);
+        const fuelScheme = fuelRecipeIndex >= 0 ? scheme_data.scheme_for_recipe[fuelRecipeIndex] : null;
+
+        const changeFuelProMode = (value) => {
+          if (fuelRecipeIndex < 0) return;
+          set_scheme_data(old => {
+            let newScheme = structuredClone(old);
+            newScheme.scheme_for_recipe[fuelRecipeIndex]["增产模式"] = value;
+            return newScheme;
+          });
+        };
+
+        const changeFuelProNum = (value) => {
+          if (fuelRecipeIndex < 0) return;
+          set_scheme_data(old => {
+            let newScheme = structuredClone(old);
+            newScheme.scheme_for_recipe[fuelRecipeIndex]["增产剂等级"] = value;
+            return newScheme;
+          });
+        };
+
+        const changeFuelFactory = (value) => {
+          if (fuelRecipeIndex < 0) return;
+          set_scheme_data(old => {
+            let newScheme = structuredClone(old);
+            newScheme.scheme_for_recipe[fuelRecipeIndex]["建筑"] = value;
+            return newScheme;
+          });
+        };
+
+        result_table_rows.unshift(
+          <tr key="__power__" className="table-info">
+            {/* 操作 */}
+            <td></td>
+            {/* 目标物品 */}
+            <td>
+              <div className="d-flex align-items-center text-nowrap">
+                <ItemIcon item="电力" tooltip={is_compact} size={mob_icon} />
+                <small className="ms-1 item-name-text">电力</small>
+              </div>
+            </td>
+            {/* 产能 */}
+            <td className="text-center">
+              <RatioAdjustInput value={totalEnergy} />
+            </td>
+            {/* 工厂 */}
+            <td className="text-nowrap">
+              {fuelScheme && (
+                <div className="d-inline-flex align-items-center gap-1">
+                  <ItemIcon item={deviceName} size={is_mobile ? 18 : 30} />
+                  <RatioAdjustInput value={deviceCount} />
+                </div>
+              )}
+            </td>
+            {/* 配方 */}
+            <td>
+              <Recipe recipe={fuelRecipe} compact={compact_mode} />
+            </td>
+            {/* 增产模式 */}
+            <td>
+              {fuelRecipeIndex >= 0 && (
+                <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
+                               choice={fuelScheme?.增产模式 || 0} />
+              )}
+            </td>
+            {/* 增产剂 */}
+            <td>
+              {fuelRecipeIndex >= 0 && (
+                <ProNumSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProNum}
+                              choice={fuelScheme?.增产剂等级 || 0} icon_size={mob_btn_icon} />
+              )}
+            </td>
+            {/* 工厂类型 */}
+            <td>
+              {fuelRecipeIndex >= 0 && (
+                <FactorySelect recipe_id={fuelRecipeIndex} onChange={changeFuelFactory}
+                               choice={fuelScheme?.建筑 || 0} icon_size={mob_btn_icon} />
+              )}
+            </td>
+          </tr>
+        );
+      }
+    }
+
     for (let i in result_dict) {
         side_products[i] = side_products[i] || {};
         let total = result_dict[i] + Object.values(side_products[i]).reduce((a, b) => a + b, 0);
@@ -406,32 +530,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 scheme_data.scheme_for_recipe[recipe_id]["建筑"] = value;
                 return scheme_data;
             })
-        };
-
-        const RatioAdjustInput = ({value}) => {
-            let disp_value = value.toFixed(fixed_num);
-            let base_value = +disp_value;
-
-            function set_needs_in_row() {
-                return function (e_or_value) {
-                    // Either an event [e] or a raw [value] is supported
-                    if (base_value != 0) {
-                        let new_value = e_or_value.target ? e_or_value.target.value : e_or_value;
-                        let new_needs_list = {};
-                        for (let i in needs_list) {
-                            new_needs_list[i] = needs_list[i] * new_value / base_value;
-                        }
-                        set_needs_list(new_needs_list);
-                    }
-                }
-            }
-
-            return <span data-tooltip="等比例调整需求" className="fast-tooltip">
-                <AutoSizedInput
-                    delayed={true}
-                    value={disp_value}
-                    onChange={set_needs_in_row()}/>
-            </span>;
         };
 
         result_table_rows.push(<tr className={row_class} key={i}>
