@@ -449,7 +449,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <ItemIcon item={selectedFuel} size={is_mobile ? 18 : 30}/>
                             <span>1</span>
                             <small className="text-muted">({fuelData?.heatValue || 0}MJ)</small>
-                            <small className="text-muted">({(fuelRecipe.产物?.['电力'] || 1).toFixed(2)}s)</small>
+                            <small className="text-muted">({(fuelRecipe.时间 || 1).toFixed(2)}s)</small>
                         </div>
                     </td>
                     <td>

@@ -318,9 +318,9 @@ export function get_game_data() {
         const recipe = {
             Type: 3,
             原料: { [fuel.name]: 1 },
-            产物: { "电力": fuel.heatValue / devicePower },
+            产物: { "电力": fuel.heatValue },
             设施: factoryIndex,
-            时间: 1,
+            时间: fuel.heatValue / devicePower,
             增产: getFuelProliferatorCode(fuel.restrict),
             isFuelRecipe: true,
             fuelName: fuel.name
