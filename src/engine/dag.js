@@ -99,7 +99,24 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
     let foundRecipe = null;
     // console.log(`[buildItemGraph] 查找 ${itemId} 的主配方...`);
 
-    if (itemData[itemId] && itemData[itemId][0] > 0) {
+    // 特殊处理"电力"物品：使用用户选择的燃料配方
+    if (itemId === '电力') {
+      const selectedFuel = schemeData?.selected_fuel;
+      if (selectedFuel && selectedFuel !== '无') {
+        // 查找燃料配方
+        for (let i = 0; i < recipes.length; i++) {
+          if (recipes[i]?.isFuelRecipe && recipes[i]?.fuelName === selectedFuel) {
+            foundRecipe = recipes[i];
+            foundRecipe._id = i;
+            break;
+          }
+        }
+      }
+      // 如果没有选择燃料或找不到配方，跳过（电力作为原始资源）
+      if (!foundRecipe) {
+        continue;
+      }
+    } else if (itemData[itemId] && itemData[itemId][0] > 0) {
       const choiceIndex = schemeData?.item_recipe_choices?.[itemId] ?? 0;
       const recipeIndex = itemData[itemId][choiceIndex];
 
@@ -312,11 +329,12 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
 
     // 将耗电加入到直接成本公式中（乘以执行次数 $x）
     // 单位物品耗电 = 单次执行耗电 * $x
+    // 保持生产/挖矿电力区分，同时让它们都依赖"电力"物品
     if (node.buildingPower?.unitPowerCost) {
-      // 区分生产设备和采集设备
       const powerKey = node.buildingPower.isMiner ? '$__miner_power__' : '$__factory_power__';
       directCost[powerKey] = (directCost[powerKey] || 0) + node.buildingPower.unitPowerCost;
-      // console.log(`[成本公式] ${itemId}: 加入耗电系数=${node.buildingPower.unitPowerCost.toFixed(6)} (${node.buildingPower.isMiner ? '采集设备' : '生产设备'}) -> ${powerKey}`);
+      // 同时添加对"电力"物品的依赖
+      directCost['电力'] = (directCost['电力'] || 0) + node.buildingPower.unitPowerCost;
     }
 
     // 四舍五入，避免浮点误差累积

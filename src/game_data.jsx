@@ -35,10 +35,10 @@
 */
 
 /**
- * 燃料数据定义
+ * 燃料数据定义（不含增产剂，增产剂从游戏数据动态获取）
  * 每个燃料包含：name(名称), heatValue(热值MJ), device(设备类型), restrict(增产限制)
  */
-export const FUEL_DATA = [
+export const FUEL_DATA_BASE = [
   { name: "无", heatValue: 0, device: "", restrict: "" },
   { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
   { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
@@ -47,14 +47,42 @@ export const FUEL_DATA = [
   { name: "氢", heatValue: 7.2, device: "火力发电厂", restrict: "只能增产" },
   { name: "液氢燃料棒", heatValue: 43.2, device: "火力发电厂", restrict: "只能增产" },
   { name: "氘核燃料棒", heatValue: 600, device: "微型聚变发电站", restrict: "只能增产" },
-  { name: "反物质燃料", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
+  { name: "反物质燃料棒", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
   { name: "奇异湮灭燃料棒", heatValue: 720000, device: "人造恒星", restrict: "只能加速" },
   { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" },
-  { name: "蓄电池", heatValue: 540, device: "能量枢纽", restrict: "只能加速" },
-  { name: "增产剂Mk.I", heatValue: 2.592, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂Mk.2", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" }
+  { name: "蓄电器", heatValue: 540, device: "能量枢纽", restrict: "只能加速" }
 ];
+
+/**
+ * 增产剂燃料数据（热值）
+ */
+const PROLIFERATOR_FUEL_VALUES = [2.592, 7.08, 16.96];
+
+/**
+ * 获取完整的燃料数据（包含从游戏数据动态获取的增产剂）
+ * @param {Object} gameData - 游戏数据对象
+ * @returns {Array} 完整的燃料数据数组
+ */
+export function getFuelData(gameData) {
+  const fuels = [...FUEL_DATA_BASE];
+  if (gameData?.proliferator_data) {
+    for (let i = 1; i <= 3; i++) {
+      const pro = gameData.proliferator_data[i];
+      if (pro?.名称) {
+        fuels.push({
+          name: pro.名称,
+          heatValue: PROLIFERATOR_FUEL_VALUES[i - 1],
+          device: "火力发电厂",
+          restrict: "只能增产"
+        });
+      }
+    }
+  }
+  return fuels;
+}
+
+// 默认燃料数据（不含增产剂，用于初始化）
+export const FUEL_DATA = FUEL_DATA_BASE;
 
 /**
  * 设备消耗速度（MW）
@@ -128,6 +156,8 @@ export function get_game_data() {
         data.item_grid[item.Name] = item["GridIndex"];
         data.item_icon_name[item.Name] = item["IconName"];
     })
+    // 手动添加"电力"图标的映射（电力不在items数据中，但精灵图中有）
+    data.item_icon_name["电力"] = "电力";
 
     //data.recipe_data & data.factory_data
     function get_item_by_id(itemID) {

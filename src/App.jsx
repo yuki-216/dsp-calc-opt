@@ -5,10 +5,10 @@ import {
     SchemeDataSetterContext,
     SettingsSetterContext
 } from './contexts.jsx';
-import {NeedsList, NeedsListStorage} from './needs_list.jsx';
+import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
-import {init_scheme_data, SchemeStorage} from './scheme_data.jsx';
-import {Settings, BatchSetting} from './settings.jsx';
+import {init_scheme_data} from './scheme_data.jsx';
+import {Settings, BatchSetting, FuelSelect} from './settings.jsx';
 import {
     default_game_data,
     vanilla_game_version
@@ -75,10 +75,9 @@ function AppWithContexts({needs_list, set_needs_list}) {
             <div className="d-flex column-gap-4 row-gap-2 flex-wrap">
                 <div className="text-nowrap">游戏版本 v{vanilla_game_version}</div>
             </div>
-            {/*生产策略、需求列表、清空数据缓存按钮、采矿参数&其他设置是否显示按钮*/}
-            <div className="d-flex column-gap-4 row-gap-2 flex-wrap mt-2">
-                <SchemeStorage/>
-                <NeedsListStorage needs_list={needs_list} set_needs_list={set_needs_list}/>
+            {/*燃料选择、清空数据缓存按钮、采矿参数&其他设置是否显示按钮*/}
+            <div className="d-flex column-gap-4 row-gap-2 flex-wrap mt-2 align-items-center">
+                <FuelSelect/>
                 <button className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
                         onClick={clearData} title="清空数据缓存">
                     <FaTrashAlt/>

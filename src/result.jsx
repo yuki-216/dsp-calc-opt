@@ -2,7 +2,7 @@ import {useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
 import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext, FuelContext} from './contexts';
-import {getFuelRecipe, DEVICE_POWER_CONSUMPTION, FUEL_DATA} from './game_data.jsx';
+import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
@@ -389,7 +389,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
       const fuelRecipe = getFuelRecipe(selectedFuel);
 
       if (fuelRecipe) {
-        const deviceName = FUEL_DATA.find(f => f.name === selectedFuel)?.device;
+        // 使用 getFuelData 获取完整的燃料数据（包含增产剂）
+        const fuelDataList = getFuelData(game_data);
+        const deviceName = fuelDataList.find(f => f.name === selectedFuel)?.device;
         const devicePower = DEVICE_POWER_CONSUMPTION[deviceName];
         const deviceCount = devicePower ? totalEnergy / devicePower : 0;
 
@@ -453,7 +455,16 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </td>
             {/* 配方 */}
             <td>
-              <Recipe recipe={fuelRecipe} compact={compact_mode} />
+              <div className="d-flex align-items-center gap-1 text-nowrap">
+                <ItemIcon item={selectedFuel} size={is_mobile ? 18 : 30} />
+                <span>1</span>
+                <small className="text-muted">
+                  ({fuelDataList.find(f => f.name === selectedFuel)?.heatValue || 0}MJ)
+                </small>
+                <small className="text-muted">
+                  ({(1 / (fuelRecipe.产物?.['电力'] || 1)).toFixed(2)}s)
+                </small>
+              </div>
             </td>
             {/* 增产模式 */}
             <td>

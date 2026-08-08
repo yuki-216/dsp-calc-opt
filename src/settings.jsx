@@ -5,7 +5,7 @@ import {pro_mode_class} from './result.jsx';
 import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
-import {FUEL_DATA} from './game_data.jsx';
+import {FUEL_DATA, getFuelData} from './game_data.jsx';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -232,33 +232,38 @@ function FactorySelect({factory, list, icon_size}) {
                                         onChange={set_factory} no_gap={true} icon_size={icon_size} rounded={true}/>;
 }
 
-function FuelSelect() {
+export function FuelSelect() {
     const selectedFuel = useContext(FuelContext);
     const setSelectedFuel = useContext(FuelSetterContext);
+    const global_state = useContext(GlobalStateContext);
     const compact_mode = useContext(CompactModeContext);
     const is_mobile = compact_mode === "mobile";
     const mob_icon = is_mobile ? 22 : undefined;
+    const icon_size = mob_icon || 32;
+
+    // 从游戏数据获取燃料列表（包含动态获取的增产剂名称）
+    const fuelData = getFuelData(global_state.game_data);
 
     return (
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-            <small className="fw-bold">燃料选择</small>
-            <div className="d-flex gap-1 flex-wrap">
-                {FUEL_DATA.map(fuel => (
+        <div className="d-flex align-items-center flex-wrap">
+            <small className="fw-bold me-2">燃料选择</small>
+            <div className="d-flex" style={{gap: '2px'}}>
+                {fuelData.map(fuel => (
                     <div
                         key={fuel.name}
-                        className={`cursor-pointer border rounded p-1 d-flex align-items-center justify-content-center ${
+                        className={`py-1 px-1 d-flex align-items-center justify-content-center cursor-pointer small border rounded ${
                             selectedFuel === fuel.name
-                                ? 'border-primary bg-primary bg-opacity-10'
-                                : 'border-secondary'
+                                ? 'bg-selected'
+                                : 'bg-unselected'
                         }`}
+                        style={fuel.name === "无" ? {minWidth: `${icon_size + 8}px`} : {}}
                         onClick={() => setSelectedFuel(fuel.name)}
-                        style={{minWidth: '32px', minHeight: '32px'}}
                         title={fuel.name === "无" ? "不进行燃料计算" : `${fuel.name} (${fuel.heatValue}MJ) - ${fuel.device}`}
                     >
                         {fuel.name === "无" ? (
-                            <span className="small text-muted">无</span>
+                            <span className="small">无</span>
                         ) : (
-                            <ItemIcon item={fuel.name} size={mob_icon || 24} />
+                            <ItemIcon item={fuel.name} size={icon_size} />
                         )}
                     </div>
                 ))}
@@ -415,12 +420,6 @@ export function BatchSetting({needs_list}) {
 
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
-            {/* 燃料选择 */}
-            <FuelSelect />
-
-            {/* 分隔线 */}
-            <div className="vr d-none d-md-block" style={{height: '24px'}}></div>
-
             <small className="fw-bold">批量预设</small>
             <div className="d-flex pro-mode-toggle">
                 {promode_options.map(({value, label, className}) => (
@@ -444,7 +443,7 @@ export function BatchSetting({needs_list}) {
                     const is_selected = allowed_levels.includes(level);
                     return <div key={level}
                                 className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
-                                    ${is_selected ? 'bg-success text-white' : 'bg-secondary text-white-50'}`}
+                                    ${is_selected ? 'bg-selected' : 'bg-unselected'}`}
                                 onClick={() => toggle_level(level)}
                                 title={`${pro_data?.名称 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
                     >
