@@ -444,14 +444,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             </div>
                         )}
                     </td>
-                    <td>
-                        <div className="d-flex align-items-center gap-1 text-nowrap">
-                            <ItemIcon item={selectedFuel} size={is_mobile ? 18 : 30}/>
-                            <span>1</span>
-                            <small className="text-muted">({fuelData?.heatValue || 0}MJ)</small>
-                            <small className="text-muted">({(fuelRecipe.时间 || 1).toFixed(2)}s)</small>
-                        </div>
-                    </td>
+                    <td><Recipe recipe={fuelRecipe} compact={compact_mode}/></td>
                     <td>
                         {fuelRecipeIndex >= 0 && (
                             <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
