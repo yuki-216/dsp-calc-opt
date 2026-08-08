@@ -1,10 +1,11 @@
 import {useContext, useState, useCallback, useRef, useEffect} from 'react';
-import {CompactModeContext, DefaultSettingsContext, EngineGraphDataContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
+import {CompactModeContext, DefaultSettingsContext, EngineGraphDataContext, FuelContext, FuelSetterContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
 import {pro_mode_class} from './result.jsx';
 import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
+import {FUEL_DATA} from './game_data.jsx';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -231,6 +232,41 @@ function FactorySelect({factory, list, icon_size}) {
                                         onChange={set_factory} no_gap={true} icon_size={icon_size} rounded={true}/>;
 }
 
+function FuelSelect() {
+    const selectedFuel = useContext(FuelContext);
+    const setSelectedFuel = useContext(FuelSetterContext);
+    const compact_mode = useContext(CompactModeContext);
+    const is_mobile = compact_mode === "mobile";
+    const mob_icon = is_mobile ? 22 : undefined;
+
+    return (
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+            <small className="fw-bold">燃料选择</small>
+            <div className="d-flex gap-1 flex-wrap">
+                {FUEL_DATA.map(fuel => (
+                    <div
+                        key={fuel.name}
+                        className={`cursor-pointer border rounded p-1 d-flex align-items-center justify-content-center ${
+                            selectedFuel === fuel.name
+                                ? 'border-primary bg-primary bg-opacity-10'
+                                : 'border-secondary'
+                        }`}
+                        onClick={() => setSelectedFuel(fuel.name)}
+                        style={{minWidth: '32px', minHeight: '32px'}}
+                        title={fuel.name === "无" ? "不进行燃料计算" : `${fuel.name} (${fuel.heatValue}MJ) - ${fuel.device}`}
+                    >
+                        {fuel.name === "无" ? (
+                            <span className="small text-muted">无</span>
+                        ) : (
+                            <ItemIcon item={fuel.name} size={mob_icon || 24} />
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function BatchSetting({needs_list}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
@@ -379,6 +415,12 @@ export function BatchSetting({needs_list}) {
 
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
+            {/* 燃料选择 */}
+            <FuelSelect />
+
+            {/* 分隔线 */}
+            <div className="vr d-none d-md-block" style={{height: '24px'}}></div>
+
             <small className="fw-bold">批量预设</small>
             <div className="d-flex pro-mode-toggle">
                 {promode_options.map(({value, label, className}) => (
