@@ -312,7 +312,10 @@ function solveSCCByMatrix(scc, costs) {
     // 提取常数项（排除循环组内引用），并处理成单位次数的常数项
     const constTerm = {};
     for (const [key, coeff] of Object.entries(cost)) {
-      if (sccSet.has(key)) {
+      if (key === sccArray[j]) {
+        // 自引用：从对角线减去（如电力配方自身的电力消耗）
+        A[j][j] -= coeff;
+      } else if (sccSet.has(key)) {
         // 循环组内引用 → 矩阵变量
         A[sccIndex.get(key)][j] = -coeff;
       } else {
