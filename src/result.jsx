@@ -383,107 +383,101 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         </span>;
     };
 
-    // 预计算燃料相关数据（供电力行使用）
-    const fuelDataList = getFuelData(game_data);
-    const fuelData = fuelDataList.find(f => f.name === selectedFuel);
-    const fuelDeviceName = fuelData?.device;
-    const fuelDevicePower = DEVICE_POWER_CONSUMPTION[fuelDeviceName];
-    const fuelRecipeIndex = selectedFuel && selectedFuel !== "无"
-        ? game_data.recipe_data.findIndex(r => r.isFuelRecipe && r.fuelName === selectedFuel)
-        : -1;
-    const fuelRecipe = fuelRecipeIndex >= 0 ? game_data.recipe_data[fuelRecipeIndex] : null;
-    const fuelScheme = fuelRecipeIndex >= 0 ? scheme_data.scheme_for_recipe[fuelRecipeIndex] : null;
-    const totalEnergy = energy_cost + miner_energy_cost;
+    // 置顶电力行（如果选择了燃料且有电力消耗）
+    if (selectedFuel && selectedFuel !== "无" && (energy_cost > 0 || miner_energy_cost > 0)) {
+        const totalEnergy = energy_cost + miner_energy_cost;
+        const fuelRecipe = getFuelRecipe(selectedFuel);
+        if (fuelRecipe) {
+            const fuelDataList = getFuelData(game_data);
+            const fuelData = fuelDataList.find(f => f.name === selectedFuel);
+            const deviceName = fuelData?.device;
+            const devicePower = DEVICE_POWER_CONSUMPTION[deviceName];
+            const deviceCount = devicePower ? totalEnergy / devicePower : 0;
+            const fuelRecipeIndex = game_data.recipe_data.findIndex(r => r.isFuelRecipe && r.fuelName === selectedFuel);
+            const fuelScheme = fuelRecipeIndex >= 0 ? scheme_data.scheme_for_recipe[fuelRecipeIndex] : null;
 
-    const changeFuelProMode = (value) => {
-        if (fuelRecipeIndex < 0) return;
-        set_scheme_data(old => {
-            let newScheme = structuredClone(old);
-            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
-            newScheme.scheme_for_recipe[fuelRecipeIndex]["增产模式"] = value;
-            return newScheme;
-        });
-    };
-    const changeFuelProNum = (value) => {
-        if (fuelRecipeIndex < 0) return;
-        set_scheme_data(old => {
-            let newScheme = structuredClone(old);
-            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
-            newScheme.scheme_for_recipe[fuelRecipeIndex]["增产剂等级"] = value;
-            return newScheme;
-        });
-    };
-    const changeFuelFactory = (value) => {
-        if (fuelRecipeIndex < 0) return;
-        set_scheme_data(old => {
-            let newScheme = structuredClone(old);
-            if (!newScheme.scheme_for_recipe[fuelRecipeIndex]) return old;
-            newScheme.scheme_for_recipe[fuelRecipeIndex]["建筑"] = value;
-            return newScheme;
-        });
-    };
+            const changeFuelProMode = (value) => {
+                if (fuelRecipeIndex < 0) return;
+                set_scheme_data(old => {
+                    let s = structuredClone(old);
+                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
+                    s.scheme_for_recipe[fuelRecipeIndex]["增产模式"] = value;
+                    return s;
+                });
+            };
+            const changeFuelProNum = (value) => {
+                if (fuelRecipeIndex < 0) return;
+                set_scheme_data(old => {
+                    let s = structuredClone(old);
+                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
+                    s.scheme_for_recipe[fuelRecipeIndex]["增产剂等级"] = value;
+                    return s;
+                });
+            };
+            const changeFuelFactory = (value) => {
+                if (fuelRecipeIndex < 0) return;
+                set_scheme_data(old => {
+                    let s = structuredClone(old);
+                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
+                    s.scheme_for_recipe[fuelRecipeIndex]["建筑"] = value;
+                    return s;
+                });
+            };
+
+            result_table_rows.unshift(
+                <tr key="__power__" className="table-info">
+                    <td></td>
+                    <td>
+                        <div className="d-flex align-items-center text-nowrap">
+                            <ItemIcon item="电力" tooltip={is_compact} size={mob_icon}/>
+                            <small className="ms-1 item-name-text">电力</small>
+                        </div>
+                    </td>
+                    <td className="text-center">
+                        <RatioAdjustInput value={totalEnergy}/>
+                    </td>
+                    <td className="text-nowrap">
+                        {fuelScheme && (
+                            <div className="d-inline-flex align-items-center gap-1">
+                                <ItemIcon item={deviceName} size={is_mobile ? 18 : 30}/>
+                                <RatioAdjustInput value={deviceCount}/>
+                            </div>
+                        )}
+                    </td>
+                    <td>
+                        <div className="d-flex align-items-center gap-1 text-nowrap">
+                            <ItemIcon item={selectedFuel} size={is_mobile ? 18 : 30}/>
+                            <span>1</span>
+                            <small className="text-muted">({fuelData?.heatValue || 0}MJ)</small>
+                            <small className="text-muted">({(fuelRecipe.产物?.['电力'] || 1).toFixed(2)}s)</small>
+                        </div>
+                    </td>
+                    <td>
+                        {fuelRecipeIndex >= 0 && (
+                            <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
+                                           choice={fuelScheme?.增产模式 || 0}/>
+                        )}
+                    </td>
+                    <td>
+                        {fuelRecipeIndex >= 0 && (
+                            <ProNumSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProNum}
+                                          choice={fuelScheme?.增产剂等级 || 0} icon_size={mob_btn_icon}/>
+                        )}
+                    </td>
+                    <td>
+                        {fuelRecipeIndex >= 0 && (
+                            <FactorySelect recipe_id={fuelRecipeIndex} onChange={changeFuelFactory}
+                                           choice={fuelScheme?.建筑 || 0} icon_size={mob_btn_icon}/>
+                        )}
+                    </td>
+                </tr>
+            );
+        }
+    }
 
     for (let i in result_dict) {
-        // "电力"特殊处理：使用燃料配方显示
-        if (i === "电力") {
-            if (!selectedFuel || selectedFuel === "无" || !fuelRecipe) continue;
-            const deviceCount = fuelDevicePower ? totalEnergy / fuelDevicePower : 0;
-            result_table_rows.push(<tr key="电力" className="table-info">
-                {/* 操作 */}
-                <td></td>
-                {/* 目标物品 */}
-                <td>
-                    <div className="d-flex align-items-center text-nowrap">
-                        <ItemIcon item="电力" tooltip={is_compact} size={mob_icon}/>
-                        <small className="ms-1 item-name-text">电力</small>
-                    </div>
-                </td>
-                {/* 产能 */}
-                <td className="text-center">
-                    <RatioAdjustInput value={totalEnergy}/>
-                </td>
-                {/* 工厂 */}
-                <td className="text-nowrap">
-                    {fuelScheme && (
-                        <div className="d-inline-flex align-items-center gap-1">
-                            <ItemIcon item={fuelDeviceName} size={is_mobile ? 18 : 30}/>
-                            <RatioAdjustInput value={deviceCount}/>
-                        </div>
-                    )}
-                </td>
-                {/* 配方 */}
-                <td>
-                    <div className="d-flex align-items-center gap-1 text-nowrap">
-                        <ItemIcon item={selectedFuel} size={is_mobile ? 18 : 30}/>
-                        <span>1</span>
-                        <small className="text-muted">({fuelData?.heatValue || 0}MJ)</small>
-                        <small className="text-muted">({(fuelRecipe.产物?.['电力'] || 1).toFixed(2)}s)</small>
-                    </div>
-                </td>
-                {/* 增产模式 */}
-                <td>
-                    {fuelRecipeIndex >= 0 && (
-                        <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
-                                       choice={fuelScheme?.增产模式 || 0}/>
-                    )}
-                </td>
-                {/* 增产剂 */}
-                <td>
-                    {fuelRecipeIndex >= 0 && (
-                        <ProNumSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProNum}
-                                      choice={fuelScheme?.增产剂等级 || 0} icon_size={mob_btn_icon}/>
-                    )}
-                </td>
-                {/* 工厂类型 */}
-                <td>
-                    {fuelRecipeIndex >= 0 && (
-                        <FactorySelect recipe_id={fuelRecipeIndex} onChange={changeFuelFactory}
-                                       choice={fuelScheme?.建筑 || 0} icon_size={mob_btn_icon}/>
-                    )}
-                </td>
-            </tr>);
-            continue;
-        }
+        // 跳过"电力"——已由置顶电力行处理
+        if (i === "电力") continue;
 
         side_products[i] = side_products[i] || {};
         let total = result_dict[i] + Object.values(side_products[i]).reduce((a, b) => a + b, 0);
