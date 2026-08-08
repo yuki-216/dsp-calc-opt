@@ -143,17 +143,20 @@ export function Recipe({recipe, compact}) {
     </span>;
 }
 
-export function HorizontalMultiButtonSelect({choice, options, onChange, no_gap, className, icon_size}) {
+export function HorizontalMultiButtonSelect({choice, options, onChange, no_gap, className, icon_size, rounded}) {
     let gap_class = no_gap ? "" : "gap-1";
     let resolved_icon_size = icon_size || 32;
-    let option_doms = options.map(({value, label, item_icon, className}) => {
+    let option_doms = options.map(({value, label, item_icon, className: optClass}) => {
         let selected = choice == value;
         let selected_class = selected ? "bg-selected" : "bg-unselected";
         // insert 1px border if [no_gap == true]
         let gap_class = no_gap ? "border-between border-body" : "";
+        let rounded_class = rounded ? "border rounded" : "";
+        let bg_class = rounded ? (selected ? "bg-success text-white" : "bg-secondary text-white-50") : "";
         return <div key={value}
-                    className={`py-1 px-1 text-nowrap d-flex align-items-center cursor-pointer small
-                ${selected_class} ${gap_class} ${className || ""}`}
+                    className={`py-1 px-1 text-nowrap d-flex align-items-center justify-content-center cursor-pointer small
+                ${selected_class} ${gap_class} ${rounded_class} ${bg_class} ${optClass || ""}`}
+                    style={rounded && label && !item_icon ? {minWidth: `${resolved_icon_size + 8}px`} : {}}
                     onClick={() => onChange(value)}
         >{item_icon && <ItemIcon item={item_icon} size={resolved_icon_size}/>}
             {label && (typeof label === 'string' ? <span className="mx-1">{label}</span> : label)}

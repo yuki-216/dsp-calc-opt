@@ -14,6 +14,21 @@ import { CoreEngine } from './index.js';
 import { GlobalState } from '../game_data.jsx';
 import { tarjanSCC } from './graph-utils.js';
 
+// 全局计数器和限制，防止死循环
+let _callCount = 0;
+const MAX_CALLS = 300;
+
+function checkCallLimit() {
+  _callCount++;
+  if (_callCount > MAX_CALLS) {
+    throw new Error(`[自动优化] 调用次数超限 (${MAX_CALLS})，可能存在死循环`);
+  }
+}
+
+export function resetCallCount() {
+  _callCount = 0;
+}
+
 /**
  * 计算给定方案下的总耗电
  * @param {Object} gameData - 游戏数据
@@ -28,6 +43,19 @@ function calculatePower(gameData, schemeData, settings, needs) {
   const engine = new CoreEngine(gameData, schemeData, settings, globalState.sprayCosts);
   const result = engine.calculate(needs, gameData.recipe_data);
 
+  // 确保 graph 和 edges 存在
+  if (!engine.graph || !engine.edges) {
+    console.error('[calculatePower] engine.graph 或 engine.edges 未定义');
+    return {
+      totalEnergyCost: result.totalEnergyCost || 0,
+      energyCost: result.energyCost || 0,
+      minerEnergyCost: result.minerEnergyCost || 0,
+      graph: new Map(),
+      edges: [],
+      sccs: []
+    };
+  }
+
   return {
     totalEnergyCost: result.totalEnergyCost || 0,
     energyCost: result.energyCost || 0,
@@ -41,19 +69,25 @@ function calculatePower(gameData, schemeData, settings, needs) {
 /**
  * 获取配方的可用增产选择
  * @param {Object} recipe - 配方数据
+ * @param {Object} settings - 设置参数（可选）
  * @returns {Array} 可用的增产选择列表
  */
-function getAvailableChoices(recipe) {
+function getAvailableChoices(recipe, settings = {}) {
   const proliferator = recipe['增产'] || 0;
   if (proliferator === 0) return [{ level: 0, mode: 0, name: '无' }];
 
   const choices = [{ level: 0, mode: 0, name: '无' }];
+  const noAccelerate = settings.proliferate_no_accelerate || false;
+  const allowedLevels = settings.proliferate_allowed_levels || [1, 2, 3];
 
   // 位掩码：bit0=可加速, bit1=可增产, bit2=特殊(透镜)
-  const canAccelerate = proliferator & 1;
+  const canAccelerate = (proliferator & 1) && !noAccelerate;
   const canExtraProduct = proliferator & 2;
 
   for (let level = 1; level <= 3; level++) {
+    // 跳过不允许的等级
+    if (!allowedLevels.includes(level)) continue;
+
     if (canAccelerate) {
       choices.push({ level, mode: 1, name: `MK${level}加速` });
     }
@@ -197,6 +231,7 @@ function getDependencies(item, graph) {
  * 对循环组内的所有成员进行组合遍历，选择总耗电最小的增产策略组合。
  * 循环组是指 SCC 中包含多个成员的强连通分量，组内成员相互依赖，
  * 必须同时确定增产策略才能得到最优解。
+ * 实现动态SCC：当组合中使用增产剂时，先递归优化增产剂。
  *
  * @param {Set<string>} group - 循环组成员
  * @param {Object} gameData - 游戏数据
@@ -204,36 +239,26 @@ function getDependencies(item, graph) {
  * @param {Array} needs - 需求列表
  * @param {Object} baseSchemeData - 基础方案数据
  * @param {Map} resolved - 持久化策略存储
+ * @param {number} depth - 递归深度
  * @param {Function} onLog - 日志回调
  */
-function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, resolved, onLog = null) {
+async function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, resolved, depth = 0, onLog = null) {
+  // 0. 检查调用次数限制
+  checkCallLimit();
+
   // 1. 生成循环组key
   const groupKey = getGroupKey(group);
 
   // 2. 检查是否已有持久化策略
   if (resolved.has(groupKey)) {
-    if (onLog) onLog(`循环组 [${[...group].join(', ')}] 已有持久化策略，跳过`);
+    if (onLog) onLog(`${'  '.repeat(depth)}循环组 [${[...group].join(', ')}] 已有持久化策略，跳过`);
     return;
   }
 
-  if (onLog) onLog(`处理循环组: [${[...group].join(', ')}]`);
-
-  // 3. 检查循环组外部依赖是否都已确定
-  const graph = gameData.graph;
-  for (const item of group) {
-    const deps = getDependencies(item, graph);
-    for (const dep of deps) {
-      if (!group.has(dep) && !resolved.has(dep)) {
-        // 外部依赖未确定，SCC 正序遍历下不应出现此情况，记录警告
-        if (onLog) onLog(`警告: 循环组外部依赖 ${dep} 未确定`);
-      }
-    }
-  }
-
-  // 4. 遍历所有组合
   const groupArray = [...group];
+  if (onLog) onLog(`${'  '.repeat(depth)}循环组优化: [${groupArray.join(', ')}] (${groupArray.length}个物品)`);
 
-  // 获取每个物品的可用增产选择
+  // 3. 获取每个物品的可用增产选择
   const recipeData = gameData.recipe_data || [];
   const itemToRecipe = new Map();
   for (let i = 0; i < recipeData.length; i++) {
@@ -245,49 +270,123 @@ function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, re
     }
   }
 
-  // 获取每个物品的可用选择
   const itemChoices = groupArray.map(item => {
     const recipeIndex = itemToRecipe.get(item);
     if (recipeIndex === undefined) return [{ level: 0, mode: 0, name: '无' }];
     const recipe = recipeData[recipeIndex];
-    return getAvailableChoices(recipe);
+    return getAvailableChoices(recipe, settings);
   });
 
-  // 生成所有组合（使用每个物品的实际可用选择）
-  const combinations = generateCombinations(groupArray, itemChoices);
+  // 4. 坐标下降算法
+  // 初始状态：所有物品选择"无"
+  const currentChoices = groupArray.map((item, idx) => {
+    return itemChoices[idx][0]; // 选择列表的第一个（"无"）
+  });
 
-  if (onLog) onLog(`循环组组合数: ${combinations.length}`);
+  // 计算当前方案的成本
+  function calculateCost(choices) {
+    const tempSchemeData = structuredClone(baseSchemeData);
+    for (let i = 0; i < groupArray.length; i++) {
+      const item = groupArray[i];
+      const choice = choices[i];
+      const recipeIndex = itemToRecipe.get(item);
+      if (recipeIndex !== undefined) {
+        tempSchemeData.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+        tempSchemeData.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+      }
+    }
+    return calculatePower(gameData, tempSchemeData, settings, needs).totalEnergyCost;
+  }
 
-  let bestCombination = null;
-  let bestCost = Infinity;
+  // 计算初始成本
+  let currentCost = calculateCost(currentChoices);
+  if (onLog) onLog(`${'  '.repeat(depth)}初始状态: ${formatPowerValue(currentCost)}`);
 
-  for (const combination of combinations) {
-    // 计算当前组合的总成本
-    const cost = calculateCombinationCost(combination, groupArray, gameData, settings, needs, baseSchemeData);
+  // 迭代优化
+  let round = 0;
+  let totalCalculations = 0;
+  let improved = true;
 
-    if (cost < bestCost) {
-      bestCost = cost;
-      bestCombination = combination;
+  while (improved) {
+    improved = false;
+    round++;
+    let improvedCount = 0;
+
+    for (let i = 0; i < groupArray.length; i++) {
+      const item = groupArray[i];
+      const choices = itemChoices[i];
+      let bestChoice = currentChoices[i];
+      let bestCost = currentCost;
+
+      // 尝试每种选择
+      for (const choice of choices) {
+        if (choice === currentChoices[i]) continue; // 跳过当前选择
+
+        // 临时修改选择
+        const oldChoice = currentChoices[i];
+        currentChoices[i] = choice;
+
+        // 计算成本
+        const cost = calculateCost(currentChoices);
+        totalCalculations++;
+
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestChoice = choice;
+        }
+
+        // 恢复选择（准备下一次尝试）
+        currentChoices[i] = oldChoice;
+      }
+
+      // 应用最佳选择
+      if (bestChoice !== currentChoices[i]) {
+        currentChoices[i] = bestChoice;
+        currentCost = bestCost;
+        improved = true;
+        improvedCount++;
+
+        if (onLog) {
+          const oldName = currentChoices[i] === bestChoice ? '无' : currentChoices[i].name;
+          onLog(`${'  '.repeat(depth)}  ${item}: ${oldName} → ${bestChoice.name} (${formatPowerValue(bestCost)})`);
+        }
+      }
+
+      // 让出主线程
+      if (totalCalculations % 100 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    if (onLog) {
+      if (improvedCount > 0) {
+        onLog(`${'  '.repeat(depth)}第${round}轮: 改善${improvedCount}个物品，当前: ${formatPowerValue(currentCost)}`);
+      } else {
+        onLog(`${'  '.repeat(depth)}第${round}轮: 无改善，收敛`);
+      }
     }
   }
 
-  // 5. 持久化循环组策略
+  // 5. 持久化结果
   for (let i = 0; i < groupArray.length; i++) {
     const item = groupArray[i];
-    const strategy = bestCombination[i];
-    resolved.set(item, { strategy, cost: bestCost });
+    resolved.set(item, { strategy: currentChoices[i], cost: currentCost });
   }
 
-  // 6. 同时持久化循环组整体策略（用于后续复用）
-  resolved.set(groupKey, { strategies: bestCombination, cost: bestCost, members: groupArray });
+  // 同时持久化循环组整体策略（用于后续复用）
+  resolved.set(groupKey, { strategies: [...currentChoices], cost: currentCost, members: groupArray });
 
-  if (onLog) onLog(`循环组最优策略: ${JSON.stringify(bestCombination.map(c => c.name))}, 耗电: ${formatPowerValue(bestCost)}`);
+  if (onLog) {
+    const bestDesc = groupArray.map((item, i) => `${item}:${currentChoices[i].name}`).join(', ');
+    onLog(`${'  '.repeat(depth)}最优: [${bestDesc}], 耗电: ${formatPowerValue(currentCost)}, 计算${totalCalculations}次`);
+  }
 }
 
 /**
  * 单物品优化
  * 遍历物品所有可用增产选择，选择使总耗电最小的策略并持久化。
  * 适用于非循环组的独立物品优化。
+ * 实现动态SCC：当选择使用增产剂时，先递归优化增产剂。
  *
  * @param {string} item - 物品ID
  * @param {Object} gameData - 游戏数据
@@ -295,9 +394,13 @@ function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeData, re
  * @param {Array} needs - 需求列表
  * @param {Object} baseSchemeData - 基础方案数据
  * @param {Map} resolved - 持久化策略存储
+ * @param {number} depth - 递归深度
  * @param {Function} onLog - 日志回调
  */
-export function optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, onLog = null) {
+export async function optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, depth = 0, onLog = null) {
+  // 0. 检查调用次数限制
+  checkCallLimit();
+
   // 1. 检查是否已确定
   if (resolved.has(item)) {
     return;
@@ -322,32 +425,131 @@ export function optimizeSingleItem(item, gameData, settings, needs, baseSchemeDa
   }
 
   const recipe = recipeData[recipeIndex];
-  const choices = getAvailableChoices(recipe);
+  const choices = getAvailableChoices(recipe, settings);
+  const proliferatorData = gameData.proliferator_data || [];
+
+  // 只有一种选择时直接标记，无需遍历
+  if (choices.length === 1) {
+    const choice = choices[0];
+    const tempSchemeData = structuredClone(baseSchemeData);
+    tempSchemeData.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+    tempSchemeData.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+    const result = calculatePower(gameData, tempSchemeData, settings, needs);
+    const cost = result.totalEnergyCost;
+    resolved.set(item, { strategy: choice, cost });
+    if (onLog) onLog(`${'  '.repeat(depth)}  ${item} 仅1种选择: ${choice.name}, 耗电: ${formatPowerValue(cost)}`);
+    return;
+  }
+
+  if (onLog) onLog(`${'  '.repeat(depth)}  ${item} 尝试 ${choices.length} 种增产选择...`);
 
   // 3. 遍历所有增产选择
   let bestChoice = { level: 0, mode: 0, name: '无' };
   let bestCost = Infinity;
 
   for (const choice of choices) {
-    // 创建临时的 schemeData
+    // 1. 先设置增产选择
     const tempSchemeData = structuredClone(baseSchemeData);
     tempSchemeData.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
     tempSchemeData.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
 
-    // 计算成本
+    // 2. 重新计算 SCC 分析（增产选择可能改变依赖图）
+    const tempResult = calculatePower(gameData, tempSchemeData, settings, needs);
+    const tempGraph = tempResult.graph;
+    const tempEdges = tempResult.edges;
+
+    // 如果 graph 或 edges 无效，跳过 SCC 分析
+    if (!tempGraph || !tempEdges || tempGraph.size === 0) {
+      const cost = tempResult.totalEnergyCost;
+      const isBetter = cost < bestCost;
+      if (isBetter) {
+        bestCost = cost;
+        bestChoice = choice;
+      }
+      if (onLog) {
+        const marker = isBetter ? ' ✓ 新最优' : '';
+        onLog(`${'  '.repeat(depth)}    ${choice.name} → ${formatPowerValue(cost)}${marker}`);
+      }
+      continue;
+    }
+
+    // 将 Map.keys() 转换为 Set，因为 tarjanSCC 期望 Set 类型
+    const tempItems = new Set(tempGraph.keys());
+    const sccs = tarjanSCC(tempItems, tempEdges);
+
+    // 3. 找到当前物品在新 SCC 顺序中的位置（使用正序：原矿→产物）
+    const sccsForward = [...sccs].reverse();
+
+    // 4. 检测当前物品是否属于循环组（SCC 大小 > 1）
+    const currentScc = sccs.find(scc => scc.has(item));
+    if (currentScc && currentScc.size > 1) {
+      // 当前选择导致物品进入循环组，转由 optimizeCycleGroup 处理整个循环组
+      if (onLog) {
+        const sccSummary = sccsForward
+          .map(scc => [...scc].filter(item => item !== '__solution__'))
+          .filter(members => members.length > 0)
+          .map(scc => `[${scc.join(',')}]`)
+          .join(' → ');
+        onLog(`${'  '.repeat(depth)}    ${choice.name} SCC: ${sccSummary}`);
+        onLog(`${'  '.repeat(depth)}    ${choice.name} 导致进入循环组 [${[...currentScc].join(', ')}]，转为循环组优化...`);
+      }
+      // 调用循环组优化，会持久化循环组所有成员的策略
+      await optimizeCycleGroup(currentScc, gameData, settings, needs, tempSchemeData, resolved, depth, onLog);
+      // 循环组优化完成后直接返回（策略已持久化）
+      return;
+    }
+
+    // 5. 非循环组情况，继续正常处理
+    const sccOrder = [];
+    for (const scc of sccsForward) {
+      for (const itemId of scc) {
+        if (itemId !== '__solution__') {
+          sccOrder.push(itemId);
+        }
+      }
+    }
+    const itemIndex = sccOrder.indexOf(item);
+
+    // 6. 日志：显示新的 SCC 分析结果
+    if (onLog) {
+      const sccSummary = sccsForward
+        .map(scc => [...scc].filter(item => item !== '__solution__'))
+        .filter(members => members.length > 0)
+        .map(scc => `[${scc.join(',')}]`)
+        .join(' → ');
+      onLog(`${'  '.repeat(depth)}    ${choice.name} SCC: ${sccSummary}`);
+    }
+
+    // 7. 递归优化在新 SCC 队列中当前物品之前的未确定物品
+    for (let i = 0; i < itemIndex; i++) {
+      const prevItem = sccOrder[i];
+      if (!resolved.has(prevItem)) {
+        if (onLog) onLog(`${'  '.repeat(depth)}    ${choice.name} 需要前置 ${prevItem}，递归优化...`);
+        await optimizeItem(prevItem, gameData, settings, needs, tempSchemeData, resolved, depth + 1, onLog, tempGraph, tempEdges);
+      }
+    }
+
+    // 8. 重新计算成本（使用已优化的前置物品）
     const result = calculatePower(gameData, tempSchemeData, settings, needs);
     const cost = result.totalEnergyCost;
 
-    if (cost < bestCost) {
+    const isBetter = cost < bestCost;
+    if (isBetter) {
       bestCost = cost;
       bestChoice = choice;
     }
+
+    // 9. 日志：显示当前选择的结果
+    if (onLog) {
+      const marker = isBetter ? ' ✓ 新最优' : '';
+      onLog(`${'  '.repeat(depth)}    ${choice.name} → ${formatPowerValue(cost)}${marker}`);
+    }
   }
 
-  // 4. 持久化
+  // 10. 持久化
   resolved.set(item, { strategy: bestChoice, cost: bestCost });
 
-  if (onLog) onLog(`${item} 最优策略: ${bestChoice.name}, 耗电: ${formatPowerValue(bestCost)}`);
+  if (onLog) onLog(`${'  '.repeat(depth)}  ${item} 最优策略: ${bestChoice.name}, 耗电: ${formatPowerValue(bestCost)}`);
 }
 
 /**
@@ -363,15 +565,20 @@ export function optimizeSingleItem(item, gameData, settings, needs, baseSchemeDa
  * @param {Map} resolved - 持久化策略存储
  * @param {number} depth - 递归深度
  * @param {Function} onLog - 日志回调
+ * @param {Map|null} graph - 动态依赖图（可选，默认使用 gameData.graph）
+ * @param {Array|null} edges - 动态边集合（可选，默认使用 gameData.edges）
  */
-export function optimizeItem(item, gameData, settings, needs, baseSchemeData, resolved, depth = 0, onLog = null) {
-  // 1. 检查是否已确定
+export async function optimizeItem(item, gameData, settings, needs, baseSchemeData, resolved, depth = 0, onLog = null, graph = null, edges = null) {
+  // 1. 检查调用次数限制
+  checkCallLimit();
+
+  // 2. 检查是否已确定
   if (resolved.has(item)) {
     return;
   }
 
-  // 2. 设置最大递归深度限制（防止无限递归）
-  const MAX_DEPTH = 100;
+  // 3. 设置最大递归深度限制（防止无限递归）
+  const MAX_DEPTH = 50;
   if (depth > MAX_DEPTH) {
     console.error(`[自动优化] 递归深度超限: ${item}，可能存在无限循环`);
     // 使用默认策略（无增产）
@@ -382,15 +589,22 @@ export function optimizeItem(item, gameData, settings, needs, baseSchemeData, re
   if (onLog) onLog(`${'  '.repeat(depth)}处理物品: ${item} (深度: ${depth})`);
 
   // 3. 计算当前 SCC 顺序
-  const graph = gameData.graph;
-  const edges = gameData.edges;
-  const sccs = tarjanSCC(graph.keys(), edges);
+  // 使用传入的 graph/edges，或者使用 gameData 的默认值
+  const currentGraph = graph || gameData.graph;
+  const currentEdges = edges || gameData.edges;
+  // 将 Map.keys() 转换为 Set，因为 tarjanSCC 期望 Set 类型
+  const currentItems = new Set(currentGraph.keys());
+  const sccs = tarjanSCC(currentItems, currentEdges);
 
-  // 4. 找到当前物品在 SCC 中的位置
+  // 4. 找到当前物品在 SCC 中的位置（使用正序：原矿→产物）
+  // tarjanSCC 返回逆拓扑序（产物在前），需要反转为正序
+  const sccsForward = [...sccs].reverse();
   const sccOrder = [];
-  for (const scc of sccs) {
+  for (const scc of sccsForward) {
     for (const itemId of scc) {
-      sccOrder.push(itemId);
+      if (itemId !== '__solution__') { // 过滤虚拟物品
+        sccOrder.push(itemId);
+      }
     }
   }
 
@@ -401,20 +615,24 @@ export function optimizeItem(item, gameData, settings, needs, baseSchemeData, re
     const prevItem = sccOrder[i];
     if (!resolved.has(prevItem)) {
       // 递归处理前置物品
-      if (onLog) onLog(`${'  '.repeat(depth)}前置物品 ${prevItem} 未确定，递归处理`);
-      optimizeItem(prevItem, gameData, settings, needs, baseSchemeData, resolved, depth + 1, onLog);
+      if (onLog) onLog(`${'  '.repeat(depth)}前置物品 ${prevItem} 未确定，递归处理...`);
+      await optimizeItem(prevItem, gameData, settings, needs, baseSchemeData, resolved, depth + 1, onLog, currentGraph, currentEdges);
+      const prevResolved = resolved.get(prevItem);
+      if (onLog && prevResolved) {
+        onLog(`${'  '.repeat(depth)}前置物品 ${prevItem} 已确定: ${prevResolved.strategy.name}, 耗电: ${formatPowerValue(prevResolved.cost)}`);
+      }
     }
   }
 
   // 6. 检测是否属于循环组
-  const cycleGroup = findCycleGroup(item, graph, edges);
+  const cycleGroup = findCycleGroup(item, currentGraph, currentEdges);
 
   if (cycleGroup.size > 1) {
     // 7. 循环组整体遍历
-    optimizeCycleGroup(cycleGroup, gameData, settings, needs, baseSchemeData, resolved, onLog);
+    await optimizeCycleGroup(cycleGroup, gameData, settings, needs, baseSchemeData, resolved, depth, onLog);
   } else {
     // 8. 单物品遍历
-    optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, onLog);
+    await optimizeSingleItem(item, gameData, settings, needs, baseSchemeData, resolved, depth, onLog);
   }
 }
 
@@ -433,14 +651,19 @@ export function optimizeItem(item, gameData, settings, needs, baseSchemeData, re
  * @param {Function} onLog - 日志回调 (message)
  * @returns {Object} { optimalScheme, initialPower, optimalPower, changes }
  */
-export function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null) {
-  // 1. 先执行一次初始计算，获取 SCC 结构
+export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null) {
+  // 0. 重置调用计数器
+  resetCallCount();
+
+  // 1. 输出初始信息
   if (onLog) {
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
     onLog(`需求数量: ${needs.length}`);
-    onLog(`设置: proliferate_itself=${settings.proliferate_itself}`);
+    onLog(`设置: proliferate_itself=${settings.proliferate_itself}, proliferate_no_accelerate=${settings.proliferate_no_accelerate}`);
+    onLog('正在计算初始耗电...');
   }
 
+  // 2. 执行初始计算，获取 SCC 结构
   const initialResult = calculatePower(gameData, schemeData, settings, needs);
   const initialPower = initialResult.totalEnergyCost;
 
@@ -489,7 +712,7 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
       if (recipeIndex === undefined) continue;
 
       const recipe = recipeData[recipeIndex];
-      const choices = getAvailableChoices(recipe);
+      const choices = getAvailableChoices(recipe, settings);
 
       // 只有超过 1 种选择的配方才需要优化
       if (choices.length > 1) {
@@ -527,7 +750,7 @@ export function optimizeProliferatorStrategy(gameData, schemeData, settings, nee
     if (onLog) onLog(`\n[${i + 1}/${totalCount}] 尝试优化: ${itemId}`);
 
     // 使用动态 SCC 优化
-    optimizeItem(itemId, gameData, settings, needs, currentScheme, resolved, 0, onLog);
+    await optimizeItem(itemId, gameData, settings, needs, currentScheme, resolved, 0, onLog);
 
     // 应用优化结果
     const strategyInfo = resolved.get(itemId);

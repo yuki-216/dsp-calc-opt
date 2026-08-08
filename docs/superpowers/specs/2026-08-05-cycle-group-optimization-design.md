@@ -8,6 +8,25 @@
 
 在合理时间内（30秒内）找到循环组的近似最优增产策略。
 
+## 相关设置
+
+### 可选增产剂等级
+
+新增设置 `proliferate_allowed_levels`，用于控制自动优化时可尝试的增产剂等级：
+
+- **类型**：数组，如 `[1, 2, 3]`
+- **默认值**：`[1, 2, 3]`（允许所有等级）
+- **作用**：`getAvailableChoices` 函数会根据此设置过滤增产选择
+- **UI**：三个增产剂图标按钮，绿色表示已选中，灰色表示未选中，可单独切换
+
+### 限制加速模式
+
+设置 `proliferate_no_accelerate`，用于限制只能选择增产模式（不能选择加速）：
+
+- **类型**：布尔值
+- **默认值**：`false`
+- **作用**：当为 `true` 时，`getAvailableChoices` 会过滤掉加速模式选项
+
 ## 方案 A：坐标下降（当前实现）
 
 ### 原理
@@ -134,12 +153,12 @@ function optimizeCycleGroupRandom(group, ..., restarts=10):
 
 ## 实施计划
 
-### 第一阶段：实现方案 A
+### 第一阶段：实现方案 A ✅ 已完成
 
-1. 修改 `optimizeCycleGroup` 函数
-2. 实现坐标下降逻辑
-3. 添加详细日志输出
-4. 测试验证
+1. ✅ 修改 `optimizeCycleGroup` 函数
+2. ✅ 实现坐标下降逻辑
+3. ✅ 添加详细日志输出
+4. ✅ 测试验证
 
 ### 第二阶段：评估效果
 
@@ -155,8 +174,32 @@ function optimizeCycleGroupRandom(group, ..., restarts=10):
 
 ---
 
+## UI 改进
+
+### 增产剂等级选择
+
+- 三个图标按钮（MK1、MK2、MK3）
+- 绿色背景表示已选中，灰色表示未选中
+- 可单独切换，至少保留一个等级
+- 设置保存到 `proliferate_allowed_levels`
+
+### 批量预设样式
+
+- 使用圆角图标样式
+- "无"选项显示为文本，居中对齐
+- 间距统一为 2px
+
+### 输出表样式
+
+- 增产剂等级选择：圆角图标样式
+- 建筑选择：圆角图标样式，移除文字展开行为
+
+---
+
 ## 参考
 
 - 当前实现：`src/engine/proliferator-optimizer.js` - `optimizeCycleGroup` 函数
 - 核心计算：`calculatePower` 函数（创建 CoreEngine 运行完整计算）
 - 增产选择：`getAvailableChoices` 函数（返回物品的可用增产选项）
+- UI 组件：`src/recipe.jsx` - `HorizontalMultiButtonSelect` 组件（支持 `rounded` 属性）
+- 设置管理：`src/contexts.jsx` - `DEFAULT_SETTINGS`（包含 `proliferate_allowed_levels`）

@@ -34,6 +34,8 @@ const DEFAULT_SETTINGS = {
     fixed_num: 2,
     stack_research_lab: 15,
     proliferate_itself: true,
+    proliferate_no_accelerate: false,
+    proliferate_allowed_levels: [1, 2, 3],  // 允许的增产剂等级，1=MK1, 2=MK2, 3=MK3
 
     mineralize_list: []
 };
@@ -144,14 +146,15 @@ export function ContextProvider({children}) {
                 count
             }));
             const result = engine.calculate(needsArray, game_info.game_data.recipe_data);
-            // 计算完成后直接更新图数据状态
+            // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
             if (engine.graph && engine.edges) {
-                setEngineGraphData({
+                const graphData = {
                     edges: engine.edges,
                     sccs: engine.sccs || [],
                     graph: engine.graph,
                     proliferatorEdgeKeys: engine.proliferatorEdgeKeys || new Set()
-                });
+                };
+                setTimeout(() => setEngineGraphData(graphData), 0);
             }
             return result;
         };

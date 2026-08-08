@@ -4,6 +4,7 @@ import {HorizontalMultiButtonSelect} from './recipe.jsx';
 import {pro_mode_class} from './result.jsx';
 import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp, FaListOl, FaInfoCircle} from 'react-icons/fa';
+import {ItemIcon} from './ui_components.jsx';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -175,6 +176,14 @@ export function Settings() {
                         {settings.proliferate_itself ? "改为禁用" : "改为启用"}</button>
                 </td>
             </tr>
+            <tr>
+                <td>限制加速模式</td>
+                <td className="ps-2">{settings.proliferate_no_accelerate ? "仅增产" : "全部"}</td>
+                <td className="ps-2">
+                    <button onClick={e => change_bool_setting(e, "proliferate_no_accelerate")}>
+                        {settings.proliferate_no_accelerate ? "改为全部" : "改为仅增产"}</button>
+                </td>
+            </tr>
             </tbody>
         </table>
     </div>;
@@ -197,8 +206,7 @@ function FactorySelect({factory, list, icon_size}) {
     }
 
     const options = list.map((data, idx) => ({
-        value: idx, item_icon: data["名称"],
-        label: cur == idx ? <span className="mx-1 compact-hide-text">{data["名称"]}</span> : null
+        value: idx, item_icon: data["名称"]
     }));
 
     function set_factory(building) {
@@ -220,12 +228,13 @@ function FactorySelect({factory, list, icon_size}) {
     }
 
     return <HorizontalMultiButtonSelect choice={cur} options={options}
-                                        onChange={set_factory} no_gap={true} icon_size={icon_size}/>;
+                                        onChange={set_factory} no_gap={true} icon_size={icon_size} rounded={true}/>;
 }
 
 export function BatchSetting({needs_list}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
+    const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
     let game_data = global_state.game_data;
     let scheme_data = global_state.scheme_data;
@@ -246,7 +255,7 @@ export function BatchSetting({needs_list}) {
     }, [optimLogs, showLogs]);
 
     // 运行优化
-    const runOptimization = useCallback(() => {
+    const runOptimization = useCallback(async () => {
         const needsArray = Object.entries(needs_list || {}).map(([id, count]) => ({ id, name: id, count }));
         if (needsArray.length === 0) {
             alert('请先添加需求物品');
@@ -255,14 +264,16 @@ export function BatchSetting({needs_list}) {
 
         setIsOptimizing(true);
         setOptimResult(null);
-        setOptimLogs([]);
+        // 先添加一条初始日志，让日志页面展开
+        setOptimLogs(['正在初始化优化...']);
         setOptimProgress({ current: 0, total: 0, message: '正在初始化...' });
+        setShowLogs(true);
 
         // 使用 setTimeout 让 UI 有时间更新
-        setTimeout(() => {
+        setTimeout(async () => {
             try {
-                const logs = [];
-                const result = optimizeProliferatorStrategy(
+                const logs = ['正在初始化优化...'];
+                const result = await optimizeProliferatorStrategy(
                     game_data,
                     scheme_data,
                     global_state.settings,
@@ -354,8 +365,35 @@ export function BatchSetting({needs_list}) {
         {value: 1, label: "加速", className: pro_mode_class[1]},
     ];
 
+    // 增产剂等级多选
+    const settings = useContext(SettingsContext);
+    const allowed_levels = settings.proliferate_allowed_levels || [1, 2, 3];
+    const toggle_level = (level) => {
+        const new_levels = allowed_levels.includes(level)
+            ? allowed_levels.filter(l => l !== level)
+            : [...allowed_levels, level].sort();
+        // 至少保留一个等级
+        if (new_levels.length === 0) return;
+        set_settings({ proliferate_allowed_levels: new_levels });
+    };
+
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
+            <small className="fw-bold">自动优化可选增产剂</small>
+            <div className="d-flex" style={{gap: '2px'}}>
+                {[1, 2, 3].map(level => {
+                    const pro_data = game_data.proliferator_data[level];
+                    const is_selected = allowed_levels.includes(level);
+                    return <div key={level}
+                                className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
+                                    ${is_selected ? 'bg-success text-white' : 'bg-secondary text-white-50'}`}
+                                onClick={() => toggle_level(level)}
+                                title={`${pro_data?.名称 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
+                    >
+                        {pro_data?.名称 && <ItemIcon item={pro_data.名称} size={mob_icon || 32}/>}
+                    </div>;
+                })}
+            </div>
             <small className="fw-bold">批量预设</small>
             <div className="d-flex pro-mode-toggle">
                 {promode_options.map(({value, label, className}) => (
@@ -366,9 +404,11 @@ export function BatchSetting({needs_list}) {
                     </div>
                 ))}
             </div>
-            <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
-                                         onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
-                                         icon_size={mob_icon}/>
+            <div className="d-flex" style={{gap: '2px'}}>
+                <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
+                                             onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
+                                             icon_size={mob_icon} rounded={true}/>
+            </div>
             {factory_doms}
             <button
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"

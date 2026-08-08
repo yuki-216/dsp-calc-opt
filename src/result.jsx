@@ -85,7 +85,7 @@ export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
     }
 
     return <HorizontalMultiButtonSelect choice={choice} options={pro_num_options} onChange={onChange}
-                                        icon_size={icon_size} optionType={"proNumSelect"}/>;
+                                        icon_size={icon_size} optionType={"proNumSelect"} rounded={true}/>;
 }
 
 export const pro_mode_class = {
@@ -110,14 +110,16 @@ export function ProModeSelect({recipe_id, choice, onChange}) {
     // 未选择时默认选中第一个选项（直接计算显示值，不依赖 useEffect）
     const effectiveChoice = (choice === 0 || !options.some(o => o.value === choice)) ? options[0].value : choice;
 
-    // 异步更新 scheme_data 以持久化默认值
-    if (effectiveChoice !== choice) {
-        set_scheme_data(old => {
-            let scheme_data = structuredClone(old);
-            scheme_data.scheme_for_recipe[recipe_id]["增产模式"] = effectiveChoice;
-            return scheme_data;
-        });
-    }
+    // 使用 useEffect 异步更新 scheme_data 以持久化默认值
+    useEffect(() => {
+        if (effectiveChoice !== choice) {
+            set_scheme_data(old => {
+                let scheme_data = structuredClone(old);
+                scheme_data.scheme_for_recipe[recipe_id]["增产模式"] = effectiveChoice;
+                return scheme_data;
+            });
+        }
+    }, [effectiveChoice, choice, recipe_id, set_scheme_data]);
 
     const isSingle = options.length === 1;
 
@@ -144,7 +146,7 @@ export function FactorySelect({recipe_id, choice, onChange, no_gap, icon_size}) 
     ));
 
     return <HorizontalMultiButtonSelect choice={choice} options={options} onChange={onChange}
-                                        no_gap={no_gap} icon_size={icon_size}/>;
+                                        no_gap={no_gap} icon_size={icon_size} rounded={true}/>;
 }
 // 简易的对象相等性检查函数
 const isEqual = (obj1, obj2) => {
