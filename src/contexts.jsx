@@ -1,4 +1,4 @@
-import {createContext, useEffect, useState, useMemo, useRef} from 'react';
+import {createContext, useEffect, useState, useMemo, useRef, useCallback} from 'react';
 import {GameInfo, GlobalState} from './game_data';
 import {init_scheme_data} from './scheme_data';
 import {default_game_data} from "./game_data.jsx";
@@ -16,6 +16,8 @@ export const GameInfoContext = createContext(null);
 export const ValidationContext = createContext(null);
 export const EngineGraphDataContext = createContext(null);
 export const EngineCalculateContext = createContext(null);
+export const FuelContext = createContext(null);
+export const FuelSetterContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
     mining_speed_oil: 3.0,
@@ -169,6 +171,17 @@ export function ContextProvider({children}) {
         comparator: null
     };
 
+    // 燃料选择状态（从 scheme_data 中读取）
+    const selected_fuel = scheme_data.selected_fuel || "无";
+
+    // 燃料选择 setter
+    const set_selected_fuel = useCallback((fuelName) => {
+        set_scheme_data(old => ({
+            ...old,
+            selected_fuel: fuelName
+        }));
+    }, [set_scheme_data]);
+
     function set_game_data(game_data) {
         set_game_info(new GameInfo(game_data));
     }
@@ -183,7 +196,11 @@ export function ContextProvider({children}) {
                                 <SchemeDataSetterContext.Provider value={set_scheme_data}>
                                     <SettingsSetterContext.Provider value={set_settings}>
                                         <SettingsContext.Provider value={settings}>
-                                            {children}
+                                            <FuelContext.Provider value={selected_fuel}>
+                                                <FuelSetterContext.Provider value={set_selected_fuel}>
+                                                    {children}
+                                                </FuelSetterContext.Provider>
+                                            </FuelContext.Provider>
                                         </SettingsContext.Provider>
                                     </SettingsSetterContext.Provider>
                                 </SchemeDataSetterContext.Provider>
