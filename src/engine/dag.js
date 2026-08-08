@@ -95,12 +95,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
       continue;
     }
 
-    // 燃料物品视为原料，不追溯其生产配方（避免电力→燃料→电力的循环依赖）
-    const selectedFuel = schemeData?.selected_fuel;
-    if (selectedFuel && selectedFuel !== '无' && itemId === selectedFuel) {
-      continue;
-    }
-
     // 从用户选择的主配方获取
     let foundRecipe = null;
     // console.log(`[buildItemGraph] 查找 ${itemId} 的主配方...`);
