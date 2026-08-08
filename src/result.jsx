@@ -494,6 +494,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }
 
     for (let i in result_dict) {
+        // 跳过"电力"——已由置顶的电力行特殊处理
+        if (i === "电力") continue;
         side_products[i] = side_products[i] || {};
         let total = result_dict[i] + Object.values(side_products[i]).reduce((a, b) => a + b, 0);
         if (total < 1e-6) continue;
