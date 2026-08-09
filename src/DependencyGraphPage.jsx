@@ -171,31 +171,37 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         out_degree.set(to, out_degree.get(to) + 1);
     });
 
-    // 5. 物品初始层级映射，多节点 SCC +2 偏移
+    // 5. 物品初始层级映射（循环组保持原始层级）
     const item_layer = new Map();
     const cycle_items = [];
     scc_groups.forEach((scc, scc_idx) => {
         const base_layer = sccVisualLayer.get(scc_idx) ?? 0;
-        const layer = scc.size > 1 ? base_layer + 2 : base_layer;
         scc.forEach(item => {
-            item_layer.set(item, layer);
+            item_layer.set(item, base_layer);
             if (scc.size > 1) cycle_items.push(item);
         });
     });
     const cycle_set = new Set(cycle_items);
 
     // 6. 下移优化：按 SCC 逆拓扑序（产物在前），尝试增大层级直到遇到产物同层
-    //    循环物品不参与下移（保持 +2 偏移）
+    //    循环物品不参与下移（保持原始层级）
     //    目标：拉大原料与产物的间距，减少引线交叉
+    //    回退机制：原本是第一层（layer 0）的物品，如果下移只能移动1层，就保持第一层
     for (const scc of scc_groups) {
         for (const item of scc) {
             if (cycle_set.has(item)) continue;
             const child_items = children.get(item) || [];
             if (child_items.length === 0) continue;
+            const original_layer = item_layer.get(item) ?? 0;
             const min_child_layer = Math.min(...child_items.map(c => item_layer.get(c) ?? 0));
             const max_allowed = min_child_layer - 1;
-            if (max_allowed > (item_layer.get(item) ?? 0)) {
-                item_layer.set(item, max_allowed);
+            if (max_allowed > original_layer) {
+                const new_layer = max_allowed;
+                // 回退机制：原本是非循环第一层，下移只能移动1层，就保持第一层
+                if (original_layer === 0 && new_layer === 1) {
+                    continue;
+                }
+                item_layer.set(item, new_layer);
             }
         }
     }
@@ -218,23 +224,21 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
     });
 
     const scc_info = [];
-    let scc_display_counter = 0;
     scc_groups.forEach((scc, scc_idx) => {
         if (scc.size > 1) {
             const first_member = [...scc][0];
             const scc_layer = item_layer.get(first_member) ?? 0;
             scc_info.push({
                 id: scc_idx,
-                display_id: scc_display_counter++,
                 members: [...scc],
                 layer: scc_layer
             });
         }
     });
 
-    // 8. 动态层间距（90px-135px，根据引线密度调整）
+    // 8. 动态层间距（90px-115px，根据引线密度调整）
     const MIN_LAYER_GAP = 90;
-    const MAX_LAYER_GAP = 135;
+    const MAX_LAYER_GAP = 115;
 
     const layer_edge_count = new Map();
     sorted_layers.forEach(layer => layer_edge_count.set(layer, 0));
@@ -1652,7 +1656,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
 
             return (
                 <div
-                    key={`scc-${scc.display_id}`}
+                    key={`scc-${scc.id}`}
                     style={{
                         position: 'absolute',
                         left: min_x,
@@ -1666,22 +1670,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                         zIndex: 1,
                         transition: 'opacity 0.15s'
                     }}
-                >
-                    <div style={{
-                        position: 'absolute',
-                        top: -10,
-                        left: 0,
-                        backgroundColor: '#e8f4fd',
-                        color: '#ff6b6b',
-                        fontSize: '11px',
-                        padding: '0 4px',
-                        borderRadius: '4px',
-                        fontWeight: 'bold',
-                        whiteSpace: 'nowrap'
-                    }}>
-                        #{scc.display_id + 1}
-                    </div>
-                </div>
+                />
             );
         });
     };
@@ -1912,11 +1901,11 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                                     </div>
                                     <div className="debug-layer-items">
                                         {layer.items.map(item => {
-                                            const scc_id = layout_scc_info?.find(s => s.members.includes(item));
+                                            const is_cycle = layout_scc_info?.some(s => s.members.includes(item));
                                             const dag_layer_val = layout_item_dag_layer?.get(item);
                                             return (
-                                                <span key={item} className="debug-item" style={scc_id ? {color: '#ff6b6b', fontWeight: 'bold'} : {}}>
-                                                    {item}{dag_layer_val !== undefined ? ` (${dag_layer_val})` : ''}{scc_id ? ` [G${scc_id.display_id + 1}]` : ''}
+                                                <span key={item} className="debug-item" style={is_cycle ? {color: '#ff6b6b', fontWeight: 'bold'} : {}}>
+                                                    {item}{dag_layer_val !== undefined ? ` (${dag_layer_val})` : ''}{is_cycle ? ' [循环]' : ''}
                                                 </span>
                                             );
                                         })}
@@ -1930,7 +1919,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                                     </div>
                                     {layout_scc_info.map(scc => (
                                         <div key={scc.id} style={{marginBottom: '4px'}}>
-                                            <span style={{color: '#ff6b6b'}}>组 {scc.display_id + 1}</span>
+                                            <span style={{color: '#ff6b6b'}}>循环组</span>
                                             <span style={{color: '#999'}}> (层{scc.layer}, {scc.members.length}节点): </span>
                                             {scc.members.map(m => <span key={m} className="debug-item" style={{color: '#ff6b6b'}}>{m} </span>)}
                                         </div>
