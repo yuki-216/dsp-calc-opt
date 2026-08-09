@@ -267,6 +267,13 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
         if (cancelAmount > 0) {
           console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
+          console.log(`[阶段2-逆生产] "${itemId}" 成本:`, JSON.stringify(itemCost));
+          // 打印乘以系数后的量
+          const scaledCost = {};
+          for (const [key, val] of Object.entries(itemCost)) {
+            scaledCost[key] = val * (-cancelAmount);
+          }
+          console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
           substitute(itemId, itemCost, -cancelAmount);  // 负号表示抵消
 
           // 恢复抵消后的系数（substitute 内部会删除 solution[itemId]）
