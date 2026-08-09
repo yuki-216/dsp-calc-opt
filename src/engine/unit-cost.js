@@ -233,13 +233,6 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       const production = solution[itemSelfKey] || 0;
       const itemCost = costs.get(itemId);
 
-      // 原矿类物品（成本只有 $物品:1）：直接删除负系数，无需逆生产
-      if (itemCost && Object.keys(itemCost).length === 1 && itemCost[itemSelfKey] === 1) {
-        console.log(`[阶段2-逆生产] "${itemId}" 是原矿，直接删除负系数=${v.toFixed(6)}`);
-        delete solution[itemId];
-        continue;
-      }
-
       if (itemCost && production > 0) {
         const selfCoeffInCost = itemCost[itemSelfKey] || 1;
         const netProduction = production / selfCoeffInCost;
