@@ -37,7 +37,7 @@ function RootApp() {
                 <App needs_list={needs_list} set_needs_list={set_needs_list}/>
             </div>
             <div style={{display: page === 'dependency-graph' ? 'contents' : 'none'}}>
-                <DependencyGraphPage onBack={() => setPage('calculator')} needs_list={needs_list}/>
+                <DependencyGraphPage onBack={() => setPage('calculator')} needs_list={needs_list} isActive={page === 'dependency-graph'}/>
             </div>
         </ContextProvider>
     </ThemeProvider>;

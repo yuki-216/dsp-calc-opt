@@ -1,6 +1,6 @@
 import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'react';
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink} from 'react-icons/fa';
-import {GameInfoContext, GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
+import {GameInfoContext, GlobalStateContext, EngineGraphDataContext, FuelContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
 import {tarjanSCC, compressToDag, dagTopologicalSort} from './engine/graph-utils.js';
 import './DependencyGraph.css';
@@ -15,10 +15,11 @@ const STORAGE_KEY_SHOW_NEEDS_ONLY = 'dependency_graph_show_needs_only';
  * @param {Object} game_data - 游戏数据
  * @param {Object} item_data - 物品数据
  * @param {Object} scheme_data - 方案数据
+ * @param {string} selected_fuel - 用户选择的燃料名称
  * @returns {Object} {edges, items_with_edges, proliferator_edges}
  * 边方向: from=产物, to=原料；增产剂消耗会作为额外原料加入
  */
-function build_dependency_graph(game_data, item_data, scheme_data) {
+function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel) {
     const edges = [];
     const edge_set = new Set();
     const items_with_edges = new Set();
@@ -27,7 +28,48 @@ function build_dependency_graph(game_data, item_data, scheme_data) {
 
     const recipe_handled = new Set();
 
+    // 处理电力物品的燃料配方
+    if (selected_fuel && selected_fuel !== '无') {
+        const fuelRecipe = game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === selected_fuel);
+        if (fuelRecipe) {
+            const recipe_index = game_data.recipe_data.indexOf(fuelRecipe);
+            const recipe_scheme = scheme_data.scheme_for_recipe[recipe_index];
+            const proliferate_mode = recipe_scheme?.["增产模式"] || 0;
+            let proliferate_num = recipe_scheme?.["增产剂等级"] || 0;
+            if (proliferate_num >= proliferator_data.length) proliferate_num = 0;
+
+            const materials = new Set(Object.keys(fuelRecipe.原料));
+            const original_materials = new Set(Object.keys(fuelRecipe.原料));
+
+            if (proliferate_mode > 0 && proliferate_num > 0) {
+                const proItem = proliferator_data[proliferate_num]?.增产剂;
+                if (proItem) {
+                    materials.add(proItem);
+                }
+            }
+
+            for (const product of Object.keys(fuelRecipe.产物)) {
+                for (const material of materials) {
+                    const edge_key = `${product}->${material}`;
+                    if (!edge_set.has(edge_key)) {
+                        edge_set.add(edge_key);
+                        edges.push({from: product, to: material});
+                        items_with_edges.add(material);
+                        items_with_edges.add(product);
+
+                        if (!original_materials.has(material)) {
+                            proliferator_edges.add(edge_key);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     for (const item in item_data) {
+        // 跳过电力物品，已单独处理
+        if (item === '电力') continue;
+
         const choice = scheme_data.item_recipe_choices[item] || 1;
         const recipe_index = item_data[item][choice];
         if (recipe_index === undefined) continue;
@@ -64,6 +106,17 @@ function build_dependency_graph(game_data, item_data, scheme_data) {
                     if (!original_materials.has(material)) {
                         proliferator_edges.add(edge_key);
                     }
+                }
+            }
+
+            // 为有设备的配方添加对电力的依赖
+            if (recipe.设施 !== undefined && recipe.设施 !== null) {
+                const power_edge_key = `${product}->电力`;
+                if (!edge_set.has(power_edge_key)) {
+                    edge_set.add(power_edge_key);
+                    edges.push({from: product, to: '电力'});
+                    items_with_edges.add('电力');
+                    items_with_edges.add(product);
                 }
             }
         }
@@ -978,10 +1031,11 @@ function assign_edge_colors(edges) {
  * 交互：左键拖拽节点/画布、右键删除、鼠标滚轮缩放、悬停高亮上下游
  * 持久化：删除列表、自定义位置、显示模式均保存在 localStorage
  */
-export function DependencyGraphPage({onBack, needs_list}) {
+export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const game_info = useContext(GameInfoContext);
     const global_state = useContext(GlobalStateContext);
     const engineGraphData = useContext(EngineGraphDataContext);
+    const selected_fuel = useContext(FuelContext);
     const container_ref = useRef(null);
 
     if (!global_state) {
@@ -1111,15 +1165,15 @@ export function DependencyGraphPage({onBack, needs_list}) {
     }, []);
 
     const full_graph_data = useMemo(() => {
-        return build_dependency_graph(game_data, item_data, scheme_data);
-    }, [game_data, item_data, scheme_data]);
+        return build_dependency_graph(game_data, item_data, scheme_data, selected_fuel);
+    }, [game_data, item_data, scheme_data, selected_fuel]);
 
     const filtered_graph = useMemo(() => {
         // 仅需求模式（复用核心计算数据）
         if (show_needs_only && needs_list && Object.keys(needs_list).length > 0 && engineGraphData) {
-            // 直接复用核心计算的边（过滤已删除物品）
+            // 直接复用核心计算的边（过滤已删除物品和电力边）
             const filtered_edges = engineGraphData.edges.filter(e =>
-                !deleted_items.has(e.from) && !deleted_items.has(e.to)
+                !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to !== '电力'
             );
             const filtered_items = new Set();
             filtered_edges.forEach(e => {
@@ -1147,18 +1201,36 @@ export function DependencyGraphPage({onBack, needs_list}) {
         }
 
         // 全部配方模式：从全量数据中过滤已删除物品
+        // SCC 基于完整边集（包括电力边）计算，保持布局稳定
         const {edges, proliferator_edges} = full_graph_data;
-        const filtered_edges = edges.filter(e =>
+        // 完整边集（包括电力边，用于 SCC 计算）
+        const full_edges = edges.filter(e =>
             !deleted_items.has(e.from) && !deleted_items.has(e.to)
         );
+        // 渲染边集（过滤电力边）
+        const filtered_edges = full_edges.filter(e => e.to !== '电力');
 
+        // filtered_items 从渲染边集构建，不包含孤立物品
         const filtered_items = new Set();
         filtered_edges.forEach(e => {
             filtered_items.add(e.from);
             filtered_items.add(e.to);
         });
 
-        return {edges: filtered_edges, items: filtered_items, proliferator_edges};
+        // 基于完整边集计算 SCC
+        const full_items = new Set();
+        full_edges.forEach(e => {
+            full_items.add(e.from);
+            full_items.add(e.to);
+        });
+        const sccs = tarjanSCC(full_items, full_edges);
+
+        // 过滤 SCC，只保留存在于 filtered_items 中的物品
+        const filtered_sccs = sccs
+            .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
+            .filter(scc => scc.size > 0);
+
+        return {edges: filtered_edges, items: filtered_items, proliferator_edges, sccs: filtered_sccs};
     }, [full_graph_data, deleted_items, show_needs_only, needs_list, engineGraphData]);
 
     const edge_colors = useMemo(() => {
@@ -1229,20 +1301,20 @@ export function DependencyGraphPage({onBack, needs_list}) {
     // 布局变化时自动居中视角
     const has_initialized_ref = useRef(false);
     const prev_layout_key_ref = useRef(null);
+
+    // 页面激活时重置，确保切换到依赖图时能重新居中
+    useEffect(() => {
+        if (isActive) {
+            prev_layout_key_ref.current = null;
+        }
+    }, [isActive]);
+
     useEffect(() => {
         if (base_positions.size === 0) return;
         // 用base_positions的key集合判断布局是否变化（排除拖动导致的变化）
         const keys = [...base_positions.keys()].sort().join(',');
         if (prev_layout_key_ref.current === keys) return;
         prev_layout_key_ref.current = keys;
-
-        // 初始位置分配完成后立刻重置视角（只执行一次）
-        if (!has_initialized_ref.current) {
-            has_initialized_ref.current = true;
-            setScale(1);
-            setPan({x: 0, y: 0});
-            return;
-        }
 
         // 计算首层节点的实际中心位置
         const first_layer_items = layout_sorted_layers.length > 0
@@ -1260,12 +1332,13 @@ export function DependencyGraphPage({onBack, needs_list}) {
 
         const rect = container_ref.current?.getBoundingClientRect();
         if (rect) {
+            setScale(1);
             setPan({
-                x: rect.width / 2 - first_layer_center_x * scale,
+                x: rect.width / 2 - first_layer_center_x,
                 y: 0
             });
         }
-    }, [base_positions, scale, container_width, layout_sorted_layers, layout_layers_map]);
+    }, [base_positions, container_width, layout_sorted_layers, layout_layers_map]);
 
     const deleted_items_list = useMemo(() => {
         return [...deleted_items].filter(item => full_graph_data.items_with_edges.has(item));
@@ -1463,6 +1536,11 @@ export function DependencyGraphPage({onBack, needs_list}) {
                 if (filtered_graph.proliferator_edges.has(edge_key)) {
                     return null;
                 }
+            }
+
+            // 电力的入边默认不渲染
+            if (edge.to === '电力') {
+                return null;
             }
 
             const edge_key = `${edge.from}->${edge.to}`;
