@@ -158,7 +158,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         const cost = costs.get(itemId);
         if (cost) console.log(`  ${itemId} cost:`, JSON.stringify(cost));
       }
-      const { constTerms } = solveSCCByMatrix(scc, costs);
+      solveSCCByMatrix(scc, costs);
       // 打印求解后的 cost
       for (const itemId of scc) {
         const cost = costs.get(itemId);
@@ -169,31 +169,10 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       for (const itemId of scc) {
         const coeff = solution[itemId] || 0;
         if (coeff > 0) {
-          // 展开常数项：将依赖关系转换为实际成本
           const itemCost = costs.get(itemId);
           if (itemCost) {
-            const expandedCost = {};
-            for (const [key, execCount] of Object.entries(itemCost)) {
-              if (key.startsWith('$')) {
-                // 依赖项：展开常数项
-                const depItemId = key.slice(1);
-                const constTerm = constTerms.get(depItemId);
-                if (constTerm) {
-                  for (const [ck, cv] of Object.entries(constTerm)) {
-                    expandedCost[ck] = (expandedCost[ck] || 0) + cv * execCount;
-                  }
-                }
-              } else {
-                // 非依赖项：直接添加
-                expandedCost[key] = (expandedCost[key] || 0) + execCount;
-              }
-            }
-            // 四舍五入
-            for (const key of Object.keys(expandedCost)) {
-              expandedCost[key] = Math.round(expandedCost[key] * ROUND_FACTOR) / ROUND_FACTOR;
-            }
-            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(expandedCost));
-            substitute(itemId, expandedCost);
+            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+            substitute(itemId, itemCost);
             console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
         }
@@ -413,10 +392,12 @@ function solveSCCByMatrix(scc, costs) {
         const itemSelfKey = `$${sccArray[i]}`;
         newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
       } else {
-        // 正依赖（原料）：不展开常数项，只记录依赖关系
-        // 保留 $物品: execCount，让展开阶段根据solution判断是否需要展开
-        const itemSelfKey = `$${sccArray[i]}`;
-        newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
+        // 正依赖（原料）：展开常数项
+        const constTerm = constTerms.get(sccArray[i]);
+        if (!constTerm) continue;
+        for (const [key, coeff] of Object.entries(constTerm)) {
+          newCost[key] = (newCost[key] || 0) + coeff * execCount;
+        }
       }
     }
 
@@ -427,9 +408,6 @@ function solveSCCByMatrix(scc, costs) {
 
     costs.set(itemId, newCost);
   }
-
-  // 返回常数项，供展开阶段使用
-  return { constTerms };
 
   // 输出结果
   // for (let i = 0; i < n; i++) {
