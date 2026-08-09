@@ -365,7 +365,17 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     let result_table_rows = [];
 
     const RatioAdjustInput = ({value, trimZeros, ceil}) => {
-        let disp_value = trimZeros ? (ceil ? formatValueCeil(value, fixed_num) : formatValue(value, fixed_num)) : value.toFixed(fixed_num);
+        let disp_value;
+        if (ceil) {
+            // 进1法，不去尾0
+            const factor = Math.pow(10, fixed_num);
+            const ceiled = Math.ceil(value * factor) / factor;
+            disp_value = ceiled.toFixed(fixed_num);
+        } else if (trimZeros) {
+            disp_value = formatValue(value, fixed_num);
+        } else {
+            disp_value = value.toFixed(fixed_num);
+        }
         let base_value = +disp_value;
 
         function set_needs_in_row() {
