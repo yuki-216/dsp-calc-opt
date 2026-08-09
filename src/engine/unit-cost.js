@@ -126,11 +126,14 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   }
 
   // ====== 阶段1：SCC展开（逆拓扑序，从顶层开始） ======
+  console.log('[展开] SCC总数:', sccs.length, '顺序:');
+  for (let i = 0; i < sccs.length; i++) {
+    console.log(`  SCC[${i}]:`, [...sccs[i]].join(', '));
+  }
+  console.log('[展开] 初始 solution:', JSON.stringify(solution));
+
   for (let i = 0; i < sccs.length; i++) {
     const scc = sccs[i];
-
-    // 累加其他开销（已禁用）
-    // timings.other += performance.now() - otherStart;
 
     if (scc.size === 1) {
       // 单节点 SCC
@@ -139,34 +142,39 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       if (coeff > 0) {
         const itemCost = costs.get(itemId);
         if (itemCost) {
-          // console.log(`[阶段1] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
-          // const subStart = performance.now();
+          console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
           substitute(itemId, itemCost);
-          // timings.substitute += performance.now() - subStart;
+          console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
         }
       }
     } else {
       // 多节点 SCC（循环组）：矩阵求逆一次性解出全部物品
-      // const matrixStart = performance.now();
+      console.log(`[阶段1] SCC[${i}] 循环组求解:`, [...scc].join(', '));
+      // 打印求解前的 cost
+      for (const itemId of scc) {
+        const cost = costs.get(itemId);
+        if (cost) console.log(`  ${itemId} cost:`, JSON.stringify(cost));
+      }
       solveSCCByMatrix(scc, costs);
-      // timings.matrixInverse += performance.now() - matrixStart;
+      // 打印求解后的 cost
+      for (const itemId of scc) {
+        const cost = costs.get(itemId);
+        if (cost) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
+      }
 
       // 将循环组内物品代入 solution
-      // const subStart = performance.now();
       for (const itemId of scc) {
         const coeff = solution[itemId] || 0;
         if (coeff > 0) {
           const itemCost = costs.get(itemId);
           if (itemCost) {
-            // console.log(`[阶段1-循环组] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
             substitute(itemId, itemCost);
+            console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
         }
       }
-      // timings.substitute += performance.now() - subStart;
     }
-
-    // otherStart = performance.now();
   }
 
   // ====== 阶段2：处理两个列表（循环直到都为空） ======
@@ -176,6 +184,8 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   let loopCount = 0;
   const maxLoops = 1000;
 
+  console.log('[阶段2] 开始, expansionList:', [...expansionList], 'reverseProductionList:', [...reverseProductionList]);
+
   while ((reverseProductionList.size > 0 || expansionList.size > 0) && loopCount < maxLoops) {
     loopCount++;
 
@@ -183,27 +193,19 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     while (expansionList.size > 0 && loopCount < maxLoops) {
       loopCount++;
       const itemId = expansionList.values().next().value;
-      // 不需要删除，substitute 内部会删除
-      // 不需要判断，待展开列表是动态维护的，进来的肯定是需求物品
-      // multiplier 为 null 时，substitute 内部会使用 solution[key] 的系数
-
       const coeff = solution[itemId] || 0;
 
-      // 截断：系数太小，直接删除
       if (Math.abs(coeff) < PHASE2_TRUNCATE_EPSILON) {
         expansionList.delete(itemId);
         delete solution[itemId];
-        // console.log(`[阶段2-待展开] "${itemId}" 系数=${coeff.toFixed(6)} < ${PHASE2_TRUNCATE_EPSILON}, 截断`);
         continue;
       }
 
       const itemCost = costs.get(itemId);
       if (itemCost) {
-        // console.log(`[阶段2-待展开] "${itemId}" (系数=${coeff.toFixed(6)})`);
-        // const subStart = performance.now();
-        substitute(itemId, itemCost);  // 2个参数，multiplier 默认为 null
-        // timings.substitute += performance.now() - subStart;
-        // console.log(`[阶段2-待展开后] 待逆生产=[${[...reverseProductionList].join(', ')}], 待展开=[${[...expansionList].join(', ')}]`);
+        console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+        substitute(itemId, itemCost);
+        console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
       }
     }
 
@@ -211,16 +213,17 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     if (reverseProductionList.size > 0 && loopCount < maxLoops) {
       loopCount++;
       const itemId = reverseProductionList.values().next().value;
-      reverseProductionList.delete(itemId);  // 开始处理时删除
+      reverseProductionList.delete(itemId);
 
       const v = solution[itemId] || 0;
 
-      // 截断：系数太小，直接删除
       if (Math.abs(v) < PHASE2_TRUNCATE_EPSILON) {
         delete solution[itemId];
-        // console.log(`[阶段2-逆生产] "${itemId}" 系数=${v.toFixed(6)} < ${PHASE2_TRUNCATE_EPSILON}, 截断`);
         continue;
       }
+
+      console.log(`[阶段2-逆生产] "${itemId}" (系数=${v.toFixed(6)})`);
+
 
       const itemSelfKey = `$${itemId}`;
       const production = solution[itemSelfKey] || 0;
@@ -238,21 +241,19 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         }
 
         if (cancelAmount > 0) {
-          // console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
-          // const subStart = performance.now();
+          console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
           substitute(itemId, itemCost, -cancelAmount);  // 负号表示抵消
-          // timings.substitute += performance.now() - subStart;
 
           // 恢复抵消后的系数（substitute 内部会删除 solution[itemId]）
           const newV = v + cancelAmount;
           if (newV !== 0) {
             solution[itemId] = newV;
             if (newV < 0) {
-              // console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
+              console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
               reverseProductionList.add(itemId);  // 还有剩余，重新加入
             }
           }
-          // console.log(`[阶段2-逆生产后] 待逆生产=[${[...reverseProductionList].join(', ')}], 待展开=[${[...expansionList].join(', ')}]`);
+          console.log(`[阶段2-逆生产后] solution:`, JSON.stringify(solution));
         }
       }
     }
