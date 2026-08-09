@@ -65,6 +65,18 @@ export class CoreEngine {
     // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
     this.initialize(needs, recipes);
 
+    console.log('[Engine] ====== 计算开始 ======');
+    console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
+    console.log('[Engine] 图节点数:', this.graph.size);
+    console.log('[Engine] SCC数:', this.sccs.length);
+
+    // 打印图中所有节点及其 buildingPower
+    for (const [id, node] of this.graph) {
+      if (node.buildingPower) {
+        console.log(`[Engine] 节点 "${id}": recipeId=${node.recipeId}, buildingPower=`, node.buildingPower);
+      }
+    }
+
     // 2. 创建虚拟"解"物品和虚拟配方
     const SOLUTION_ID = '__solution__';
     const solutionNode = {
@@ -103,11 +115,15 @@ export class CoreEngine {
     // 添加 solution 的成本
     costs.set(SOLUTION_ID, solutionNode.directCost);
 
+    console.log('[Engine] Solution directCost:', JSON.stringify(solutionNode.directCost));
+
     // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
     expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
 
     // 5. 获取"解"的成本并缩放
     let solutionCost = costs.get(SOLUTION_ID);
+
+    console.log('[Engine] 展开后 solutionCost:', JSON.stringify(solutionCost));
 
     const recipeExecutions = {};
     const surplusByproducts = {};
@@ -139,6 +155,10 @@ export class CoreEngine {
         }
       }
     }
+
+    console.log('[Engine] energyCost:', energyCost, 'minerEnergyCost:', minerEnergyCost);
+    console.log('[Engine] recipeExecutions:', JSON.stringify(recipeExecutions));
+    console.log('[Engine] surplusByproducts:', JSON.stringify(surplusByproducts));
 
     const totalEnergyCost = energyCost + minerEnergyCost;
 
@@ -202,6 +222,10 @@ export class CoreEngine {
     aggregated.energyCost = energyCost;
     aggregated.minerEnergyCost = minerEnergyCost;
     aggregated.totalEnergyCost = totalEnergyCost;
+
+    console.log('[Engine] buildingList:', JSON.stringify(buildingList));
+    console.log('[Engine] buildingDetails:', JSON.stringify(buildingDetails));
+    console.log('[Engine] ====== 计算结束 ======');
 
     return aggregated;
   }
