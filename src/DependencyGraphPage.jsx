@@ -318,15 +318,24 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             const layer_items = layers_map.get(layer_idx);
             const base_y = layer_y.get(layer_idx);
             const gap = layer_gap_map.get(layer_idx);
-            const layer_width = layer_items.length * gap;
-            const center_width = effective_page_width;
-            const start_x = (center_width - layer_width) / 2 + gap / 2;
 
-            // 首层节点按矿石顺序排列
-            let sorted_layer_items = layer_items;
+            // 首层排列：循环组算一个整体放到最右边
             if (layer_order === 0) {
+                // 分离循环组和普通节点
+                const cycle_items_in_layer = layer_items.filter(item => cycle_set.has(item));
+                const normal_items_in_layer = layer_items.filter(item => !cycle_set.has(item));
+
+                // 计算循环组宽度（成员数 * gap）
+                const cycle_group_width = cycle_items_in_layer.length > 0 ? cycle_items_in_layer.length * gap : 0;
+
+                // 普通节点排列（排除循环组占用的宽度）
+                const available_width = effective_page_width - MARGIN_X * 2 - cycle_group_width;
+                const normal_gap = normal_items_in_layer.length > 0 ? available_width / normal_items_in_layer.length : 0;
+                const normal_start_x = MARGIN_X + normal_gap / 2;
+
+                // 按矿石顺序排列普通节点
                 const default_order = ['铁矿', '铜矿', '石矿', '硅矿', '原油', '煤矿', '钛矿'];
-                sorted_layer_items = [...layer_items].sort((a, b) => {
+                const sorted_normal_items = [...normal_items_in_layer].sort((a, b) => {
                     const index_a = default_order.indexOf(a);
                     const index_b = default_order.indexOf(b);
                     if (index_a !== -1 && index_b !== -1) return index_a - index_b;
@@ -334,26 +343,63 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     if (index_b !== -1) return 1;
                     return 0;
                 });
-                layers_map.set(layer_idx, sorted_layer_items);
-            }
 
-            sorted_layer_items.forEach((item, i) => {
-                let x = start_x + i * gap;
-                if (layer_order === 0 && custom_first_layer_positions && custom_first_layer_positions.has(item)) {
-                    x = custom_first_layer_positions.get(item).x;
+                // 排列普通节点
+                sorted_normal_items.forEach((item, i) => {
+                    let x = normal_start_x + i * normal_gap;
+                    if (custom_first_layer_positions && custom_first_layer_positions.has(item)) {
+                        x = custom_first_layer_positions.get(item).x;
+                    }
+
+                    positions.set(item, {
+                        x: x,
+                        y: base_y,
+                        is_source: in_degree.get(item) === 0,
+                        is_sink: out_degree.get(item) === 0,
+                        is_cycle: false,
+                        layer: layer_idx,
+                        index: i,
+                        is_first_layer: true
+                    });
+                });
+
+                // 排列循环组（放到最右边）
+                if (cycle_items_in_layer.length > 0) {
+                    const cycle_start_x = effective_page_width - MARGIN_X - cycle_group_width + gap / 2;
+                    cycle_items_in_layer.forEach((item, i) => {
+                        let x = cycle_start_x + i * gap;
+                        positions.set(item, {
+                            x: x,
+                            y: base_y,
+                            is_source: in_degree.get(item) === 0,
+                            is_sink: out_degree.get(item) === 0,
+                            is_cycle: true,
+                            layer: layer_idx,
+                            index: sorted_normal_items.length + i,
+                            is_first_layer: true
+                        });
+                    });
                 }
 
-                positions.set(item, {
-                    x: x,
-                    y: base_y,
-                    is_source: in_degree.get(item) === 0,
-                    is_sink: out_degree.get(item) === 0,
-                    is_cycle: cycle_set.has(item),
-                    layer: layer_idx,
-                    index: i,
-                    is_first_layer: layer_order === 0
+                layers_map.set(layer_idx, [...sorted_normal_items, ...cycle_items_in_layer]);
+            } else {
+                // 非首层：正常排列
+                const layer_width = layer_items.length * gap;
+                const start_x = (effective_page_width - layer_width) / 2 + gap / 2;
+
+                layer_items.forEach((item, i) => {
+                    positions.set(item, {
+                        x: start_x + i * gap,
+                        y: base_y,
+                        is_source: in_degree.get(item) === 0,
+                        is_sink: out_degree.get(item) === 0,
+                        is_cycle: cycle_set.has(item),
+                        layer: layer_idx,
+                        index: i,
+                        is_first_layer: false
+                    });
                 });
-            });
+            }
         });
     }
 
@@ -364,8 +410,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
 
         const deferred_nodes = [];
         const deferred_set = new Set();
-
-        const scc_center_positions = new Map();
 
         /**
          * 解决节点与 SCC 包围盒的重叠，将节点推挤到 SCC 左侧或右侧
@@ -605,114 +649,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             });
         });
 
-        // 11. SCC 中心定位：找最大空隙放置
-        const NODE_R = 32;
-        const scc_by_layer = new Map();
-        scc_info.forEach(scc => {
-            if (!scc_by_layer.has(scc.layer)) scc_by_layer.set(scc.layer, []);
-            scc_by_layer.get(scc.layer).push(scc);
-        });
-
-        scc_by_layer.forEach((layer_sccs, layer_idx) => {
-            const base_y = layer_y.get(layer_idx) || 0;
-            const layer_items = layers_map.get(layer_idx) || [];
-            const placed_positions = [];
-            layer_items.forEach(item => {
-                if (!cycle_set.has(item) && positions.has(item)) {
-                    placed_positions.push(positions.get(item).x);
-                }
-            });
-            placed_positions.sort((a, b) => a - b);
-
-            const gaps = [];
-            const canvas_left = MARGIN_X;
-            const canvas_right = final_canvas_width - MARGIN_X;
-
-            if (placed_positions.length === 0) {
-                gaps.push({left: canvas_left, right: canvas_right});
-            } else {
-                if (placed_positions[0] - canvas_left > MIN_GAP) {
-                    gaps.push({left: canvas_left, right: placed_positions[0] - MIN_GAP / 2});
-                }
-                for (let i = 0; i < placed_positions.length - 1; i++) {
-                    const gap_left = placed_positions[i] + MIN_GAP / 2;
-                    const gap_right = placed_positions[i + 1] - MIN_GAP / 2;
-                    if (gap_right - gap_left > MIN_GAP) {
-                        gaps.push({left: gap_left, right: gap_right});
-                    }
-                }
-                if (canvas_right - placed_positions[placed_positions.length - 1] > MIN_GAP) {
-                    gaps.push({left: placed_positions[placed_positions.length - 1] + MIN_GAP / 2, right: canvas_right});
-                }
-            }
-
-            layer_sccs.forEach(scc => {
-                const member_count = scc.members.length;
-                const scc_width = (member_count - 1) * MIN_GAP + NODE_R * 2;
-
-                let best_gap = null;
-                let best_gap_size = 0;
-
-                gaps.forEach(gap => {
-                    const gap_size = gap.right - gap.left;
-                    if (gap_size >= scc_width && gap_size > best_gap_size) {
-                        best_gap = gap;
-                        best_gap_size = gap_size;
-                    }
-                });
-
-                let center_x;
-                if (best_gap) {
-                    center_x = (best_gap.left + best_gap.right) / 2;
-                } else {
-                    let max_gap = null;
-                    let max_gap_size = 0;
-                    gaps.forEach(gap => {
-                        const gap_size = gap.right - gap.left;
-                        if (gap_size > max_gap_size) {
-                            max_gap = gap;
-                            max_gap_size = gap_size;
-                        }
-                    });
-                    center_x = max_gap ? (max_gap.left + max_gap.right) / 2 : final_canvas_width / 2;
-                }
-
-                scc_center_positions.set(scc.id, {x: center_x, y: base_y});
-            });
-        });
-
-        // 12. SCC 水平排列布局，收集包围盒用于后续推挤
-        const scc_bboxes = new Map();
-        scc_info.forEach(scc => {
-            const center = scc_center_positions.get(scc.id);
-            if (!center) return;
-
-            const member_count = scc.members.length;
-            const total_width = (member_count - 1) * MIN_GAP;
-            const start_x = center.x - total_width / 2;
-
-            scc.members.forEach((item, index) => {
-                positions.set(item, {
-                    x: start_x + index * MIN_GAP,
-                    y: center.y,
-                    is_source: in_degree.get(item) === 0,
-                    is_sink: out_degree.get(item) === 0,
-                    is_cycle: true,
-                    layer: scc.layer,
-                    is_first_layer: false
-                });
-            });
-
-            scc_bboxes.set(scc.id, {
-                left: start_x - NODE_R,
-                right: start_x + total_width + NODE_R,
-                y: center.y,
-                layer: scc.layer,
-                scc_id: scc.id
-            });
-        });
-
-        // 13. 第二遍：从下到上，处理延迟节点，循环组整体推挤
+        // 11. 第二遍：从下到上，处理延迟节点
         if (deferred_nodes.length > 0) {
             const deferred_by_layer = new Map();
             deferred_nodes.forEach(item => {
@@ -738,13 +675,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 });
 
                 // 收集该层的 SCC 包围盒
-                const layer_scc_bboxes = [];
-                scc_bboxes.forEach((bbox, scc_id) => {
-                    if (bbox.layer === layer_idx) {
-                        layer_scc_bboxes.push(bbox);
-                    }
-                });
-
                 // 计算延迟节点的理想位置（靠近子节点）
                 const ideal_positions = new Map();
                 deferred_items.forEach(item => {
@@ -758,7 +688,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     }
                 });
 
-                // 合并已有节点和延迟节点
+                // 合并已有节点和延迟节点，按理想位置排序
                 const all_items_for_layout = [];
                 existing_items.forEach(item => {
                     all_items_for_layout.push({item, ideal_x: existing_positions_map.get(item)});
@@ -768,13 +698,13 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 });
                 all_items_for_layout.sort((a, b) => a.ideal_x - b.ideal_x);
 
-                // 使用通用布局算法（含 SCC 障碍物处理）
-                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP, layer_scc_bboxes);
+                // 简单排列（居中）
+                const total_width = all_items_for_layout.length * MIN_GAP;
+                const start_x = (final_canvas_width - total_width) / 2 + MIN_GAP / 2;
 
-                // 应用布局结果
-                layout_result.forEach((x, item) => {
+                all_items_for_layout.forEach(({item}, i) => {
                     positions.set(item, {
-                        x,
+                        x: start_x + i * MIN_GAP,
                         y: base_y,
                         is_source: in_degree.get(item) === 0,
                         is_sink: out_degree.get(item) === 0,
@@ -785,36 +715,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 });
             });
         }
-
-        // 14. 全局检查：确保非循环节点不与循环组重叠
-        const all_scc_bboxes = [];
-        scc_info.forEach(scc => {
-            const center = scc_center_positions.get(scc.id);
-            if (!center) return;
-            const member_count = scc.members.length;
-            const total_width = (member_count - 1) * MIN_GAP;
-            const start_x = center.x - total_width / 2;
-            all_scc_bboxes.push({
-                left: start_x - NODE_R,
-                right: start_x + total_width + NODE_R,
-                y: center.y,
-                scc_id: scc.id
-            });
-        });
-
-        const Y_THRESHOLD = 10;
-        positions.forEach((pos, item) => {
-            if (cycle_set.has(item)) return;
-
-            // 只检查同层的 SCC 包围盒
-            const nearby_bboxes = all_scc_bboxes.filter(bbox => Math.abs(pos.y - bbox.y) <= Y_THRESHOLD);
-            if (nearby_bboxes.length === 0) return;
-
-            const x = resolve_scc_overlap(pos.x, nearby_bboxes);
-            if (x !== pos.x) {
-                positions.set(item, { ...pos, x });
-            }
-        });
     }
 
     // 执行布局（两遍重心法优化，第二遍处理延迟节点）
