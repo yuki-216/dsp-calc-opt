@@ -14,9 +14,10 @@
 function solveLinearSystem(A, b) {
   const n = A.length;
   // 构造增广矩阵 [A|b]
-  const aug = A.map((row, i) => [...row, b[i]]);
+  let aug = A.map((row, i) => [...row, b[i]]);
 
   // 前向消元（部分主元选择）
+  let singular = false;
   for (let col = 0; col < n; col++) {
     // 找主元（绝对值最大的行）
     let maxVal = Math.abs(aug[col][col]);
@@ -29,7 +30,8 @@ function solveLinearSystem(A, b) {
     }
 
     if (maxVal < 1e-12) {
-      throw new Error(`矩阵奇异，无法求解（主元列 ${col} 全为零）`);
+      singular = true;
+      break;
     }
 
     // 交换行
@@ -45,6 +47,17 @@ function solveLinearSystem(A, b) {
         aug[row][j] -= factor * aug[col][j];
       }
     }
+  }
+
+  // 如果矩阵奇异，添加正则化项到对角线后重试
+  if (singular) {
+    const REGULARIZE_EPS = 1e-6;
+    const A_reg = A.map((row, i) => {
+      const newRow = [...row];
+      newRow[i] += REGULARIZE_EPS;
+      return newRow;
+    });
+    return solveLinearSystem(A_reg, b);
   }
 
   // 回代

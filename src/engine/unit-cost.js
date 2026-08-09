@@ -330,10 +330,19 @@ function solveSCCByMatrix(scc, costs) {
     // console.log(`[solveSCCByMatrix] ${sccArray[j]}: 依赖项=${JSON.stringify(deps)}, 常数项=${JSON.stringify(constTerm)}`);
   }
 
-  // console.log('[solveSCCByMatrix] 矩阵A:', A);
-
   // 求逆矩阵
-  const A_inv = invertMatrix(A);
+  let A_inv;
+  try {
+    A_inv = invertMatrix(A);
+  } catch (e) {
+    console.error('[solveSCCByMatrix] 矩阵奇异! SCC成员:', sccArray);
+    console.error('[solveSCCByMatrix] 矩阵A:', JSON.stringify(A));
+    for (const itemId of scc) {
+      const cost = costs.get(itemId);
+      console.error(`  ${itemId} cost:`, JSON.stringify(cost));
+    }
+    throw e;
+  }
 
   // 四舍五入逆矩阵元素
   for (let i = 0; i < n; i++) {
