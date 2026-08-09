@@ -42,9 +42,10 @@ class ItemNode {
  * @param {Object} schemeData - 方案数据（包含用户选择的主配方）
  * @param {Object} settings - 设置（包含mineralize_list）
  * @param {Array} sprayCosts - 增产剂喷涂成本 [null, cost1, cost2, cost3]
+ * @param {Set} filterList - 过滤列表（上次迭代中的负需求物品，不寻找主配方，直接当原矿处理）
  * @returns {Object} {graph, edges} - 物品图和边集合
  */
-export function buildItemGraph(needs, recipes, gameData, schemeData, settings = {}, sprayCosts = null) {
+export function buildItemGraph(needs, recipes, gameData, schemeData, settings = {}, sprayCosts = null, filterList = new Set()) {
   const graph = new Map();
   const edges = [];
   const edgeSet = new Set();
@@ -92,6 +93,12 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
     const mineralizeList = settings.mineralize_list || {};
     if (itemId in mineralizeList) {
       // console.log(`[buildItemGraph] ${itemId} 在原矿化列表中，跳过配方查找`);
+      continue;
+    }
+
+    // 过滤列表中的物品，不寻找主配方，直接当原矿处理
+    if (filterList.has(itemId)) {
+      console.log(`[buildItemGraph] ${itemId} 在过滤列表中，当原矿处理`);
       continue;
     }
 
@@ -378,6 +385,40 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
         reachable.add(key);
         queue.push(key);
       }
+    }
+
+    // 为跨配方的副产物建立SCC边（跳过同一配方的联产物）
+    // 联产物（同一配方的多个产物）天然抵消，不需要进入SCC
+    // 只有跨配方的副产物（如高能石墨）才需要建立SCC边
+    for (const [key, coeff] of Object.entries(directCost)) {
+      if (key.startsWith('$')) continue;
+      if (coeff >= 0) continue;  // 只处理负系数（副产物/联产物）
+
+      // 跳过联产物：如果负系数的物品也是当前配方的产物，则是联产物
+      if (recipe.产物 && key in recipe.产物) {
+        continue;  // 联产物，不建立SCC边
+      }
+
+      // 跨配方的副产物：建立SCC边，但不入队
+      // 副产物是产出的物品，不需要追溯其原料
+      if (!graph.has(key)) {
+        graph.set(key, new ItemNode(key, key, 0));
+      }
+
+      // 配方所有产物 → 副产物（建立依赖边）
+      for (const outputId of Object.keys(recipe.产物 || {})) {
+        if (!graph.has(outputId)) {
+          graph.set(outputId, new ItemNode(outputId, outputId, 0));
+        }
+        const edgeKey = `${outputId}->${key}`;
+        if (!edgeSet.has(edgeKey)) {
+          edgeSet.add(edgeKey);
+          edges.push({ from: outputId, to: key });
+        }
+      }
+
+      // 副产物不入队！只建立SCC边
+      // 副产物是产出的物品，不需要追溯其原料
     }
   }
 

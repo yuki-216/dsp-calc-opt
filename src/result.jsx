@@ -16,6 +16,16 @@ const formatValue = (value, fixedNum) => {
     return str.replace(/\.?0+$/, '') || '0';
 };
 
+// 进1法格式化数字：向上取整到指定小数位数
+const formatValueCeil = (value, fixedNum) => {
+    if (Number.isInteger(value)) return value.toString();
+    const factor = Math.pow(10, fixedNum);
+    const ceiled = Math.ceil(value * factor) / factor;
+    const str = ceiled.toFixed(fixedNum);
+    // 去除末尾的0，但保留至少一位小数
+    return str.replace(/\.?0+$/, '') || '0';
+};
+
 const ValueWithDifference = ({currentValue, previousValue}) => {
     const global_state = useContext(GlobalStateContext);
     const fixedNum = global_state.settings.fixed_num;
@@ -304,20 +314,17 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         // 从引擎的 buildingDetails 中获取设备数量
         const detail = building_details[item];
         if (detail) {
-            const offset = 0.49994 * 0.1 ** fixed_num;
-            return detail.设备数量 + offset;
+            return detail.设备数量;
         }
         // fallback：如果引擎没有返回该物品的数据
         return 0;
     }
 
     function get_gross_output(amount, item) {
-        var offset = 0;
-        offset = 0.49994 * 0.1 ** fixed_num;//未显示的部分进一法取整
         if (selfConsumption[item]) {
-            return Number(amount * (1 + selfConsumption[item])) + offset;
+            return Number(amount * (1 + selfConsumption[item]));
         }
-        return Number(amount) + offset;
+        return Number(amount);
     }
 
     // Dict<item, Dict<from, quantity>> - 使用新引擎的 byproductSources
@@ -357,8 +364,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     let result_table_rows = [];
 
-    const RatioAdjustInput = ({value}) => {
-        let disp_value = value.toFixed(fixed_num);
+    const RatioAdjustInput = ({value, trimZeros, ceil}) => {
+        let disp_value = trimZeros ? (ceil ? formatValueCeil(value, fixed_num) : formatValue(value, fixed_num)) : value.toFixed(fixed_num);
         let base_value = +disp_value;
 
         function set_needs_in_row() {
@@ -556,7 +563,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     <>
                         <div className="d-inline-flex align-items-center gap-1">
                             <ItemIcon item={factory_name} size={is_mobile ? 18 : 30}/>
-                            <RatioAdjustInput value={factory_number}/>
+                            <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>
                         </div>
                     </>
                 }

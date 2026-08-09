@@ -36,6 +36,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   // const totalStart = performance.now();
   // let otherStart = totalStart;
 
+  // 负需求物品集合（用于迭代过滤）
+  const negativeDemandItems = new Set();
+
   const solutionCost = costs.get(solutionId);
   if (!solutionCost) {
     // timings.total = performance.now() - totalStart;
@@ -155,25 +158,47 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         const cost = costs.get(itemId);
         if (cost) console.log(`  ${itemId} cost:`, JSON.stringify(cost));
       }
-      solveSCCByMatrix(scc, costs);
+      const { constTerms } = solveSCCByMatrix(scc, costs);
       // 打印求解后的 cost
       for (const itemId of scc) {
         const cost = costs.get(itemId);
         if (cost) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
       }
 
-      // 将循环组内物品代入 solution
+      // 优化2：先检查solution有没有正需求，再展开常数项
       for (const itemId of scc) {
         const coeff = solution[itemId] || 0;
         if (coeff > 0) {
+          // 展开常数项：将依赖关系转换为实际成本
           const itemCost = costs.get(itemId);
           if (itemCost) {
-            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
-            substitute(itemId, itemCost);
+            const expandedCost = {};
+            for (const [key, execCount] of Object.entries(itemCost)) {
+              if (key.startsWith('$')) {
+                // 依赖项：展开常数项
+                const depItemId = key.slice(1);
+                const constTerm = constTerms.get(depItemId);
+                if (constTerm) {
+                  for (const [ck, cv] of Object.entries(constTerm)) {
+                    expandedCost[ck] = (expandedCost[ck] || 0) + cv * execCount;
+                  }
+                }
+              } else {
+                // 非依赖项：直接添加
+                expandedCost[key] = (expandedCost[key] || 0) + execCount;
+              }
+            }
+            // 四舍五入
+            for (const key of Object.keys(expandedCost)) {
+              expandedCost[key] = Math.round(expandedCost[key] * ROUND_FACTOR) / ROUND_FACTOR;
+            }
+            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(expandedCost));
+            substitute(itemId, expandedCost);
             console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
         }
       }
+
     }
   }
 
@@ -264,6 +289,17 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
   // console.log('[expandSCC] 最终 solution 成本:', JSON.stringify(solution));
 
+  // 阶段2完成后，检查所有SCC物品在solution中的负需求
+  for (const scc of sccs) {
+    for (const itemId of scc) {
+      const netDemand = solution[itemId] || 0;
+      if (netDemand < 0) {
+        negativeDemandItems.add(itemId);
+        console.log(`[阶段2完成] ${itemId} 有负需求: ${netDemand.toFixed(6)}`);
+      }
+    }
+  }
+
   // 输出计时结果（已禁用）
   // console.log('[SCC展开计时]', {
   //   '矩阵求逆': timings.matrixInverse.toFixed(2) + ' ms',
@@ -272,7 +308,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   //   '总计': timings.total.toFixed(2) + ' ms'
   // });
 
-  return {};
+  return { negativeDemandItems };
 }
 
 /**
@@ -351,7 +387,7 @@ function solveSCCByMatrix(scc, costs) {
       A_inv[i][j] = Math.round(A_inv[i][j] * ROUND_FACTOR) / ROUND_FACTOR;
     }
   }
-  // console.log('[solveSCCByMatrix] 逆矩阵:', A_inv);
+
 
   // 更新 costs：每个 SCC 物品的真实成本
   // 对于配方j，其单位成本 = Σ(A_inv[i][j] * 物品i的单位次数常数项)
@@ -364,13 +400,16 @@ function solveSCCByMatrix(scc, costs) {
       const execCount = A_inv[i][j];
       if (execCount === 0) continue;
 
-      // 获取物品i的单位次数常数项（固定的，不会改变）
-      const constTerm = constTerms.get(sccArray[i]);
-      if (!constTerm) continue;
-
-      // 将物品i的单位次数常数项乘以执行次数
-      for (const [key, coeff] of Object.entries(constTerm)) {
-        newCost[key] = (newCost[key] || 0) + coeff * execCount;
+      if (execCount < 0) {
+        // 负依赖（副产物）：不展开常数项，只记录依赖关系
+        // 保留 $物品: execCount，让阶段2判断是否需要逆生产
+        const itemSelfKey = `$${sccArray[i]}`;
+        newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
+      } else {
+        // 正依赖（原料）：不展开常数项，只记录依赖关系
+        // 保留 $物品: execCount，让展开阶段根据solution判断是否需要展开
+        const itemSelfKey = `$${sccArray[i]}`;
+        newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
       }
     }
 
@@ -381,6 +420,9 @@ function solveSCCByMatrix(scc, costs) {
 
     costs.set(itemId, newCost);
   }
+
+  // 返回常数项，供展开阶段使用
+  return { constTerms };
 
   // 输出结果
   // for (let i = 0; i < n; i++) {

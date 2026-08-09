@@ -37,15 +37,16 @@ export class CoreEngine {
    * 初始化引擎
    * @param {Array} needs - 需求列表
    * @param {Object} recipes - 配方数据
+   * @param {Set} filterList - 过滤列表（上次迭代中的负需求物品）
    */
-  initialize(needs, recipes) {
+  initialize(needs, recipes, filterList = new Set()) {
     // 构建配方映射（确保键是字符串类型）
     for (const [id, recipe] of Object.entries(recipes)) {
       this.recipeMap.set(String(id), recipe);
     }
 
     // 1. 构建物品图（BFS从需求出发，使用用户选择的主配方）
-    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts);
+    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts, filterList);
     this.graph = result.graph;
     this.edges = result.edges;
     this.proliferatorEdgeKeys = result.proliferatorEdgeKeys || new Set();
@@ -62,65 +63,96 @@ export class CoreEngine {
    * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
    */
   calculate(needs, recipes) {
-    // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
-    this.initialize(needs, recipes);
-
     console.log('[Engine] ====== 计算开始 ======');
     console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
-    console.log('[Engine] 图节点数:', this.graph.size);
-    console.log('[Engine] SCC数:', this.sccs.length);
 
-    // 打印图中所有节点及其 buildingPower
-    for (const [id, node] of this.graph) {
-      if (node.buildingPower) {
-        console.log(`[Engine] 节点 "${id}": recipeId=${node.recipeId}, buildingPower=`, node.buildingPower);
-      }
-    }
-
-    // 2. 创建虚拟"解"物品和虚拟配方
+    // 迭代过滤逻辑
+    const filterList = new Set(); // 过滤列表（负需求物品）
+    let iteration = 0;
+    const maxIterations = 10; // 最大迭代次数
+    let costs = new Map();
+    let byproductMap = new Map();
     const SOLUTION_ID = '__solution__';
-    const solutionNode = {
-      id: SOLUTION_ID,
-      name: '解',
-      recipeId: null,
-      directCost: {},
-      dependents: [],
-      inputs: [],
-      outputs: []
-    };
 
-    // 虚拟配方：需求表中的物品作为输入，产出1个"解"
-    // 注意：这里用物品数量（没有$前缀），不是执行次数
-    for (const need of needs) {
-      solutionNode.directCost[need.id] = need.count;
-
-      // 补上依赖边：需求物品的dependents包含解
-      const needNode = this.graph.get(need.id);
-      if (needNode && !needNode.dependents.includes(SOLUTION_ID)) {
-        needNode.dependents.push(SOLUTION_ID);
+    while (iteration < maxIterations) {
+      iteration++;
+      console.log(`[Engine] ====== 迭代 ${iteration} ======`);
+      if (filterList.size > 0) {
+        console.log(`[Engine] 过滤列表:`, [...filterList].join(', '));
       }
+
+      // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
+      this.initialize(needs, recipes, filterList);
+
+      console.log('[Engine] 图节点数:', this.graph.size);
+      console.log('[Engine] SCC数:', this.sccs.length);
+
+      // 打印图中所有节点及其 buildingPower
+      for (const [id, node] of this.graph) {
+        if (node.buildingPower) {
+          console.log(`[Engine] 节点 "${id}": recipeId=${node.recipeId}, buildingPower=`, node.buildingPower);
+        }
+      }
+
+      // 2. 创建虚拟"解"物品和虚拟配方
+      const solutionNode = {
+        id: SOLUTION_ID,
+        name: '解',
+        recipeId: null,
+        directCost: {},
+        dependents: [],
+        inputs: [],
+        outputs: []
+      };
+
+      // 虚拟配方：需求表中的物品作为输入，产出1个"解"
+      // 注意：这里用物品数量（没有$前缀），不是执行次数
+      for (const need of needs) {
+        solutionNode.directCost[need.id] = need.count;
+
+        // 补上依赖边：需求物品的dependents包含解
+        const needNode = this.graph.get(need.id);
+        if (needNode && !needNode.dependents.includes(SOLUTION_ID)) {
+          needNode.dependents.push(SOLUTION_ID);
+        }
+      }
+
+      // 将"解"添加到图中
+      this.graph.set(SOLUTION_ID, solutionNode);
+
+      // 3. 计算所有物品的直接成本（系数表）
+      costs = new Map();
+      byproductMap = new Map(); // 独立的副产物映射
+      for (const [itemId, node] of this.graph) {
+        // 直接使用节点已有的 directCost（BFS阶段已计算）
+        costs.set(itemId, node.directCost || { [`$${itemId}`]: 1 });
+        byproductMap.set(itemId, new Set(node.byproducts || []));
+      }
+      // 添加 solution 的成本
+      costs.set(SOLUTION_ID, solutionNode.directCost);
+
+      console.log('[Engine] Solution directCost:', JSON.stringify(solutionNode.directCost));
+
+      // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
+      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
+
+      // 5. 检查是否需要迭代
+      // 检查是否有新的负需求物品（不在过滤列表中的）
+      const newNegativeItems = [...negativeDemandItems].filter(id => !filterList.has(id));
+      if (newNegativeItems.length === 0) {
+        console.log(`[Engine] 迭代 ${iteration} 完成，没有新的负需求物品，停止迭代`);
+        break;
+      }
+
+      // 更新过滤列表
+      for (const itemId of newNegativeItems) {
+        filterList.add(itemId);
+      }
+      console.log(`[Engine] 迭代 ${iteration} 完成，发现新的负需求物品:`, newNegativeItems.join(', '));
+      console.log(`[Engine] 更新过滤列表:`, [...filterList].join(', '));
     }
 
-    // 将"解"添加到图中
-    this.graph.set(SOLUTION_ID, solutionNode);
-
-    // 3. 计算所有物品的直接成本（系数表）
-    const costs = new Map();
-    const byproductMap = new Map(); // 独立的副产物映射
-    for (const [itemId, node] of this.graph) {
-      // 直接使用节点已有的 directCost（BFS阶段已计算）
-      costs.set(itemId, node.directCost || { [`$${itemId}`]: 1 });
-      byproductMap.set(itemId, new Set(node.byproducts || []));
-    }
-    // 添加 solution 的成本
-    costs.set(SOLUTION_ID, solutionNode.directCost);
-
-    console.log('[Engine] Solution directCost:', JSON.stringify(solutionNode.directCost));
-
-    // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-    expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
-
-    // 5. 获取"解"的成本并缩放
+    // 6. 获取"解"的成本并缩放
     let solutionCost = costs.get(SOLUTION_ID);
 
     console.log('[Engine] 展开后 solutionCost:', JSON.stringify(solutionCost));
@@ -157,12 +189,11 @@ export class CoreEngine {
     }
 
     console.log('[Engine] energyCost:', energyCost, 'minerEnergyCost:', minerEnergyCost);
-    console.log('[Engine] recipeExecutions:', JSON.stringify(recipeExecutions));
     console.log('[Engine] surplusByproducts:', JSON.stringify(surplusByproducts));
 
     const totalEnergyCost = energyCost + minerEnergyCost;
 
-    // 6. 计算设备数量
+    // 7. 计算设备数量
     const buildingDetails = {};
     const buildingList = {};
 
@@ -222,9 +253,6 @@ export class CoreEngine {
     aggregated.energyCost = energyCost;
     aggregated.minerEnergyCost = minerEnergyCost;
     aggregated.totalEnergyCost = totalEnergyCost;
-
-    console.log('[Engine] buildingList:', JSON.stringify(buildingList));
-    console.log('[Engine] buildingDetails:', JSON.stringify(buildingDetails));
     console.log('[Engine] ====== 计算结束 ======');
 
     return aggregated;
