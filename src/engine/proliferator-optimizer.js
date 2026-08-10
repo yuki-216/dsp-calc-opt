@@ -738,7 +738,7 @@ function getMaxAllowedLevel(settings) {
  * @param {Object} baseScheme - 基础方案数据
  * @param {Map} itemToRecipe - 物品到配方映射
  * @param {Function} onLog - 日志回调
- * @returns {Object} { choices, cost }
+ * @returns {Object} { choices, cost, calculations }
  */
 async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog) {
   const recipeData = gameData.recipe_data || [];
