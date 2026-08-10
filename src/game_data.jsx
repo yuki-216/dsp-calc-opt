@@ -43,16 +43,16 @@ export const FUEL_DATA_BASE = [
   { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
   { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
   { name: "增产剂 Mk.I", heatValue: 2.592, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂 Mk.II", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂 Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" },
   { name: "原油", heatValue: 3.24, device: "火力发电厂", restrict: "只能增产" },
-  { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" },
   { name: "氢", heatValue: 7.2, device: "火力发电厂", restrict: "只能增产" },
   { name: "液氢燃料棒", heatValue: 43.2, device: "火力发电厂", restrict: "只能增产" },
   { name: "氘核燃料棒", heatValue: 600, device: "微型聚变发电站", restrict: "只能增产" },
   { name: "反物质燃料棒", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
   { name: "奇异湮灭燃料棒", heatValue: 720000, device: "人造恒星", restrict: "只能加速" },
-  { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" }
+  { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂 Mk.II", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂 Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" },
+  { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" }
 ];
 
 /**

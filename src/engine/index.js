@@ -12,12 +12,11 @@ import { expandInSCCOrder } from './unit-cost.js';
 export class CoreEngine {
   static VERSION = 'current';
 
-  constructor(gameData, schemeData, settings = {}, sprayCosts = null, silent = false) {
+  constructor(gameData, schemeData, settings = {}, sprayCosts = null) {
     this.gameData = gameData;
     this.schemeData = schemeData;
     this.settings = settings;
     this.sprayCosts = sprayCosts;
-    this.silent = silent;
     this.recipeMap = new Map();
     this.graph = null;
     this.edges = [];
@@ -47,7 +46,7 @@ export class CoreEngine {
     }
 
     // 1. 构建物品图（BFS从需求出发，使用用户选择的主配方）
-    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts, filterList, this.silent);
+    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts, filterList);
     this.graph = result.graph;
     this.edges = result.edges;
     this.proliferatorEdgeKeys = result.proliferatorEdgeKeys || new Set();
@@ -64,10 +63,8 @@ export class CoreEngine {
    * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
    */
   calculate(needs, recipes) {
-    if (!this.silent) {
-      console.log('[Engine] ====== 计算开始 ======');
-      console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
-    }
+    // console.log('[Engine] ====== 计算开始 ======');
+    // console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
 
     // 迭代过滤逻辑
     const filterList = new Set(); // 过滤列表（负需求物品）
@@ -79,19 +76,15 @@ export class CoreEngine {
 
     while (iteration < maxIterations) {
       iteration++;
-      if (!this.silent) {
-        console.log(`[Engine] ====== 迭代 ${iteration} ======`);
-        if (filterList.size > 0) {
-          console.log(`[Engine] 过滤列表:`, [...filterList].join(', '));
-        }
-      }
+      // console.log(`[Engine] ====== 迭代 ${iteration} ======`);
+      // if (filterList.size > 0) {
+      //   console.log(`[Engine] 过滤列表:`, [...filterList].join(', '));
+      // }
 
       // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
       this.initialize(needs, recipes, filterList);
 
-      if (!this.silent) {
-        console.log('[Engine] 图节点数:', this.graph.size);
-      }
+      // console.log('[Engine] 图节点数:', this.graph.size);
 
       // 2. 创建虚拟"解"物品和虚拟配方
       const solutionNode = {
@@ -132,15 +125,13 @@ export class CoreEngine {
 
 
       // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap, this.silent);
+      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
 
       // 5. 检查是否需要迭代
       // 检查是否有新的负需求物品（不在过滤列表中的）
       const newNegativeItems = [...negativeDemandItems].filter(id => !filterList.has(id));
       if (newNegativeItems.length === 0) {
-        if (!this.silent) {
-          console.log(`[Engine] 迭代 ${iteration} 完成，没有新的负需求物品，停止迭代`);
-        }
+        // console.log(`[Engine] 迭代 ${iteration} 完成，没有新的负需求物品，停止迭代`);
         break;
       }
 
@@ -148,18 +139,14 @@ export class CoreEngine {
       for (const itemId of newNegativeItems) {
         filterList.add(itemId);
       }
-      if (!this.silent) {
-        console.log(`[Engine] 迭代 ${iteration} 完成，发现新的负需求物品:`, newNegativeItems.join(', '));
-        console.log(`[Engine] 更新过滤列表:`, [...filterList].join(', '));
-      }
+      // console.log(`[Engine] 迭代 ${iteration} 完成，发现新的负需求物品:`, newNegativeItems.join(', '));
+      // console.log(`[Engine] 更新过滤列表:`, [...filterList].join(', '));
     }
 
     // 6. 获取"解"的成本并缩放
     let solutionCost = costs.get(SOLUTION_ID);
 
-    if (!this.silent) {
-      console.log('[Engine] 展开后 solutionCost:', JSON.stringify(solutionCost));
-    }
+    // console.log('[Engine] 展开后 solutionCost:', JSON.stringify(solutionCost));
 
     const recipeExecutions = {};
     const surplusByproducts = {};
@@ -192,10 +179,8 @@ export class CoreEngine {
       }
     }
 
-    if (!this.silent) {
-      console.log('[Engine] energyCost:', energyCost, 'minerEnergyCost:', minerEnergyCost);
-      console.log('[Engine] surplusByproducts:', JSON.stringify(surplusByproducts));
-    }
+    // console.log('[Engine] energyCost:', energyCost, 'minerEnergyCost:', minerEnergyCost);
+    // console.log('[Engine] surplusByproducts:', JSON.stringify(surplusByproducts));
 
     const totalEnergyCost = energyCost + minerEnergyCost;
 
@@ -259,9 +244,7 @@ export class CoreEngine {
     aggregated.energyCost = energyCost;
     aggregated.minerEnergyCost = minerEnergyCost;
     aggregated.totalEnergyCost = totalEnergyCost;
-    if (!this.silent) {
-      console.log('[Engine] ====== 计算结束 ======');
-    }
+    // console.log('[Engine] ====== 计算结束 ======');
 
     return aggregated;
   }

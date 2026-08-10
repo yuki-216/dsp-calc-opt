@@ -325,8 +325,7 @@ export function BatchSetting({needs_list}) {
                     (message) => {
                         logs.push(message);
                         setOptimLogs([...logs]);
-                    },
-                    true  // silent模式，不输出调试日志
+                    }
                 );
 
                 setOptimResult(result);
