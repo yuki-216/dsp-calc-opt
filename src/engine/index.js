@@ -85,14 +85,6 @@ export class CoreEngine {
       this.initialize(needs, recipes, filterList);
 
       console.log('[Engine] 图节点数:', this.graph.size);
-      console.log('[Engine] SCC数:', this.sccs.length);
-
-      // 打印图中所有节点及其 buildingPower
-      for (const [id, node] of this.graph) {
-        if (node.buildingPower) {
-          console.log(`[Engine] 节点 "${id}": recipeId=${node.recipeId}, buildingPower=`, node.buildingPower);
-        }
-      }
 
       // 2. 创建虚拟"解"物品和虚拟配方
       const solutionNode = {
@@ -131,7 +123,6 @@ export class CoreEngine {
       // 添加 solution 的成本
       costs.set(SOLUTION_ID, solutionNode.directCost);
 
-      console.log('[Engine] Solution directCost:', JSON.stringify(solutionNode.directCost));
 
       // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
       const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);

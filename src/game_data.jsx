@@ -42,6 +42,9 @@ export const FUEL_DATA_BASE = [
   { name: "无", heatValue: 0, device: "", restrict: "" },
   { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
   { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂 Mk.I", heatValue: 2.592, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂 Mk.II", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
+  { name: "增产剂 Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" },
   { name: "原油", heatValue: 3.24, device: "火力发电厂", restrict: "只能增产" },
   { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" },
   { name: "氢", heatValue: 7.2, device: "火力发电厂", restrict: "只能增产" },
@@ -53,31 +56,12 @@ export const FUEL_DATA_BASE = [
 ];
 
 /**
- * 增产剂燃料数据（热值）
- */
-const PROLIFERATOR_FUEL_VALUES = [2.592, 7.08, 16.96];
-
-/**
- * 获取完整的燃料数据（包含从游戏数据动态获取的增产剂）
- * @param {Object} gameData - 游戏数据对象
+ * 获取完整的燃料数据
+ * @param {Object} gameData - 游戏数据对象（保留兼容性，现在直接返回 FUEL_DATA_BASE）
  * @returns {Array} 完整的燃料数据数组
  */
 export function getFuelData(gameData) {
-  const fuels = [...FUEL_DATA_BASE];
-  if (gameData?.proliferator_data) {
-    for (let i = 1; i <= 3; i++) {
-      const pro = gameData.proliferator_data[i];
-      if (pro?.名称) {
-        fuels.push({
-          name: pro.名称,
-          heatValue: PROLIFERATOR_FUEL_VALUES[i - 1],
-          device: "火力发电厂",
-          restrict: "只能增产"
-        });
-      }
-    }
-  }
-  return fuels;
+  return FUEL_DATA_BASE;
 }
 
 // 默认燃料数据（不含增产剂，用于初始化）
@@ -260,16 +244,10 @@ export function get_game_data() {
         }
     ]
     let proliferator_effect = data.proliferator_effect;
-    // 从JSON数据中读取增产剂名称（避免硬编码空格字符差异）
-    const pro_items = json_data.items.filter(i => i.ID >= 1141 && i.ID <= 1143);
-    const pro_mk1 = pro_items.find(i => i.ID === 1141);
-    const pro_mk2 = pro_items.find(i => i.ID === 1142);
-    const pro_mk3 = pro_items.find(i => i.ID === 1143);
     //data.proliferator_data - 使用等级索引（0/1/2/3）
     data.proliferator_data = [
         {
-            "名称": "不使用增产剂",
-            "增产剂": 0,
+            "增产剂": null,
             "喷涂次数": 1,
             "等级": 0,
             "增产效果": proliferator_effect[0].增产效果,
@@ -277,8 +255,7 @@ export function get_game_data() {
             "耗电倍率": proliferator_effect[0].耗电倍率,
         },
         {
-            "名称": pro_mk1.Name,
-            "增产剂": pro_mk1.Name,
+            "增产剂": "增产剂 Mk.I",
             "喷涂次数": 12,
             "等级": 1,
             "增产效果": proliferator_effect[1].增产效果,
@@ -286,8 +263,7 @@ export function get_game_data() {
             "耗电倍率": proliferator_effect[1].耗电倍率,
         },
         {
-            "名称": pro_mk2.Name,
-            "增产剂": pro_mk2.Name,
+            "增产剂": "增产剂 Mk.II",
             "喷涂次数": 24,
             "等级": 2,
             "增产效果": proliferator_effect[2].增产效果,
@@ -295,8 +271,7 @@ export function get_game_data() {
             "耗电倍率": proliferator_effect[2].耗电倍率,
         },
         {
-            "名称": pro_mk3.Name,
-            "增产剂": pro_mk3.Name,
+            "增产剂": "增产剂 Mk.III",
             "喷涂次数": 60,
             "等级": 3,
             "增产效果": proliferator_effect[3].增产效果,
@@ -305,8 +280,9 @@ export function get_game_data() {
         }
     ]
 
-    // 添加燃料配方
-    FUEL_DATA.forEach(fuel => {
+    // 添加燃料配方（使用 getFuelData 获取包含增产剂的完整列表）
+    const allFuels = getFuelData(data);
+    allFuels.forEach(fuel => {
         if (fuel.name === "无") return;
 
         const devicePower = DEVICE_POWER_CONSUMPTION[fuel.device];

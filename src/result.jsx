@@ -90,8 +90,8 @@ export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
 
     let pro_num_options = [{value: 0, label: "无"}];
     for (let i = 1; i < game_data.proliferator_data.length; i++) {
-        if (game_data.proliferator_data[i]?.增产剂) {
-            pro_num_options.push({value: i, item_icon: game_data.proliferator_data[i]["名称"]});
+        if (game_data.proliferator_data[i]?.增产剂 != null) {
+            pro_num_options.push({value: i, item_icon: game_data.proliferator_data[i].增产剂});
         }
     }
 

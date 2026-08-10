@@ -370,10 +370,10 @@ export function BatchSetting({needs_list}) {
     let proliferate_options = [{value: 0, label: "无"}];
     game_data.proliferator_data.forEach((data, idx) => {
         if (idx === 0) return;
-        if (data?.增产剂) {
+        if (data?.增产剂 != null) {
             proliferate_options.push({
                 value: idx, label: null,
-                item_icon: data["名称"]
+                item_icon: data.增产剂
             })
         }
     });
@@ -445,9 +445,9 @@ export function BatchSetting({needs_list}) {
                                 className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
                                     ${is_selected ? 'bg-selected' : 'bg-unselected'}`}
                                 onClick={() => toggle_level(level)}
-                                title={`${pro_data?.名称 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
+                                title={`${pro_data?.增产剂 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
                     >
-                        {pro_data?.名称 && <ItemIcon item={pro_data.名称} size={mob_icon || 32}/>}
+                        {pro_data?.增产剂 && <ItemIcon item={pro_data.增产剂} size={mob_icon || 32}/>}
                     </div>;
                 })}
             </div>

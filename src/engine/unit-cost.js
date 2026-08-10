@@ -69,13 +69,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     const isReverse = multiplier !== null;
 
     for (const [k, v] of Object.entries(source)) {
-      let A = solution[k] || 0;    // 加和前的值
-      const addend = m * v;        // 待加的值
-      let C = A + addend;          // 加和后的值
-
-      // 四舍五入到精度位数，避免浮点误差
-      A = Math.round(A * ROUND_FACTOR) / ROUND_FACTOR;
-      C = Math.round(C * ROUND_FACTOR) / ROUND_FACTOR;
+      const A = solution[k] || 0;    // 加和前的值
+      const addend = m * v;          // 待加的值
+      const C = A + addend;          // 加和后的值
 
       // 处理执行次数（$前缀）
       if (k.startsWith('$')) {
@@ -92,7 +88,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         continue;
       }
 
-      // 截断极小值：如果值为0，删除key；否则设置值
+      // 设置值（精确计算，不截断）
       if (C === 0) {
         delete solution[k];
         // 从列表中移除
@@ -152,12 +148,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       }
     } else {
       // 多节点 SCC（循环组）：矩阵求逆一次性解出全部物品
-      console.log(`[阶段1] SCC[${i}] 循环组求解:`, [...scc].join(', '));
-      // 打印求解前的 cost
-      for (const itemId of scc) {
-        const cost = costs.get(itemId);
-        if (cost) console.log(`  ${itemId} cost:`, JSON.stringify(cost));
-      }
+                
       solveSCCByMatrix(scc, costs);
       // 打印求解后的 cost
       for (const itemId of scc) {
@@ -175,6 +166,15 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
             substitute(itemId, itemCost);
             console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
+        }
+      }
+
+      // 循环组求解后，将solution中负系数的物品加入待逆生产列表
+      for (const [key, val] of Object.entries(solution)) {
+        if (key.startsWith('$')) continue;
+        if (val < 0 && !reverseProductionList.has(key)) {
+          console.log(`[阶段1] SCC[${i}] 循环组求解后，"${key}" 有负系数=${val.toFixed(6)}，加入待逆生产列表`);
+          reverseProductionList.add(key);
         }
       }
 
@@ -275,13 +275,13 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
   // console.log('[expandSCC] 最终 solution 成本:', JSON.stringify(solution));
 
-  // 阶段2完成后，检查所有SCC物品在solution中的负需求
+  // 阶段2完成后，只检查循环组（多节点SCC）中的物品是否有负需求
   for (const scc of sccs) {
+    if (scc.size <= 1) continue; // 跳过单节点SCC
     for (const itemId of scc) {
       const netDemand = solution[itemId] || 0;
       if (netDemand < 0) {
         negativeDemandItems.add(itemId);
-        console.log(`[阶段2完成] ${itemId} 有负需求: ${netDemand.toFixed(6)}`);
       }
     }
   }
@@ -367,12 +367,6 @@ function solveSCCByMatrix(scc, costs) {
     throw e;
   }
 
-  // 四舍五入逆矩阵元素
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      A_inv[i][j] = Math.round(A_inv[i][j] * ROUND_FACTOR) / ROUND_FACTOR;
-    }
-  }
 
 
   // 更新 costs：每个 SCC 物品的真实成本
@@ -399,11 +393,6 @@ function solveSCCByMatrix(scc, costs) {
           newCost[key] = (newCost[key] || 0) + coeff * execCount;
         }
       }
-    }
-
-    // 四舍五入结果
-    for (const key of Object.keys(newCost)) {
-      newCost[key] = Math.round(newCost[key] * ROUND_FACTOR) / ROUND_FACTOR;
     }
 
     costs.set(itemId, newCost);

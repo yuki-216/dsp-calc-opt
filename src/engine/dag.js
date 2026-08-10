@@ -344,10 +344,7 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
       directCost['电力'] = (directCost['电力'] || 0) + node.buildingPower.unitPowerCost;
     }
 
-    // 四舍五入，避免浮点误差累积
-    for (const key of Object.keys(directCost)) {
-      directCost[key] = Math.round(directCost[key] * ROUND_FACTOR) / ROUND_FACTOR;
-    }
+    // 精确计算，不进行四舍五入
 
     node.directCost = directCost;
 
