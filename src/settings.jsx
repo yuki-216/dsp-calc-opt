@@ -285,7 +285,7 @@ export function BatchSetting({needs_list}) {
     const [optimProgress, setOptimProgress] = useState({ current: 0, total: 0, message: '' });
     const [optimResult, setOptimResult] = useState(null);
     const [optimLogs, setOptimLogs] = useState([]);
-    const [showLogs, setShowLogs] = useState(true);
+    const [showLogs, setShowLogs] = useState(false);
     const logContainerRef = useRef(null);
 
     // 自动滚动到底部
@@ -305,15 +305,13 @@ export function BatchSetting({needs_list}) {
 
         setIsOptimizing(true);
         setOptimResult(null);
-        // 先添加一条初始日志，让日志页面展开
-        setOptimLogs(['正在初始化优化...']);
+        setOptimLogs([]);
         setOptimProgress({ current: 0, total: 0, message: '正在初始化...' });
-        setShowLogs(true);
 
         // 使用 setTimeout 让 UI 有时间更新
         setTimeout(async () => {
             try {
-                const logs = ['正在初始化优化...'];
+                const logs = [];
                 const result = await optimizeProliferatorStrategy(
                     game_data,
                     scheme_data,
@@ -464,7 +462,7 @@ export function BatchSetting({needs_list}) {
             </button>
         </div>
         {optimLogs.length > 0 && (
-            <div className="mt-2 border rounded p-2" style={{maxWidth: '800px'}}>
+            <div className="mt-2 border rounded p-2">
                 <div className="d-flex align-items-center justify-content-between mb-1">
                     <small className="fw-bold">优化日志</small>
                     <button

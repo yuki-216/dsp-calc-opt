@@ -600,8 +600,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         <tr key={building}>
             <td className="d-flex align-items-center text-nowrap">
                 <ItemIcon item={building} tooltip={false} size={mob_icon}/>
-                <span className="ms-1">{'×'}</span>
-                <ValueWithDifference currentValue={count} previousValue={historyValues?.[1]?.buildingCounts?.[building]}/>
+                <div className="d-flex flex-column ms-1">
+                    <span>{'×'}{formatValue(count, fixed_num)}</span>
+                    {historyValues?.[1]?.buildingCounts?.[building] !== undefined && Math.abs(count - historyValues[1].buildingCounts[building]) > 1e-6 && (
+                        <span style={{fontSize: '0.85em', color: count > historyValues[1].buildingCounts[building] ? 'red' : 'green'}}>
+                            {count > historyValues[1].buildingCounts[building] ? '+' : ''}{formatValue(count - historyValues[1].buildingCounts[building], fixed_num)}
+                        </span>
+                    )}
+                </div>
             </td>
         </tr>));
 
@@ -752,87 +758,98 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     </fieldset>}
             </div>
 
-            {/* 多余产物 */}
-            {Object.keys(surplusByproducts).length > 0 &&
-                <fieldset className="w-fit">
-                    <legend><small>多余产物</small></legend>
-                    <table>
-                        <tbody>
-                            {Object.entries(surplusByproducts).map(([item, amount]) => (
-                                <tr key={item}>
-                                    <td className="d-flex align-items-center text-nowrap">
-                                        <ItemIcon item={item} tooltip={false} size={mob_icon}/>
-                                        <span className="ms-1">{'×'}</span>
-                                        <span>{formatValue(-amount, fixed_num)}</span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </fieldset>
-            }
+            {/* 两列布局：左列多余产物+原矿+电力，右列建筑统计 */}
+            <div className="d-flex gap-2 align-items-start">
+                {/* 左列：多余产物 + 原矿需求 + 预估电力 */}
+                <div className="d-flex flex-column gap-2">
+                    {/* 多余产物 */}
+                    {Object.keys(surplusByproducts).length > 0 &&
+                        <fieldset className="w-fit">
+                            <legend><small>多余产物</small></legend>
+                            <table>
+                                <tbody>
+                                    {Object.entries(surplusByproducts).map(([item, amount]) => (
+                                        <tr key={item}>
+                                            <td className="d-flex align-items-center text-nowrap">
+                                                <ItemIcon item={item} tooltip={false} size={mob_icon}/>
+                                                <div className="d-flex flex-column ms-1">
+                                                    <span>{'×'}{formatValue(-amount, fixed_num)}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </fieldset>
+                    }
 
-            {/* 原矿输入总需求 */}
-            {rawMaterials.length > 0 && (
-                <fieldset className="w-fit">
-                    <legend><small>原矿输入总需求</small></legend>
-                    <table>
-                        <tbody>
-                            {rawMaterials.map(([item, amount]) => (
-                                <tr key={item}>
-                                    <td className="d-flex align-items-center text-nowrap">
-                                        <ItemIcon item={item} tooltip={false} size={mob_icon}/>
-                                        <span className="ms-1">{'×'}</span>
-                                        <ValueWithDifference
-                                            currentValue={amount}
-                                            previousValue={historyValues?.[1]?.rawMaterials?.[item]}
-                                            key={`raw-material-${item}`}
-                                        />
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </fieldset>
-            )}
+                    {/* 原矿输入总需求 */}
+                    {rawMaterials.length > 0 && (
+                        <fieldset className="w-fit">
+                            <legend><small>原矿输入总需求</small></legend>
+                            <table>
+                                <tbody>
+                                    {rawMaterials.map(([item, amount]) => (
+                                        <tr key={item}>
+                                            <td className="d-flex align-items-center text-nowrap">
+                                                <ItemIcon item={item} tooltip={false} size={mob_icon}/>
+                                                <div className="d-flex flex-column ms-1">
+                                                    <span>{'×'}{formatValue(amount, fixed_num)}</span>
+                                                    {historyValues?.[1]?.rawMaterials?.[item] !== undefined && Math.abs(amount - historyValues[1].rawMaterials[item]) > 1e-6 && (
+                                                        <span style={{fontSize: '0.85em', color: amount > historyValues[1].rawMaterials[item] ? 'red' : 'green'}}>
+                                                            {amount > historyValues[1].rawMaterials[item] ? '+' : ''}{formatValue(amount - historyValues[1].rawMaterials[item], fixed_num)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </fieldset>
+                    )}
 
-            {/* 建筑统计 */}
-            {building_rows.length > 0 &&
-                <fieldset className="w-fit">
-                    <legend><small>建筑统计</small></legend>
-                    <table>
-                        <tbody>{building_rows}</tbody>
-                    </table>
-                </fieldset>
-            }
+                    {/* 预估电力：非 mobile 布局时显示 */}
+                    {!is_mobile && building_rows.length > 0 &&
+                        <fieldset className="w-fit">
+                            <legend><small>预估电力 (MW)</small></legend>
+                            <div className="d-flex flex-column gap-2">
+                                <div className="d-flex align-items-center text-nowrap">
+                                    <span className="text-muted">生产：</span>
+                                    <div className="d-flex flex-column">
+                                        <span>{formatValue(energy_cost, fixed_num)}</span>
+                                        {historyValues?.[1]?.energyCost !== undefined && Math.abs(energy_cost - historyValues[1].energyCost) > 1e-6 && (
+                                            <span style={{fontSize: '0.85em', color: energy_cost > historyValues[1].energyCost ? 'red' : 'green'}}>
+                                                {energy_cost > historyValues[1].energyCost ? '+' : ''}{formatValue(energy_cost - historyValues[1].energyCost, fixed_num)}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="d-flex align-items-center text-nowrap">
+                                    <span className="text-muted">总计：</span>
+                                    <div className="d-flex flex-column">
+                                        <span>{formatValue(energy_cost + miner_energy_cost, fixed_num)}</span>
+                                        {historyValues?.[1]?.totalEnergyCost !== undefined && Math.abs((energy_cost + miner_energy_cost) - historyValues[1].totalEnergyCost) > 1e-6 && (
+                                            <span style={{fontSize: '0.85em', color: (energy_cost + miner_energy_cost) > historyValues[1].totalEnergyCost ? 'red' : 'green'}}>
+                                                {(energy_cost + miner_energy_cost) > historyValues[1].totalEnergyCost ? '+' : ''}{formatValue((energy_cost + miner_energy_cost) - historyValues[1].totalEnergyCost, fixed_num)}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>}
+                </div>
 
-            {/* 预估电力：非 mobile 布局时显示在最下方 */}
-            {!is_mobile && building_rows.length > 0 &&
-                <fieldset className="w-fit">
-                    <legend><small>预估电力 (MW)</small></legend>
-                    <div className="d-flex flex-column gap-1">
-                        <div className="d-flex align-items-center gap-1 text-nowrap">
-                            <span className="text-muted">生产：</span>
-                            <span className="fast-tooltip" data-tooltip="不包含采集设备">
-                                <ValueWithDifference
-                                    currentValue={energy_cost}
-                                    previousValue={historyValues?.[1]?.energyCost}
-                                    key="energy-cost"
-                                />
-                            </span>
-                        </div>
-                        <div className="d-flex align-items-center gap-1 text-nowrap">
-                            <span className="text-muted">总计：</span>
-                            <span className="fast-tooltip" data-tooltip="包含采集设备">
-                                <ValueWithDifference
-                                    currentValue={energy_cost + miner_energy_cost}
-                                    previousValue={historyValues?.[1]?.totalEnergyCost}
-                                    key="total-energy-cost"
-                                />
-                            </span>
-                        </div>
-                    </div>
-                </fieldset>}
+                {/* 右列：建筑统计 */}
+                {building_rows.length > 0 &&
+                    <fieldset className="w-fit">
+                        <legend><small>建筑统计</small></legend>
+                        <table>
+                            <tbody>{building_rows}</tbody>
+                        </table>
+                    </fieldset>
+                }
+            </div>
         </div>}
         </div>
 

@@ -274,7 +274,7 @@ body > .p-3 {
 .result-summary-scroll {
     flex-shrink: 0;
     width: fit-content;
-    max-width: 320px;
+    max-width: 500px;
     overflow-y: auto;
     overflow-x: hidden;
 }
