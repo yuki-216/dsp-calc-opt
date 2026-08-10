@@ -181,6 +181,17 @@ export function calculateCombinationCost(combination, items, gameData, settings,
     }
   }
 
+  // 特殊处理电力：映射到用户选择的燃料配方
+  const selectedFuel = baseSchemeData?.selected_fuel;
+  if (selectedFuel && selectedFuel !== '无') {
+    for (let i = 0; i < recipeData.length; i++) {
+      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
+        itemToRecipe.set('电力', i);
+        break;
+      }
+    }
+  }
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const choice = combination[i];
@@ -266,6 +277,17 @@ async function optimizeCycleGroup(group, gameData, settings, needs, baseSchemeDa
     for (const item of outputs) {
       if (!itemToRecipe.has(item)) {
         itemToRecipe.set(item, i);
+      }
+    }
+  }
+
+  // 特殊处理电力：映射到用户选择的燃料配方
+  const selectedFuel = baseSchemeData?.selected_fuel;
+  if (selectedFuel && selectedFuel !== '无') {
+    for (let i = 0; i < recipeData.length; i++) {
+      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
+        itemToRecipe.set('电力', i);
+        break;
       }
     }
   }
@@ -414,6 +436,17 @@ export async function optimizeSingleItem(item, gameData, settings, needs, baseSc
     for (const output of outputs) {
       if (!itemToRecipe.has(output)) {
         itemToRecipe.set(output, i);
+      }
+    }
+  }
+
+  // 特殊处理电力：映射到用户选择的燃料配方
+  const selectedFuel = baseSchemeData?.selected_fuel;
+  if (selectedFuel && selectedFuel !== '无') {
+    for (let i = 0; i < recipeData.length; i++) {
+      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
+        itemToRecipe.set('电力', i);
+        break;
       }
     }
   }
@@ -701,6 +734,17 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     for (const item of outputs) {
       if (!itemToRecipe.has(item)) {
         itemToRecipe.set(item, i);
+      }
+    }
+  }
+
+  // 特殊处理电力：映射到用户选择的燃料配方
+  const selectedFuel = schemeData?.selected_fuel;
+  if (selectedFuel && selectedFuel !== '无') {
+    for (let i = 0; i < recipeData.length; i++) {
+      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
+        itemToRecipe.set('电力', i);
+        break;
       }
     }
   }
