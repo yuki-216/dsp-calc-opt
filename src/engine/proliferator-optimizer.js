@@ -1,13 +1,11 @@
 /**
  * 增产策略优化器
- * 职责：按 SCC 正序（原矿→产物）遍历，为每个物品选择最优增产策略
+ * 职责：两阶段优化增产策略
  * 目标函数：最小化总耗电
  *
  * 算法核心：
- * 1. 使用已有 BFS+SCC 分析的结果
- * 2. 按 SCC 正序遍历（从原矿到产物）
- * 3. 每个物品尝试所有增产选择，选耗电最小的
- * 4. 确定后锁定，不再改变（天然满足子问题分解，完美剪枝）
+ * 1. 第一阶段：循环组优化（坐标下降法）
+ * 2. 第二阶段：单物品优化（按 SCC 正序逐个优化）
  */
 
 import { CoreEngine } from './index.js';
@@ -670,11 +668,187 @@ export async function optimizeItem(item, gameData, settings, needs, baseSchemeDa
 }
 
 /**
+ * 构建物品到配方索引的映射
+ * @param {Array} recipeData - 配方数据
+ * @param {string} selectedFuel - 用户选择的燃料
+ * @returns {Map} 物品->配方索引映射
+ */
+function buildItemToRecipeMap(recipeData, selectedFuel) {
+  const itemToRecipe = new Map();
+  for (let i = 0; i < recipeData.length; i++) {
+    const outputs = Object.keys(recipeData[i]['产物'] || {});
+    for (const item of outputs) {
+      if (!itemToRecipe.has(item)) {
+        itemToRecipe.set(item, i);
+      }
+    }
+  }
+
+  // 特殊处理电力：映射到用户选择的燃料配方
+  if (selectedFuel && selectedFuel !== '无') {
+    for (let i = 0; i < recipeData.length; i++) {
+      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
+        itemToRecipe.set('电力', i);
+        break;
+      }
+    }
+  }
+
+  return itemToRecipe;
+}
+
+/**
+ * 获取配方的第一个可选增产模式
+ * @param {Object} recipe - 配方数据
+ * @param {Object} settings - 设置参数
+ * @returns {number} 第一个可选模式
+ */
+function getFirstAvailableMode(recipe, settings) {
+  const proliferator = recipe['增产'] || 0;
+  if (proliferator === 0) return 0;
+
+  const noAccelerate = settings.proliferate_no_accelerate || false;
+  const canAccelerate = (proliferator & 1) && !noAccelerate;
+  const canExtraProduct = proliferator & 2;
+
+  // 优先返回增产模式，其次加速模式
+  if (canExtraProduct) return 2;
+  if (canAccelerate) return 1;
+  return 0;
+}
+
+/**
+ * 获取允许的最高等级增产剂
+ * @param {Object} settings - 设置参数
+ * @returns {number} 最高等级
+ */
+function getMaxAllowedLevel(settings) {
+  const allowedLevels = settings.proliferate_allowed_levels || [1, 2, 3];
+  return allowedLevels.length > 0 ? Math.max(...allowedLevels) : 0;
+}
+
+/**
+ * 第一阶段：循环组优化
+ * 使用坐标下降算法优化循环组内所有物品的增产策略
+ *
+ * @param {Array<string>} cycleItems - 循环组物品列表
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} settings - 设置参数
+ * @param {Array} needs - 需求列表
+ * @param {Object} baseScheme - 基础方案数据
+ * @param {Map} itemToRecipe - 物品到配方映射
+ * @param {Function} onLog - 日志回调
+ * @returns {Object} { choices, cost }
+ */
+async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog) {
+  const recipeData = gameData.recipe_data || [];
+
+  // 获取每个物品的可用增产选择
+  const itemChoices = cycleItems.map(item => {
+    const recipeIndex = itemToRecipe.get(item);
+    if (recipeIndex === undefined) return [{ level: 0, mode: 0, name: '无' }];
+    const recipe = recipeData[recipeIndex];
+    return getAvailableChoices(recipe, settings);
+  });
+
+  // 初始状态：所有物品选择"无"
+  const currentChoices = cycleItems.map((item, idx) => {
+    return itemChoices[idx][0];
+  });
+
+  // 计算当前方案的成本
+  function calculateCost(choices) {
+    const tempScheme = structuredClone(baseScheme);
+    for (let i = 0; i < cycleItems.length; i++) {
+      const item = cycleItems[i];
+      const choice = choices[i];
+      const recipeIndex = itemToRecipe.get(item);
+      if (recipeIndex !== undefined && tempScheme.scheme_for_recipe[recipeIndex]) {
+        tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+        tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+      }
+    }
+    return calculatePower(gameData, tempScheme, settings, needs).totalEnergyCost;
+  }
+
+  // 计算初始成本
+  let currentCost = calculateCost(currentChoices);
+  if (onLog) onLog(`初始状态: ${formatPowerValue(currentCost)}`);
+
+  // 坐标下降迭代
+  let round = 0;
+  let totalCalculations = 0;
+  let improved = true;
+
+  while (improved) {
+    improved = false;
+    round++;
+    let improvedCount = 0;
+
+    for (let i = 0; i < cycleItems.length; i++) {
+      const item = cycleItems[i];
+      const choices = itemChoices[i];
+      let bestChoice = currentChoices[i];
+      let bestCost = currentCost;
+
+      // 尝试每种选择
+      for (const choice of choices) {
+        if (choice === currentChoices[i]) continue;
+
+        const oldChoice = currentChoices[i];
+        currentChoices[i] = choice;
+
+        const cost = calculateCost(currentChoices);
+        totalCalculations++;
+
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestChoice = choice;
+        }
+
+        currentChoices[i] = oldChoice;
+      }
+
+      // 应用最佳选择
+      if (bestChoice !== currentChoices[i]) {
+        currentChoices[i] = bestChoice;
+        currentCost = bestCost;
+        improved = true;
+        improvedCount++;
+
+        if (onLog) {
+          onLog(`  ${item}: → ${bestChoice.name} (${formatPowerValue(bestCost)})`);
+        }
+      }
+
+      // 让出主线程
+      if (totalCalculations % 100 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    if (onLog) {
+      if (improvedCount > 0) {
+        onLog(`第${round}轮: 改善${improvedCount}个物品，当前: ${formatPowerValue(currentCost)}`);
+      } else {
+        onLog(`第${round}轮: 无改善，收敛`);
+      }
+    }
+  }
+
+  return {
+    choices: currentChoices,
+    cost: currentCost,
+    calculations: totalCalculations
+  };
+}
+
+/**
  * 增产策略优化器主函数（重构后）
  *
- * 使用动态 SCC 遍历，按 SCC 正序（原矿→产物）遍历每个物品，
- * 尝试所有增产选择，选择使总耗电最小的配置。
- * 对于循环组，整体遍历所有组合。
+ * 两阶段优化：
+ * 1. 循环组优化：在最高等级配置下分析 SCC，找出循环组并用坐标下降优化
+ * 2. 单物品优化：按 SCC 正序逐个优化非循环组物品
  *
  * @param {Object} gameData - 游戏数据
  * @param {Object} schemeData - 当前方案数据
@@ -691,19 +865,15 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   // 1. 输出初始信息
   if (onLog) {
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
-    onLog(`需求数量: ${needs.length}`);
-    onLog(`设置: proliferate_itself=${settings.proliferate_itself}, proliferate_no_accelerate=${settings.proliferate_no_accelerate}`);
     onLog('正在计算初始耗电...');
   }
 
-  // 2. 执行初始计算，获取 SCC 结构
+  // 2. 执行初始计算
   const initialResult = calculatePower(gameData, schemeData, settings, needs);
   const initialPower = initialResult.totalEnergyCost;
 
   if (onLog) {
-    onLog(`初始总耗电: ${formatPowerValue(initialPower)}`);
-    onLog(`初始生产设备耗电: ${formatPowerValue(initialResult.energyCost)}`);
-    onLog(`初始采集设备耗电: ${formatPowerValue(initialResult.minerEnergyCost)}`);
+    onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
   }
 
   if (!initialResult.sccs || initialResult.sccs.length === 0) {
@@ -718,110 +888,156 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     };
   }
 
-  // 2. 获取 SCC 顺序（逆拓扑序：sccGroups[0]=产物，sccGroups[last]=原矿）
-  // 反转为正序：从原矿到产物
-  const sccsForward = [...initialResult.sccs].reverse();
-  if (onLog) onLog(`SCC 正序: ${sccsForward.map(scc => `[${[...scc].join(',')}]`).join(' → ')}`);
-
-  // 3. 收集所有需要优化的物品（按 SCC 正序）
-  const itemsToOptimize = [];
+  // 3. 构建物品到配方映射
   const recipeData = gameData.recipe_data || [];
+  const itemToRecipe = buildItemToRecipeMap(recipeData, schemeData?.selected_fuel);
 
-  // 构建物品 -> 配方索引的映射
-  const itemToRecipe = new Map();
-  for (let i = 0; i < recipeData.length; i++) {
-    const outputs = Object.keys(recipeData[i]['产物'] || {});
-    for (const item of outputs) {
-      if (!itemToRecipe.has(item)) {
-        itemToRecipe.set(item, i);
-      }
+  // 4. 第一阶段：循环组优化
+  if (onLog) onLog('\n========== 第一阶段：循环组优化 ==========');
+
+  // 4.1 强制所有物品使用最高等级 + 第一个可选模式
+  const maxLevel = getMaxAllowedLevel(settings);
+  const maxScheme = structuredClone(schemeData);
+
+  for (const [itemId, recipeIndex] of itemToRecipe) {
+    if (recipeIndex !== undefined && maxScheme.scheme_for_recipe[recipeIndex]) {
+      const recipe = recipeData[recipeIndex];
+      const firstMode = getFirstAvailableMode(recipe, settings);
+      maxScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = maxLevel;
+      maxScheme.scheme_for_recipe[recipeIndex]['增产模式'] = firstMode;
     }
   }
 
-  // 特殊处理电力：映射到用户选择的燃料配方
-  const selectedFuel = schemeData?.selected_fuel;
-  if (selectedFuel && selectedFuel !== '无') {
-    for (let i = 0; i < recipeData.length; i++) {
-      if (recipeData[i]?.isFuelRecipe && recipeData[i]?.fuelName === selectedFuel) {
-        itemToRecipe.set('电力', i);
-        break;
-      }
-    }
+  // 4.2 在最高等级配置下进行SCC分析
+  const maxResult = calculatePower(gameData, maxScheme, settings, needs);
+  const sccsForward = [...maxResult.sccs].reverse();
+
+  if (onLog) {
+    onLog(`最高等级配置下 SCC: ${sccsForward.map(scc => `[${[...scc].join(',')}]`).join(' → ')}`);
   }
 
-  // 按 SCC 正序收集可优化的物品
-  for (const scc of sccsForward) {
+  // 4.3 找出循环组（SCC大小>1）
+  const cycleGroup = sccsForward.find(scc => scc.size > 1 && !scc.has('__solution__'));
+
+  // 4.4 持久化存储
+  const resolved = new Map();
+  let currentScheme = structuredClone(schemeData);
+  let currentPower = initialPower;
+
+  if (cycleGroup) {
+    // 有循环组，用坐标下降优化
+    const cycleItems = [...cycleGroup];
+    if (onLog) onLog(`发现循环组: [${cycleItems.join(', ')}]`);
+
+    // 坐标下降优化
+    const cycleResult = await optimizeCycleGroupPhase(
+      cycleItems, gameData, settings, needs, maxScheme, itemToRecipe, onLog
+    );
+
+    // 持久化循环组策略
+    for (let i = 0; i < cycleItems.length; i++) {
+      resolved.set(cycleItems[i], {
+        strategy: cycleResult.choices[i],
+        cost: cycleResult.cost
+      });
+    }
+
+    // 应用循环组策略到当前方案
+    for (let i = 0; i < cycleItems.length; i++) {
+      const item = cycleItems[i];
+      const choice = cycleResult.choices[i];
+      const recipeIndex = itemToRecipe.get(item);
+      if (recipeIndex !== undefined && currentScheme.scheme_for_recipe[recipeIndex]) {
+        currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+        currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
+      }
+    }
+    currentPower = cycleResult.cost;
+
+    if (onLog) {
+      onLog(`循环组优化完成, 耗电: ${formatPowerValue(currentPower)}`);
+    }
+  } else {
+    if (onLog) onLog('无循环组，跳过第一阶段');
+  }
+
+  // 5. 第二阶段：单物品优化
+  if (onLog) onLog('\n========== 第二阶段：单物品优化 ==========');
+
+  // 5.1 重新SCC分析
+  const secondResult = calculatePower(gameData, currentScheme, settings, needs);
+  const secondSccsForward = [...secondResult.sccs].reverse();
+
+  // 5.2 按SCC正序收集需要优化的物品
+  const itemsToOptimize = [];
+  for (const scc of secondSccsForward) {
     for (const itemId of scc) {
+      if (itemId === '__solution__') continue;
+      if (resolved.has(itemId)) continue; // 跳过已持久化的物品
+
       const recipeIndex = itemToRecipe.get(itemId);
       if (recipeIndex === undefined) continue;
 
       const recipe = recipeData[recipeIndex];
       const choices = getAvailableChoices(recipe, settings);
 
-      // 只有超过 1 种选择的配方才需要优化
       if (choices.length > 1) {
-        itemsToOptimize.push({
-          itemId,
-          recipeIndex,
-          recipe,
-          choices
-        });
+        itemsToOptimize.push({ itemId, recipeIndex, choices });
       }
     }
   }
 
-  // 4. 创建持久化策略存储
-  const resolved = new Map();
+  if (onLog) onLog(`需要优化的物品: ${itemsToOptimize.length} 个`);
 
-  // 5. 按 SCC 正序遍历，逐个物品优化（使用动态 SCC）
-  let currentScheme = structuredClone(schemeData);
-  let currentPower = initialPower;
+  // 5.3 按SCC正序逐个优化
   const changes = [];
-  const totalCount = itemsToOptimize.length;
-
-  // 将 graph 和 edges 存储到 gameData 中，供后续使用
-  gameData.graph = initialResult.graph;
-  gameData.edges = initialResult.edges;
-
   for (let i = 0; i < itemsToOptimize.length; i++) {
-    const item = itemsToOptimize[i];
-    const { itemId, recipeIndex } = item;
+    const { itemId, recipeIndex, choices } = itemsToOptimize[i];
 
-    // 报告进度
     if (onProgress) {
-      onProgress(i + 1, totalCount, `优化 ${itemId}`);
+      onProgress(i + 1, itemsToOptimize.length, `优化 ${itemId}`);
     }
-    if (onLog) onLog(`\n[${i + 1}/${totalCount}] 尝试优化: ${itemId}`);
+    if (onLog) onLog(`[${i + 1}/${itemsToOptimize.length}] ${itemId}`);
 
-    // 使用动态 SCC 优化
-    await optimizeItem(itemId, gameData, settings, needs, currentScheme, resolved, 0, onLog);
+    // 遍历所有增产选择
+    let bestChoice = { level: 0, mode: 0, name: '无' };
+    let bestCost = currentPower;
 
-    // 应用优化结果
-    const strategyInfo = resolved.get(itemId);
-    if (strategyInfo) {
-      const { strategy, cost } = strategyInfo;
-      const currentLevel = currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] || 0;
-      const currentMode = currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] || 0;
+    for (const choice of choices) {
+      // 临时修改选择
+      const tempScheme = structuredClone(currentScheme);
+      tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
+      tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
 
-      if (strategy.level !== currentLevel || strategy.mode !== currentMode) {
-        currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = strategy.level;
-        currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = strategy.mode;
-        currentPower = cost;
+      // 计算成本
+      const result = calculatePower(gameData, tempScheme, settings, needs);
+      const cost = result.totalEnergyCost;
 
-        changes.push({
-          itemId,
-          recipeIndex,
-          oldLevel: currentLevel,
-          oldMode: currentMode,
-          newLevel: strategy.level,
-          newMode: strategy.mode,
-          powerAfter: cost
-        });
-
-        if (onLog) onLog(`  ✓ 选择: ${strategy.name} (耗电 ${formatPowerValue(cost)})`);
-      } else {
-        if (onLog) onLog(`  ✓ 保持: ${strategy.name} (耗电 ${formatPowerValue(cost)})`);
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestChoice = choice;
       }
+    }
+
+    // 应用最佳选择
+    if (bestChoice.level !== 0 || bestChoice.mode !== 0) {
+      currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
+      currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
+      currentPower = bestCost;
+
+      resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
+      changes.push({
+        itemId,
+        recipeIndex,
+        newLevel: bestChoice.level,
+        newMode: bestChoice.mode,
+        powerAfter: bestCost
+      });
+
+      if (onLog) onLog(`  ✓ ${bestChoice.name} (${formatPowerValue(bestCost)})`);
+    } else {
+      resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
+      if (onLog) onLog(`  - 保持无增产`);
     }
   }
 
@@ -834,7 +1050,6 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
       const reduction = initialPower - currentPower;
       const percent = (reduction / initialPower * 100).toFixed(1);
       onLog(`耗电减少: ${formatPowerValue(reduction)} (${percent}%)`);
-      onLog(`调整配方: ${changes.length} 个`);
     } else {
       onLog('当前配置已是最优');
     }
@@ -845,8 +1060,8 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     initialPower,
     optimalPower: currentPower,
     changes,
-    processedCount: totalCount,
-    totalCount
+    processedCount: itemsToOptimize.length,
+    totalCount: itemsToOptimize.length
   };
 }
 
