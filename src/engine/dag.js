@@ -45,7 +45,7 @@ class ItemNode {
  * @param {Set} filterList - 过滤列表（上次迭代中的负需求物品，不寻找主配方，直接当原矿处理）
  * @returns {Object} {graph, edges} - 物品图和边集合
  */
-export function buildItemGraph(needs, recipes, gameData, schemeData, settings = {}, sprayCosts = null, filterList = new Set()) {
+export function buildItemGraph(needs, recipes, gameData, schemeData, settings = {}, sprayCosts = null, filterList = new Set(), silent = false) {
   const graph = new Map();
   const edges = [];
   const edgeSet = new Set();
@@ -98,7 +98,9 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
 
     // 过滤列表中的物品，不寻找主配方，直接当原矿处理
     if (filterList.has(itemId)) {
-      console.log(`[buildItemGraph] ${itemId} 在过滤列表中，当原矿处理`);
+      if (!silent) {
+        console.log(`[buildItemGraph] ${itemId} 在过滤列表中，当原矿处理`);
+      }
       continue;
     }
 

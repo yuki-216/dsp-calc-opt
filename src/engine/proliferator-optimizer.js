@@ -37,10 +37,10 @@ export function resetCallCount() {
  * @param {Array} needs - 需求列表
  * @returns {Object} { totalEnergyCost, energyCost, minerEnergyCost }
  */
-function calculatePower(gameData, schemeData, settings, needs) {
+function calculatePower(gameData, schemeData, settings, needs, silent = false) {
   const gameInfo = { game_data: gameData, item_data: {} };
   const globalState = new GlobalState(gameInfo, schemeData, settings);
-  const engine = new CoreEngine(gameData, schemeData, settings, globalState.sprayCosts);
+  const engine = new CoreEngine(gameData, schemeData, settings, globalState.sprayCosts, silent);
   const result = engine.calculate(needs, gameData.recipe_data);
 
   // 确保 graph 和 edges 存在
@@ -649,9 +649,10 @@ export async function optimizeItem(item, gameData, settings, needs, baseSchemeDa
  * @param {Array} needs - 需求列表
  * @param {Function} onProgress - 进度回调 (current, total, message)
  * @param {Function} onLog - 日志回调 (message)
+ * @param {boolean} silent - 是否静默模式（不输出调试日志）
  * @returns {Object} { optimalScheme, initialPower, optimalPower, changes }
  */
-export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null) {
+export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null, silent = false) {
   // 0. 重置调用计数器
   resetCallCount();
 
@@ -664,7 +665,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   }
 
   // 2. 执行初始计算，获取 SCC 结构
-  const initialResult = calculatePower(gameData, schemeData, settings, needs);
+  const initialResult = calculatePower(gameData, schemeData, settings, needs, silent);
   const initialPower = initialResult.totalEnergyCost;
 
   if (onLog) {

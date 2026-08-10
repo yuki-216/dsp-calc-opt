@@ -24,7 +24,7 @@ const TRUNCATE_EPSILON = 1 / ROUND_FACTOR;     // 1e-7
  * @param {Array<Set<string>>} sccs - SCC分组（逆拓扑序：顶层在前，底层在后）
  * @param {Map<string,Set>} byproductMap - 副产物映射
  */
-export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map()) {
+export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map(), silent = false) {
   // 计时统计（已禁用）
   // const timings = {
   //   matrixInverse: 0,  // 矩阵求逆耗时
@@ -125,11 +125,13 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   }
 
   // ====== 阶段1：SCC展开（逆拓扑序，从顶层开始） ======
-  console.log('[展开] SCC总数:', sccs.length, '顺序:');
-  for (let i = 0; i < sccs.length; i++) {
-    console.log(`  SCC[${i}]:`, [...sccs[i]].join(', '));
+  if (!silent) {
+    console.log('[展开] SCC总数:', sccs.length, '顺序:');
+    for (let i = 0; i < sccs.length; i++) {
+      console.log(`  SCC[${i}]:`, [...sccs[i]].join(', '));
+    }
+    console.log('[展开] 初始 solution:', JSON.stringify(solution));
   }
-  console.log('[展开] 初始 solution:', JSON.stringify(solution));
 
   for (let i = 0; i < sccs.length; i++) {
     const scc = sccs[i];
@@ -141,19 +143,25 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       if (coeff > 0) {
         const itemCost = costs.get(itemId);
         if (itemCost) {
-          console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+          if (!silent) {
+            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+          }
           substitute(itemId, itemCost);
-          console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+          if (!silent) {
+            console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+          }
         }
       }
     } else {
       // 多节点 SCC（循环组）：矩阵求逆一次性解出全部物品
-                
-      solveSCCByMatrix(scc, costs);
+
+      solveSCCByMatrix(scc, costs, silent);
       // 打印求解后的 cost
-      for (const itemId of scc) {
-        const cost = costs.get(itemId);
-        if (cost) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
+      if (!silent) {
+        for (const itemId of scc) {
+          const cost = costs.get(itemId);
+          if (cost) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
+        }
       }
 
       // 优化2：先检查solution有没有正需求，再展开常数项
@@ -162,9 +170,13 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         if (coeff > 0) {
           const itemCost = costs.get(itemId);
           if (itemCost) {
-            console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+            if (!silent) {
+              console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+            }
             substitute(itemId, itemCost);
-            console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+            if (!silent) {
+              console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+            }
           }
         }
       }
@@ -173,7 +185,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       for (const [key, val] of Object.entries(solution)) {
         if (key.startsWith('$')) continue;
         if (val < 0 && !reverseProductionList.has(key)) {
-          console.log(`[阶段1] SCC[${i}] 循环组求解后，"${key}" 有负系数=${val.toFixed(6)}，加入待逆生产列表`);
+          if (!silent) {
+            console.log(`[阶段1] SCC[${i}] 循环组求解后，"${key}" 有负系数=${val.toFixed(6)}，加入待逆生产列表`);
+          }
           reverseProductionList.add(key);
         }
       }
@@ -188,7 +202,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   let loopCount = 0;
   const maxLoops = 1000;
 
-  console.log('[阶段2] 开始, expansionList:', [...expansionList], 'reverseProductionList:', [...reverseProductionList]);
+  if (!silent) {
+    console.log('[阶段2] 开始, expansionList:', [...expansionList], 'reverseProductionList:', [...reverseProductionList]);
+  }
 
   while ((reverseProductionList.size > 0 || expansionList.size > 0) && loopCount < maxLoops) {
     loopCount++;
@@ -207,9 +223,13 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
       const itemCost = costs.get(itemId);
       if (itemCost) {
-        console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+        if (!silent) {
+          console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+        }
         substitute(itemId, itemCost);
-        console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
+        if (!silent) {
+          console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
+        }
       }
     }
 
@@ -226,7 +246,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         continue;
       }
 
-      console.log(`[阶段2-逆生产] "${itemId}" (系数=${v.toFixed(6)})`);
+      if (!silent) {
+        console.log(`[阶段2-逆生产] "${itemId}" (系数=${v.toFixed(6)})`);
+      }
 
 
       const itemSelfKey = `$${itemId}`;
@@ -245,14 +267,16 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         }
 
         if (cancelAmount > 0) {
-          console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
-          console.log(`[阶段2-逆生产] "${itemId}" 成本:`, JSON.stringify(itemCost));
-          // 打印乘以系数后的量
-          const scaledCost = {};
-          for (const [key, val] of Object.entries(itemCost)) {
-            scaledCost[key] = val * (-cancelAmount);
+          if (!silent) {
+            console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
+            console.log(`[阶段2-逆生产] "${itemId}" 成本:`, JSON.stringify(itemCost));
+            // 打印乘以系数后的量
+            const scaledCost = {};
+            for (const [key, val] of Object.entries(itemCost)) {
+              scaledCost[key] = val * (-cancelAmount);
+            }
+            console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
           }
-          console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
           substitute(itemId, itemCost, -cancelAmount);  // 负号表示抵消
 
           // 恢复抵消后的系数（substitute 内部会删除 solution[itemId]）
@@ -260,11 +284,15 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
           if (newV !== 0) {
             solution[itemId] = newV;
             if (newV < 0) {
-              console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
+              if (!silent) {
+                console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
+              }
               reverseProductionList.add(itemId);  // 还有剩余，重新加入
             }
           }
-          console.log(`[阶段2-逆生产后] solution:`, JSON.stringify(solution));
+          if (!silent) {
+            console.log(`[阶段2-逆生产后] solution:`, JSON.stringify(solution));
+          }
         }
       }
     }
@@ -308,8 +336,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
  *
  * @param {Set<string>} scc - SCC物品ID集合
  * @param {Map} costs - 系数表映射（会被修改）
+ * @param {boolean} silent - 是否静默模式（不输出日志）
  */
-function solveSCCByMatrix(scc, costs) {
+function solveSCCByMatrix(scc, costs, silent = false) {
   const sccArray = [...scc];
   const n = sccArray.length;
   const sccSet = scc;
