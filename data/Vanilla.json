@@ -1573,6 +1573,33 @@
       "IconName": "glass"
     },
     {
+      "ID": 58,
+      "Type": 3,
+      "Factories": [
+        2308
+      ],
+      "Name": "X射线裂解",
+      "Items": [
+        1114,
+        1120
+      ],
+      "ItemCounts": [
+        1,
+        2
+      ],
+      "Results": [
+        1120,
+        1109
+      ],
+      "ResultCounts": [
+        3,
+        1
+      ],
+      "TimeSpend": 240,
+      "Proliferator": 1,
+      "IconName": "X-ray"
+    },
+    {
       "ID": 59,
       "Type": 1,
       "Factories": [
