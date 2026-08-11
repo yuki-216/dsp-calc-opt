@@ -1,6 +1,6 @@
 [package]
 name = "dsp-calc"
-version = "0.5.6"
+version = "1.0.0"
 description = "Dyson Sphere Program Production Calculator"
 authors = []
 license = "MIT"

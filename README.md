@@ -1,4 +1,4 @@
-# 戴森球计划量化计算器（重构版）
+# 戴森球计划量化计算器 v1.0.0
 
 基于 [dsp-calc](https://github.com/DSPCalculator/dsp-calc) 开源项目进行功能修剪和新增。
 
@@ -33,17 +33,22 @@ http://localhost:5173
 
 | 阶段 | 目标 | 状态 |
 |------|------|------|
-| 阶段1 | 项目理解与裁剪 | 进行中 |
-| 阶段2 | 燃料计算模块 | 待开始 |
-| 阶段3 | 增产剂自动优化 | 待开始 |
-| 阶段4 | 占地模块与完善优化 | 待开始 |
+| 阶段1 | 项目理解与裁剪 | ✅ 已完成 |
+| 阶段2 | 燃料计算模块 | ✅ 已完成 |
+| 阶段3 | 增产剂自动优化 | ✅ 已完成 |
+| 阶段4 | 占地模块与完善优化 | ✅ 已完成 |
 
 ## 文档
 
 - [设计规格文档](docs/design-spec.md)
-- [架构分析文档](docs/architecture-analysis.md)
-- [决策记录](docs/decision-log.md)
-- [dsp-calc原始README](README-dsp-calc.md)
+- [核心算法文档](docs/core-algorithm.md)
+- [依赖图模块文档](docs/dependency_graph.md)
+- [增产策略优化算法详解](docs/增产策略优化算法详解.md)
+
+## 联系方式
+
+- QQ: 1610241445
+- QQ群: 暂无
 
 ## 参考资源
 

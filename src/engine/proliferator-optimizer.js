@@ -1,7 +1,7 @@
 /**
  * 增产策略优化器
  * 职责：两阶段优化增产策略
- * 目标函数：最小化总耗电
+ * 支持多种目标函数：最小电力、最小原矿输出
  *
  * 算法核心：
  * 1. 第一阶段：循环组优化（坐标下降法）
@@ -17,7 +17,7 @@ import { GlobalState } from '../game_data.jsx';
  * @param {Object} schemeData - 方案数据
  * @param {Object} settings - 设置参数
  * @param {Array} needs - 需求列表
- * @returns {Object} { totalEnergyCost, energyCost, minerEnergyCost }
+ * @returns {Object} { totalEnergyCost, energyCost, minerEnergyCost, resourceUsage, graph, edges, sccs }
  */
 function calculatePower(gameData, schemeData, settings, needs) {
   const gameInfo = { game_data: gameData, item_data: {} };
@@ -32,6 +32,7 @@ function calculatePower(gameData, schemeData, settings, needs) {
       totalEnergyCost: result.totalEnergyCost || 0,
       energyCost: result.energyCost || 0,
       minerEnergyCost: result.minerEnergyCost || 0,
+      resourceUsage: result.resourceUsage || {},
       graph: new Map(),
       edges: [],
       sccs: []
@@ -42,10 +43,91 @@ function calculatePower(gameData, schemeData, settings, needs) {
     totalEnergyCost: result.totalEnergyCost || 0,
     energyCost: result.energyCost || 0,
     minerEnergyCost: result.minerEnergyCost || 0,
+    resourceUsage: result.resourceUsage || {},
     graph: engine.graph,
     edges: engine.edges,
     sccs: engine.sccs
   };
+}
+
+/**
+ * 判断物品是否为原矿
+ * 原矿判定标准：
+ * 1. 在 mineralize_list 中（用户标记为原矿化）
+ * 2. 配方无原料输入且只有单一产物
+ * @param {string} itemId - 物品ID
+ * @param {Array} recipeData - 配方数据
+ * @param {Object} mineralizeList - 原矿化列表
+ * @returns {boolean}
+ */
+function isRawOreItem(itemId, recipeData, mineralizeList) {
+  // 1. 在原矿化列表中
+  if (itemId in mineralizeList) return true;
+
+  // 2. 查找该物品的配方，判断是否为无原料输入的单一产物配方
+  for (const recipe of recipeData) {
+    const outputs = recipe['产物'] || {};
+    if (!(itemId in outputs)) continue;
+
+    const inputs = recipe['原料'] || {};
+    const outputKeys = Object.keys(outputs);
+    // 无原料输入 + 单一产物 = 原矿
+    if (Object.keys(inputs).length === 0 && outputKeys.length === 1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * 计算给定方案下的总原矿消耗量（无权重累加）
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} schemeData - 方案数据
+ * @param {Object} settings - 设置参数
+ * @param {Array} needs - 需求列表
+ * @returns {Object} { totalRawOre, totalEnergyCost, energyCost, minerEnergyCost, resourceUsage, graph, edges, sccs }
+ */
+function calculateRawOre(gameData, schemeData, settings, needs) {
+  const result = calculatePower(gameData, schemeData, settings, needs);
+  const recipeData = gameData.recipe_data || [];
+  const mineralizeList = settings.mineralize_list || {};
+
+  let totalRawOre = 0;
+  for (const [item, amount] of Object.entries(result.resourceUsage)) {
+    if (amount <= 0) continue; // 跳过副产物/盈余
+    if (isRawOreItem(item, recipeData, mineralizeList)) {
+      totalRawOre += amount;
+    }
+  }
+
+  return { totalRawOre, ...result };
+}
+
+/**
+ * 获取优化目标值
+ * @param {Object} result - calculatePower 或 calculateRawOre 的返回结果
+ * @param {string} strategy - 策略标识 ('min_power' | 'min_raw_ore')
+ * @returns {number} 目标值（越小越好）
+ */
+function getObjectiveValue(result, strategy) {
+  if (strategy === 'min_raw_ore') {
+    return result.totalRawOre ?? 0;
+  }
+  return result.totalEnergyCost; // 默认 min_power
+}
+
+/**
+ * 格式化目标值
+ * @param {number} value - 目标值
+ * @param {string} strategy - 策略标识
+ * @returns {string} 格式化后的字符串
+ */
+function formatObjectiveValue(value, strategy) {
+  if (strategy === 'min_raw_ore') {
+    return value.toFixed(2) + ' 原矿';
+  }
+  return formatPowerValue(value);
 }
 
 /**
@@ -152,10 +234,14 @@ function getMaxAllowedLevel(settings) {
  * @param {Object} baseScheme - 基础方案数据
  * @param {Map} itemToRecipe - 物品到配方映射
  * @param {Function} onLog - 日志回调
+ * @param {string} strategy - 优化策略 ('min_power' | 'min_raw_ore')
  * @returns {Object} { choices, cost, calculations }
  */
-async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog) {
+async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog, strategy = 'min_power') {
   const recipeData = gameData.recipe_data || [];
+
+  // 根据策略选择计算函数
+  const calculateResult = strategy === 'min_raw_ore' ? calculateRawOre : calculatePower;
 
   // 获取每个物品的可用增产选择
   const itemChoices = cycleItems.map(item => {
@@ -182,12 +268,13 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
       }
     }
-    return calculatePower(gameData, tempScheme, settings, needs).totalEnergyCost;
+    const result = calculateResult(gameData, tempScheme, settings, needs);
+    return getObjectiveValue(result, strategy);
   }
 
   // 计算初始成本
   let currentCost = calculateCost(currentChoices);
-  if (onLog) onLog(`初始状态: ${formatPowerValue(currentCost)}`);
+  if (onLog) onLog(`初始状态: ${formatObjectiveValue(currentCost, strategy)}`);
 
   // 坐标下降迭代
   let round = 0;
@@ -231,7 +318,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         improvedCount++;
 
         if (onLog) {
-          onLog(`  ${item}: → ${bestChoice.name} (${formatPowerValue(bestCost)})`);
+          onLog(`  ${item}: → ${bestChoice.name} (${formatObjectiveValue(bestCost, strategy)})`);
         }
       }
 
@@ -243,7 +330,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
 
     if (onLog) {
       if (improvedCount > 0) {
-        onLog(`第${round}轮: 改善${improvedCount}个物品，当前: ${formatPowerValue(currentCost)}`);
+        onLog(`第${round}轮: 改善${improvedCount}个物品，当前: ${formatObjectiveValue(currentCost, strategy)}`);
       } else {
         onLog(`第${round}轮: 无改善，收敛`);
       }
@@ -270,21 +357,31 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
  * @param {Array} needs - 需求列表
  * @param {Function} onProgress - 进度回调 (current, total, message)
  * @param {Function} onLog - 日志回调 (message)
- * @returns {Object} { optimalScheme, initialPower, optimalPower, changes }
+ * @param {string} strategy - 优化策略 ('min_power' | 'min_raw_ore')
+ * @returns {Object} { optimalScheme, initialPower, optimalPower, strategy, initialObjective, optimalObjective, changes }
  */
-export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null) {
+export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null, strategy = 'min_power') {
+  // 根据策略选择计算函数
+  const calculateResult = strategy === 'min_raw_ore' ? calculateRawOre : calculatePower;
+
   // 1. 输出初始信息
+  const strategyName = strategy === 'min_raw_ore' ? '最小原矿输出' : '最小电力';
   if (onLog) {
+    onLog(`优化策略: ${strategyName}`);
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
-    onLog('正在计算初始耗电...');
+    onLog('正在计算初始值...');
   }
 
   // 2. 执行初始计算
-  const initialResult = calculatePower(gameData, schemeData, settings, needs);
+  const initialResult = calculateResult(gameData, schemeData, settings, needs);
   const initialPower = initialResult.totalEnergyCost;
+  const initialObjective = getObjectiveValue(initialResult, strategy);
 
   if (onLog) {
-    onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
+    onLog(`初始${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(initialObjective, strategy)}`);
+    if (strategy === 'min_raw_ore') {
+      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
+    }
   }
 
   if (!initialResult.sccs || initialResult.sccs.length === 0) {
@@ -293,6 +390,9 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
       optimalScheme: structuredClone(schemeData),
       initialPower,
       optimalPower: initialPower,
+      strategy,
+      initialObjective,
+      optimalObjective: initialObjective,
       changes: [],
       processedCount: 0,
       totalCount: 0
@@ -334,6 +434,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   const resolved = new Map();
   let currentScheme = structuredClone(schemeData);
   let currentPower = initialPower;
+  let currentObjective = initialObjective;
 
   if (cycleGroup) {
     // 有循环组，用坐标下降优化
@@ -342,7 +443,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
 
     // 坐标下降优化
     const cycleResult = await optimizeCycleGroupPhase(
-      cycleItems, gameData, settings, needs, maxScheme, itemToRecipe, onLog
+      cycleItems, gameData, settings, needs, maxScheme, itemToRecipe, onLog, strategy
     );
 
     // 持久化循环组策略
@@ -363,10 +464,14 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
         currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
       }
     }
-    currentPower = cycleResult.cost;
+    currentObjective = cycleResult.cost;
+
+    // 重新计算耗电（循环组优化后）
+    const afterCycleResult = calculatePower(gameData, currentScheme, settings, needs);
+    currentPower = afterCycleResult.totalEnergyCost;
 
     if (onLog) {
-      onLog(`循环组优化完成, 耗电: ${formatPowerValue(currentPower)}`);
+      onLog(`循环组优化完成, ${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(currentObjective, strategy)}`);
     }
   } else {
     if (onLog) onLog('无循环组，跳过第一阶段');
@@ -375,13 +480,14 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   // 5. 第二阶段：单物品优化
   if (onLog) onLog('\n========== 第二阶段：单物品优化 ==========');
 
-  // 5.1 重新SCC分析并更新当前耗电
-  const secondResult = calculatePower(gameData, currentScheme, settings, needs);
+  // 5.1 重新SCC分析并更新当前值
+  const secondResult = calculateResult(gameData, currentScheme, settings, needs);
   const secondSccsForward = [...secondResult.sccs].reverse();
 
-  // 更新当前耗电（第二阶段开始时，其他物品配置已改变，需要重新计算基准）
+  // 更新当前目标值（第二阶段开始时，其他物品配置已改变，需要重新计算基准）
+  currentObjective = getObjectiveValue(secondResult, strategy);
   currentPower = secondResult.totalEnergyCost;
-  if (onLog) onLog(`第二阶段初始耗电: ${formatPowerValue(currentPower)}`);
+  if (onLog) onLog(`第二阶段初始${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(currentObjective, strategy)}`);
 
   // 5.2 按SCC正序收集需要优化的物品
   const itemsToOptimize = [];
@@ -416,9 +522,9 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
 
     // 遍历所有增产选择
     let bestChoice = { level: 0, mode: 0, name: '无' };
-    let bestCost = currentPower;
+    let bestCost = currentObjective;
 
-    if (onLog) onLog(`  当前耗电: ${formatPowerValue(currentPower)}, 可选策略: ${choices.length}个`);
+    if (onLog) onLog(`  当前${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(currentObjective, strategy)}, 可选策略: ${choices.length}个`);
 
     for (const choice of choices) {
       // 临时修改选择
@@ -427,10 +533,10 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
       tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
 
       // 计算成本
-      const result = calculatePower(gameData, tempScheme, settings, needs);
-      const cost = result.totalEnergyCost;
+      const result = calculateResult(gameData, tempScheme, settings, needs);
+      const cost = getObjectiveValue(result, strategy);
 
-      if (onLog) onLog(`  测试 ${choice.name}: ${formatPowerValue(cost)} ${cost < bestCost ? '✓ 更优' : ''}`);
+      if (onLog) onLog(`  测试 ${choice.name}: ${formatObjectiveValue(cost, strategy)} ${cost < bestCost ? '✓ 更优' : ''}`);
 
       if (cost < bestCost) {
         bestCost = cost;
@@ -442,7 +548,11 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     if (bestChoice.level !== 0 || bestChoice.mode !== 0) {
       currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
       currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
-      currentPower = bestCost;
+      currentObjective = bestCost;
+
+      // 更新耗电
+      const afterApplyResult = calculatePower(gameData, currentScheme, settings, needs);
+      currentPower = afterApplyResult.totalEnergyCost;
 
       resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
       changes.push({
@@ -450,10 +560,11 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
         recipeIndex,
         newLevel: bestChoice.level,
         newMode: bestChoice.mode,
-        powerAfter: bestCost
+        powerAfter: currentPower,
+        objectiveAfter: bestCost
       });
 
-      if (onLog) onLog(`  ✓ ${bestChoice.name} (${formatPowerValue(bestCost)})`);
+      if (onLog) onLog(`  ✓ ${bestChoice.name} (${formatObjectiveValue(bestCost, strategy)})`);
     } else {
       resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
       if (onLog) onLog(`  - 保持无增产`);
@@ -461,14 +572,20 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   }
 
   // 6. 输出最终结果
+  const optimalObjective = currentObjective;
   if (onLog) {
     onLog('\n========== 优化结果 ==========');
-    onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
-    onLog(`最终耗电: ${formatPowerValue(currentPower)}`);
+    onLog(`策略: ${strategyName}`);
+    onLog(`初始${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(initialObjective, strategy)}`);
+    onLog(`最终${strategy === 'min_raw_ore' ? '原矿' : '耗电'}: ${formatObjectiveValue(optimalObjective, strategy)}`);
+    if (strategy === 'min_raw_ore') {
+      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
+      onLog(`最终耗电: ${formatPowerValue(currentPower)}`);
+    }
     if (changes.length > 0) {
-      const reduction = initialPower - currentPower;
-      const percent = (reduction / initialPower * 100).toFixed(1);
-      onLog(`耗电减少: ${formatPowerValue(reduction)} (${percent}%)`);
+      const reduction = initialObjective - optimalObjective;
+      const percent = initialObjective > 0 ? (reduction / initialObjective * 100).toFixed(1) : '0.0';
+      onLog(`${strategy === 'min_raw_ore' ? '原矿' : '耗电'}减少: ${formatObjectiveValue(reduction, strategy)} (${percent}%)`);
     } else {
       onLog('当前配置已是最优');
     }
@@ -478,6 +595,9 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     optimalScheme: currentScheme,
     initialPower,
     optimalPower: currentPower,
+    strategy,
+    initialObjective,
+    optimalObjective,
     changes,
     processedCount: itemsToOptimize.length,
     totalCount: itemsToOptimize.length

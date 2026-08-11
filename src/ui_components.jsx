@@ -1,8 +1,8 @@
 import {createContext, useContext, useState, useEffect} from 'react';
 import {Nav, Navbar, OverlayTrigger, Tooltip} from 'react-bootstrap';
-import {FaInfoCircle, FaMoon, FaProjectDiagram, FaQq, FaReact, FaSun} from 'react-icons/fa';
+import {FaMoon, FaProjectDiagram, FaQq, FaReact, FaSun} from 'react-icons/fa';
 import {useRegisterSW} from 'virtual:pwa-register/react';
-import {default_game_data} from './game_data';
+import {default_game_data, vanilla_game_version} from './game_data';
 
 // ========== ThemeContext ==========
 
@@ -129,8 +129,8 @@ export function Header({onNavigate, currentPage}) {
     const {theme, toggleTheme} = useTheme();
     const renderTooltip = (props) => (
         <Tooltip id="qq-tooltip" {...props}>
-            联系作者QQ:653524123<br/>
-            加入QQ群反馈:816367922
+            QQ:1610241445<br/>
+            QQ群:暂无
         </Tooltip>
     );
 
@@ -161,9 +161,9 @@ export function Header({onNavigate, currentPage}) {
                         <FaProjectDiagram/>
                         <span>依赖图</span>
                     </Nav.Link>
-                    <Nav.Link href="https://github.com/DSPCalculator/dsp-calc">开源仓库</Nav.Link>
-                    <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link>
-                    <Nav.Link href="https://space.bilibili.com/16051534">联系作者</Nav.Link>
+                    {/* <Nav.Link href="https://github.com/DSPCalculator/dsp-calc">开源仓库</Nav.Link> */}
+                    {/* <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link> */}
+                    {/* <Nav.Link href="https://space.bilibili.com/16051534">联系作者</Nav.Link> */}
                 </Nav>
                 <Nav>
                     <OverlayTrigger
@@ -178,7 +178,7 @@ export function Header({onNavigate, currentPage}) {
                 </Nav>
 
                 <span className="navbar-text ms-auto small me-3">
-                    <FaInfoCircle/> 若无法加载，尝试切换浏览器为Chrome/Edge
+                    游戏版本 v{vanilla_game_version}
                 </span>
                 <Nav>
                     <Nav.Link

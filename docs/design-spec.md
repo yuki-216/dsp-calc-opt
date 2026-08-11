@@ -12,7 +12,7 @@
 | 项目 | 选择 | 说明 |
 |------|------|------|
 | 基础项目 | dsp-calc | 已实现核心计算功能 |
-| 框架 | React 18 | UI组件库 |
+| 框架 | React 19 | UI组件库 |
 | 构建 | Vite | 快速开发服务器 |
 | 样式 | Bootstrap 5 | UI框架 |
 | 求解器 | javascript-lp-solver | 线性规划 |

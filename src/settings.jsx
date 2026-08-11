@@ -286,6 +286,7 @@ export function BatchSetting({needs_list}) {
     const [optimResult, setOptimResult] = useState(null);
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
+    const [optimStrategy, setOptimStrategy] = useState('min_power');
     const logContainerRef = useRef(null);
 
     // 自动滚动到底部
@@ -323,7 +324,8 @@ export function BatchSetting({needs_list}) {
                     (message) => {
                         logs.push(message);
                         setOptimLogs([...logs]);
-                    }
+                    },
+                    optimStrategy
                 );
 
                 setOptimResult(result);
@@ -341,7 +343,7 @@ export function BatchSetting({needs_list}) {
                 setIsOptimizing(false);
             }
         }, 50);
-    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data]);
+    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy]);
 
     // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
     let pro_num = 0;
@@ -449,11 +451,22 @@ export function BatchSetting({needs_list}) {
                     </div>;
                 })}
             </div>
+            <select
+                className="form-select form-select-sm"
+                style={{width: 'auto', minWidth: '100px'}}
+                value={optimStrategy}
+                onChange={(e) => setOptimStrategy(e.target.value)}
+                disabled={isOptimizing}
+                title="选择优化策略"
+            >
+                <option value="min_power">最小电力</option>
+                <option value="min_raw_ore">最小原矿</option>
+            </select>
             <button
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}
                 disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
-                title={isOptimizing ? '优化进行中...' : '按 SCC 正序自动优化增产策略（最小化总耗电）'}
+                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿输出' : '最小化总耗电'}）`}
             >
                 <FaMagic/>
                 <span className="compact-hide-text">

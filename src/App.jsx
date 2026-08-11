@@ -71,10 +71,6 @@ function AppWithContexts({needs_list, set_needs_list}) {
     return <div className="app-layout">
         {/* 顶部面板：不参与滚动 */}
         <div className="app-top-panel">
-            {/*游戏版本*/}
-            <div className="d-flex column-gap-4 row-gap-2 flex-wrap">
-                <div className="text-nowrap">游戏版本 v{vanilla_game_version}</div>
-            </div>
             {/*燃料选择、清空数据缓存按钮、采矿参数&其他设置是否显示按钮*/}
             <div className="d-flex column-gap-4 row-gap-2 flex-wrap mt-2 align-items-center">
                 <FuelSelect/>

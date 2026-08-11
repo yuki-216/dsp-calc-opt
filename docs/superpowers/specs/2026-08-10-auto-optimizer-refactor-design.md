@@ -29,17 +29,18 @@
 ### 算法流程
 
 ```
-optimizeProliferatorStrategy(gameData, schemeData, settings, needs):
+optimizeProliferatorStrategy(gameData, schemeData, settings, needs, strategy='min_power'):
 
   1. 初始化
+     - 根据 strategy 选择目标函数（calculatePower 或 calculateRawOre）
      - 构建物品→配方映射（处理电力特殊逻辑）
-     - 计算初始耗电
+     - 计算初始目标值
 
   2. 第一阶段：循环组优化
      - 配置：所有物品 = 最高等级 + 第一个可选模式
      - SCC分析 → 找出循环组
      - 如果循环组存在：
-       - 坐标下降优化循环组
+       - 坐标下降优化循环组（使用对应目标函数）
        - 持久化最优策略
      - 输出：循环组最优策略
 
@@ -49,12 +50,13 @@ optimizeProliferatorStrategy(gameData, schemeData, settings, needs):
      - 跳过已持久化的物品（循环组成员）
      - 对每个未持久化物品：
        - 尝试所有增产选择
-       - 选耗电最小的策略
+       - 选目标函数最优的策略
        - 持久化
      - 输出：所有物品的最优策略
 
   4. 返回结果
      - 最优方案
+     - 策略标识、初始/最终目标值
      - 耗电变化
      - 策略变更列表
 ```
@@ -62,32 +64,32 @@ optimizeProliferatorStrategy(gameData, schemeData, settings, needs):
 ### 关键函数设计
 
 ```javascript
-// 主函数
+// 主函数（支持多目标策略）
 export async function optimizeProliferatorStrategy(
   gameData, schemeData, settings, needs,
-  onProgress = null, onLog = null
+  onProgress = null, onLog = null,
+  strategy = 'min_power'  // 'min_power' | 'min_raw_ore'
 )
 
 // 第一阶段：循环组优化
 async function optimizeCycleGroupPhase(
-  gameData, schemeData, settings, needs, onLog
+  cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog, strategy
 )
-// 返回 { strategies, updatedScheme }
-
-// 第二阶段：单物品优化
-async function optimizeSingleItemsPhase(
-  gameData, schemeData, settings, needs,
-  resolved, sccOrder, onProgress, onLog
-)
-
-// 坐标下降算法
-async function coordinateDescent(
-  items, gameData, settings, needs,
-  baseSchemeData, onLog
-)
+// 返回 { choices, cost, calculations }
 
 // 计算耗电
 function calculatePower(gameData, schemeData, settings, needs)
+// 返回 { totalEnergyCost, energyCost, minerEnergyCost, resourceUsage, graph, edges, sccs }
+
+// 计算原矿消耗（新增）
+function calculateRawOre(gameData, schemeData, settings, needs)
+// 返回 { totalRawOre, ...calculatePower的结果 }
+
+// 判断是否为原矿（新增）
+function isRawOreItem(itemId, recipeData, mineralizeList)
+
+// 获取目标值（新增）
+function getObjectiveValue(result, strategy)
 ```
 
 ### 数据结构
@@ -101,6 +103,19 @@ resolved = Map<itemId, {
 
 // SCC顺序
 sccOrder = Array<itemId>  // 正序：原矿→产物
+
+// 返回值结构
+{
+  optimalScheme: Object,      // 最优方案
+  initialPower: number,       // 初始耗电
+  optimalPower: number,       // 最终耗电
+  strategy: string,           // 使用的策略 ('min_power' | 'min_raw_ore')
+  initialObjective: number,   // 初始目标值
+  optimalObjective: number,   // 最终目标值
+  changes: Array,             // 策略变更列表
+  processedCount: number,     // 已处理物品数
+  totalCount: number          // 总物品数
+}
 ```
 
 ### 日志设计
@@ -108,6 +123,8 @@ sccOrder = Array<itemId>  // 正序：原矿→产物
 简化日志，只保留关键信息：
 
 ```
+优化策略: 最小电力
+需求物品: 铁板x10, 铜板x5
 初始耗电: 1.23 GW
 第一阶段: 循环组 [石墨烯, 金刚石] 优化完成, 耗电降至 1.15 GW
 第二阶段: [1/10] 铁板 → Mk.II增产 (1.12 GW)
@@ -115,6 +132,8 @@ sccOrder = Array<itemId>  // 正序：原矿→产物
          ...
 最终耗电: 0.98 GW, 减少 20.3%
 ```
+
+使用最小原矿策略时，日志会显示原矿总量而非耗电值。
 
 ### 边界情况处理
 
@@ -138,6 +157,37 @@ function* enumerateStrategies(items, settings) {
 function evaluateStrategy(strategy, gameData, settings, needs) {
   // 当前：计算总耗电
   // 未来：可添加其他目标
+}
+```
+
+### 多目标策略支持（已实现）
+
+优化器支持通过 `strategy` 参数选择不同的优化目标：
+
+| 策略标识 | 名称 | 目标函数 | 说明 |
+|---------|------|---------|------|
+| `min_power` | 最小电力 | `totalEnergyCost` | 最小化总耗电（默认） |
+| `min_raw_ore` | 最小原矿 | `totalRawOre` | 最小化原矿消耗总量（无权重累加） |
+
+**函数签名变更**：
+
+```javascript
+export async function optimizeProliferatorStrategy(
+  gameData, schemeData, settings, needs,
+  onProgress = null, onLog = null,
+  strategy = 'min_power'  // 新增参数
+)
+```
+
+**返回值扩展**：
+
+```javascript
+{
+  optimalScheme, initialPower, optimalPower,
+  strategy,           // 使用的策略标识
+  initialObjective,   // 初始目标值
+  optimalObjective,   // 最终目标值
+  changes, processedCount, totalCount
 }
 ```
 
