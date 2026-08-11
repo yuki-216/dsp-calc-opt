@@ -352,6 +352,12 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
     }
   }
 
+  // 输出被合并联产物的原始直接成本
+  for (const [coProductId, { representative, ratio }] of mergeMap) {
+    const coCost = costs.get(coProductId);
+    if (DEBUG) console.log(`[solveSCCByMatrix] 被合并 ${coProductId} (→${representative}, ratio=${ratio}) 原始直接成本:`, JSON.stringify(coCost));
+  }
+
   // 3. 构建 reducedArray（排除被合并的联产物）
   const reducedArray = sccArray.filter(id => !mergeMap.has(id));
   const n = reducedArray.length;
@@ -362,7 +368,8 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
   // 对角线放$x，循环组内消耗放负系数
   const A = Array.from({ length: n }, () => new Array(n).fill(0));
 
-  // 存储单位次数的常数项（排除循环组内引用）
+  // 存储单位次数的常数项
+  // 包含：$物品（执行次数）、外部依赖、联产物引用（保留原样）
   const constTerms = new Map();
 
   for (let j = 0; j < n; j++) {
@@ -370,80 +377,59 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
     const cost = costs.get(itemId);
     if (!cost) continue;
 
+    if (DEBUG) console.log(`[solveSCCByMatrix] ${itemId} 原始直接成本:`, JSON.stringify(cost));
+
     // 对角线放$x（成本公式中的执行次数）
     const xKey = `$${itemId}`;
     const xValue = cost[xKey] || 1; // 默认为1
     A[j][j] = xValue;
 
-    // 提取常数项（排除循环组内引用），并处理成单位次数的常数项
+    // 分离依赖项和常数项
     const constTerm = {};
+    const debugDeps = {}; // 仅用于调试输出
     for (const [key, coeff] of Object.entries(cost)) {
-      if (key === xKey) continue;
-
-      // 确定实际目标列（联产物 → 合并到代表物品）
-      let targetId = key;
-      let targetCoeff = coeff;
+      // 联产物引用（代表物品的成本中有 "精炼油:-2"）
+      // → 保留原样放入常数项，不转为矩阵依赖
       if (mergeMap.has(key)) {
-        const { representative, ratio } = mergeMap.get(key);
-        targetId = representative;
-        targetCoeff = coeff * ratio;
+        const { representative } = mergeMap.get(key);
+        if (representative === itemId) {
+          // 本物品是代表，联产物引用 → 常数项原样保留
+          constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
+          continue;
+        }
+        // 本物品不是代表，依赖联产物 → 转为依赖代表物品
+        // 除以 -ratio（抵消关系，取负号）：1.2精炼油 → -0.6氢
+        const { ratio } = mergeMap.get(key);
+        const targetId = representative;
+        const targetCoeff = coeff / (-ratio);
+        if (sccSet.has(targetId) && reducedIndex.has(targetId)) {
+          A[reducedIndex.get(targetId)][j] += -targetCoeff;
+          debugDeps[targetId] = (debugDeps[targetId] || 0) + targetCoeff;
+        } else {
+          constTerm[targetId] = (constTerm[targetId] || 0) + targetCoeff / xValue;
+        }
+        continue;
       }
 
-      if (sccSet.has(targetId) && reducedIndex.has(targetId)) {
-        // 循环组内引用（且在 reducedArray 中）→ 矩阵变量
-        A[reducedIndex.get(targetId)][j] += -targetCoeff;
-      } else {
-        // 常数项 → 处理成单位次数的常数项（除以$x）
-        constTerm[targetId] = (constTerm[targetId] || 0) + targetCoeff / xValue;
+      // $物品 → 常数项（保留执行次数，求解后自动包含）
+      if (key === xKey) {
+        constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
+        continue;
       }
+
+      // 循环组内引用（且在 reducedArray 中）→ 矩阵变量
+      if (sccSet.has(key) && reducedIndex.has(key)) {
+        A[reducedIndex.get(key)][j] += -coeff;
+        debugDeps[key] = (debugDeps[key] || 0) + coeff;
+        continue;
+      }
+
+      // 外部依赖 → 常数项
+      constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
     }
     constTerms.set(itemId, constTerm);
 
-    // 输出依赖项（循环组内引用）
-    const deps = {};
-    for (const [key, coeff] of Object.entries(cost)) {
-      if (key === xKey) continue;
-      let targetId = key;
-      if (mergeMap.has(key)) targetId = mergeMap.get(key).representative;
-      if (sccSet.has(targetId) && reducedIndex.has(targetId)) deps[targetId] = coeff;
-    }
-    if (DEBUG) console.log(`[solveSCCByMatrix] ${itemId}: 依赖项=${JSON.stringify(deps)}, 常数项=${JSON.stringify(constTerm)}`);
-  }
-
-  // 对于代表物品，合并联产物的常数项（按产出比加权）
-  for (const [recipeId, items] of recipeGroups) {
-    if (items.length <= 1) continue;
-    const recipe = recipeMap.get(String(recipeId));
-    if (!recipe?.产物) continue;
-    const outputs = recipe.产物;
-    const representative = items[0];
-    const repOutput = outputs[representative] || 1;
-
-    for (let k = 1; k < items.length; k++) {
-      const coProductId = items[k];
-      const coProductCost = costs.get(coProductId);
-      if (!coProductCost) continue;
-
-      const ratio = (outputs[coProductId] || 1) / repOutput;
-      const repConstTerm = constTerms.get(representative) || {};
-
-      // 提取联产物的常数项
-      for (const [key, coeff] of Object.entries(coProductCost)) {
-        if (key.startsWith('$')) continue;
-        let targetId = key;
-        let targetCoeff = coeff;
-        if (mergeMap.has(key)) {
-          const { representative: rep, ratio: r } = mergeMap.get(key);
-          targetId = rep;
-          targetCoeff = coeff * r;
-        }
-        if (!sccSet.has(targetId) || !reducedIndex.has(targetId)) {
-          // 加权合并
-          repConstTerm[targetId] = (repConstTerm[targetId] || 0) + targetCoeff * ratio;
-        }
-      }
-      constTerms.set(representative, repConstTerm);
-    }
+    if (DEBUG) console.log(`[solveSCCByMatrix] ${itemId}: 依赖项=${JSON.stringify(debugDeps)}, 常数项=${JSON.stringify(constTerm)}`);
   }
 
   // 求逆矩阵
@@ -460,25 +446,22 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
 
   // 更新 costs：每个 SCC 物品的真实成本
   // 对于配方j，其单位成本 = Σ(A_inv[i][j] * 物品i的单位次数常数项)
+  // 常数项已包含 $物品，求解后自动包含执行次数，无需额外添加
   for (let j = 0; j < n; j++) {
     const itemId = reducedArray[j];
     const newCost = {};
 
-    // 对于每个循环组内物品i，将其单位次数常数项 × A_inv[i][j] 累加到配方j的成本中
     for (let i = 0; i < n; i++) {
       const execCount = A_inv[i][j];
       if (execCount === 0) continue;
 
       if (execCount < 0) {
-        // 负依赖（副产物）：不展开常数项，只记录依赖关系
+        // 负依赖（副产物）：不展开常数项，只记录$物品
         // 保留 $物品: execCount，让阶段2判断是否需要逆生产
         const itemSelfKey = `$${reducedArray[i]}`;
         newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
       } else {
-        // 正依赖（原料）：展开常数项 + 添加执行次数
-        // $物品 代表该配方的执行次数，是逆生产机制的基础
-        const itemSelfKey = `$${reducedArray[i]}`;
-        newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
+        // 正依赖（原料）：展开常数项（已包含$物品）
         const constTerm = constTerms.get(reducedArray[i]);
         if (!constTerm) continue;
         for (const [key, coeff] of Object.entries(constTerm)) {
@@ -490,15 +473,28 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
     costs.set(itemId, newCost);
   }
 
-  // 联产物成本 = 代表物品成本 × ratio
+  // 联产物成本推导：从代表物品成本转换
+  // - $代表 → $联产物：只改名，不除以 ratio（$x 数量不变）
+  // - 联产物引用（精炼油:-2t）→ 代表物品引用（氢:-t/ratio²）：除以 ratio²
+  // - 其他所有项（外部依赖等）：除以 ratio
   for (const [coProductId, { representative, ratio }] of mergeMap) {
     const repCost = costs.get(representative);
     if (!repCost) continue;
     const coProductCost = {};
     for (const [key, coeff] of Object.entries(repCost)) {
-      coProductCost[key] = coeff * ratio;
+      if (key === `$${representative}`) {
+        // $代表 → $联产物，只改名（$x 数量不变）
+        coProductCost[`$${coProductId}`] = coeff;
+      } else if (key === coProductId) {
+        // 联产物引用：除以 ratio²（"变倒数"）
+        // 精炼油:-2t → 氢:-t/2（ratio=2, -2t/4=-t/2）
+        coProductCost[representative] = coeff / (ratio * ratio);
+      } else {
+        // 其他所有项（外部依赖等）：除以 ratio
+        coProductCost[key] = coeff / ratio;
+      }
     }
     costs.set(coProductId, coProductCost);
-    if (DEBUG) console.log(`[solveSCCByMatrix] 联产物 ${coProductId} 成本 = ${representative} × ${ratio}:`, JSON.stringify(coProductCost));
+    if (DEBUG) console.log(`[solveSCCByMatrix] 联产物 ${coProductId} 成本:`, JSON.stringify(coProductCost));
   }
 }
