@@ -109,14 +109,22 @@ function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel
                 }
             }
 
-            // 为有设备的配方添加对电力的依赖
+            // 为有设备且设备消耗电力的配方添加对电力的依赖
+            // 注意：射线接收站等设施不消耗玩家电网电力，不应添加依赖
             if (recipe.设施 !== undefined && recipe.设施 !== null) {
-                const power_edge_key = `${product}->电力`;
-                if (!edge_set.has(power_edge_key)) {
-                    edge_set.add(power_edge_key);
-                    edges.push({from: product, to: '电力'});
-                    items_with_edges.add('电力');
-                    items_with_edges.add(product);
+                const factoryGroup = game_data.factory_data[recipe.设施];
+                if (factoryGroup && Array.isArray(factoryGroup)) {
+                    // 检查该配方的所有可用工厂是否都无功耗
+                    const hasPowerCost = factoryGroup.some(factory => factory["耗能"] > 0);
+                    if (hasPowerCost) {
+                        const power_edge_key = `${product}->电力`;
+                        if (!edge_set.has(power_edge_key)) {
+                            edge_set.add(power_edge_key);
+                            edges.push({from: product, to: '电力'});
+                            items_with_edges.add('电力');
+                            items_with_edges.add(product);
+                        }
+                    }
                 }
             }
         }
@@ -134,9 +142,10 @@ function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel
  * @param {Map|null} custom_first_layer_positions - 首层自定义位置
  * @param {number|null} page_width - 页面宽度
  * @param {Array<Set<string>>|null} precomputed_sccs - 预计算的 SCC 分组（核心计算输出）
+ * @param {Set<string>} proliferator_edges - 因增产而添加的边的 key 集合
  * @returns {Object} {positions, debug_layers, canvas_width, canvas_height, layers_map, sorted_layers, detect_y_array, scc_groups, scc_info, node_to_scc}
  */
-function layout_graph(items, edges, canvas_width, canvas_height, custom_first_layer_positions = null, page_width = null, precomputed_sccs = null) {
+function layout_graph(items, edges, canvas_width, canvas_height, custom_first_layer_positions = null, page_width = null, precomputed_sccs = null, proliferator_edges = new Set()) {
     const positions = new Map();
     const MARGIN_X = 100;
     const MARGIN_Y = 80;
@@ -610,9 +619,16 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             non_scc_items.forEach(item => {
                 const parent_items = parents.get(item) || [];
                 // 循环组父节点也参与重心计算，使用物品自身的 x 坐标
-                const valid_parents = parent_items.filter(p =>
-                    positions.has(p) && !deferred_set.has(p)
-                );
+                // 排除电力和因增产加入的增产剂（只去除因增产才加入的增产剂需求，生产3级增产剂本来就需求的2级增产剂不去除）
+                const valid_parents = parent_items.filter(p => {
+                    if (!positions.has(p) || deferred_set.has(p)) return false;
+                    // 排除电力
+                    if (p === '电力') return false;
+                    // 排除因增产才加入的增产剂
+                    const edge_key = `${item}->${p}`;
+                    if (proliferator_edges.has(edge_key)) return false;
+                    return true;
+                });
                 if (valid_parents.length > 0) {
                     const avg_x = valid_parents.reduce((sum, p) => sum + positions.get(p).x, 0) / valid_parents.length;
                     ideal_positions.set(item, avg_x);
@@ -1190,7 +1206,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             }
         });
 
-        const result = layout_graph(filtered_graph.items, filtered_graph.edges, CANVAS_WIDTH, CANVAS_HEIGHT, first_layer_positions, container_width, filtered_graph.sccs || null);
+        const result = layout_graph(filtered_graph.items, filtered_graph.edges, CANVAS_WIDTH, CANVAS_HEIGHT, first_layer_positions, container_width, filtered_graph.sccs || null, filtered_graph.proliferator_edges);
 
         return result;
     }, [filtered_graph, first_layer_moved, active_custom_positions, container_width, show_needs_only]);
