@@ -116,7 +116,7 @@ calculate(needs, recipes) {
   }
 
   // 4. 按 SCC 逆拓扑序展开成本到 solution
-  expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap);
+  expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap, this.recipeMap);
 
   // 5. 提取结果
   // ...
@@ -238,7 +238,7 @@ Tarjan输出顺序：逆拓扑序（`sccGroups[0]`=最终产物/顶层，`sccGro
 按SCC逆拓扑序展开（从顶层/最终产物开始，正向遍历）：
 
 ```javascript
-function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap) {
+function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap, recipeMap) {
   for (let i = 0; i < sccs.length; i++) {
     const scc = sccs[i];
 
@@ -247,8 +247,8 @@ function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap) {
       const itemId = scc.values().next().value;
       substituteDeferred(solutionCost, solutionId, itemId, itemCost, ...);
     } else {
-      // 多节点 SCC（循环组）：矩阵求逆
-      solveSCCByMatrix(scc, costs);
+      // 多节点 SCC（循环组）：矩阵求逆（支持配方变量法）
+      solveSCCByMatrix(scc, costs, graph, recipeMap);
       for (const itemId of scc) {
         substituteDeferred(solutionCost, solutionId, itemId, itemCost, ...);
       }
@@ -282,23 +282,37 @@ function substituteDeferred(target, targetItemId, key, source, costs, byproductM
 对循环组构建矩阵，求逆求解：
 
 ```javascript
-function solveSCCByMatrix(scc, costs) {
+function solveSCCByMatrix(scc, costs, graph, recipeMap) {
   const sccArray = [...scc];
-  const n = sccArray.length;
+  
+  // ====== 配方变量法：检测并合并同配方产物 ======
+  // 当同一配方的多个产物（如精炼油和氢气）同时出现在 SCC 中时，
+  // 它们的成本方程线性相关（a₂·b₂=1），导致矩阵奇异。
+  // 解决方案：将同一配方的多个产物合并为一个"配方执行次数"变量。
+  const mergeMap = new Map(); // coProductId → { representative, ratio }
+  
+  // 1. 按配方分组 SCC 中的物品
+  // 2. 同配方多产物 → 合并为一个矩阵变量（配方执行次数）
+  // 3. 联产物的系数按产出比合并到代表物品的列
+  // 4. 联产物的行被删除（与代表行线性相关）
+  
+  // 构建 reducedArray（排除被合并的联产物）
+  const reducedArray = sccArray.filter(id => !mergeMap.has(id));
+  const n = reducedArray.length;
   
   // 构建矩阵A
   const A = Array.from({ length: n }, () => new Array(n).fill(0));
   
   for (let j = 0; j < n; j++) {
-    const cost = costs.get(sccArray[j]);
+    const cost = costs.get(reducedArray[j]);
     
     // 对角线放$x（执行次数）
-    A[j][j] = cost[`$${sccArray[j]}`] || 1;
+    A[j][j] = cost[`$${reducedArray[j]}`] || 1;
     
-    // 循环组内引用 → 矩阵变量
+    // 循环组内引用 → 矩阵变量（联产物合并到代表物品列）
     for (const [key, coeff] of Object.entries(cost)) {
-      if (scc.has(key)) {
-        A[sccIndex.get(key)][j] = -coeff;
+      if (scc.has(key) && reducedIndex.has(key)) {
+        A[reducedIndex.get(key)][j] = -coeff;
       }
     }
   }
@@ -306,10 +320,27 @@ function solveSCCByMatrix(scc, costs) {
   // 求逆矩阵
   const A_inv = invertMatrix(A);
   
-  // 更新costs
-  // ...
+  // 更新 costs：每个物品的真实成本
+  // 正向依赖：展开常数项 + 添加 $物品 执行次数
+  // 负向依赖：保留 $物品 让逆生产机制判断取消量
+  // 联产物成本 = 代表物品成本 × ratio
 }
 ```
+
+#### 配方变量法详解
+
+**问题**：当同一配方的多个产物（如精炼油和氢气都选择 X 裂解配方）同时出现在 SCC 中时，它们的成本方程线性相关，矩阵不可逆。
+
+**数学原理**：
+- 设配方 X 产出 `r·A + h·B`，A 和 B 都选择配方 X
+- A 的成本方程：`a₁·cₐ + a₂·cᵦ = bₐ`（a₂ = -h/r 是 B 的副产品系数）
+- B 的成本方程：`b₁·cₐ + b₂·cᵦ = bᵦ`（b₁ = -r/h 是 A 的副产品系数）
+- 由于 `a₂·b₂ = 1`，两行线性相关，矩阵奇异
+
+**解决方案**：将 A 和 B 合并为一个"配方执行次数"变量 t：
+- A 的成本 = t·bₐ，B 的成本 = t·bᵦ × (h/r)
+- 矩阵维度降低 1，消除线性相关
+- 求解后，联产物成本从代表物品成本按产出比推导
 
 ---
 

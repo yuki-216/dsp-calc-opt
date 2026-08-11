@@ -1,5 +1,5 @@
 import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'react';
-import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink} from 'react-icons/fa';
+import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink, FaBolt} from 'react-icons/fa';
 import {GameInfoContext, GlobalStateContext, EngineGraphDataContext, FuelContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
 import {tarjanSCC, compressToDag, dagTopologicalSort} from './engine/graph-utils.js';
@@ -609,8 +609,9 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             const ideal_positions = new Map();
             non_scc_items.forEach(item => {
                 const parent_items = parents.get(item) || [];
+                // 循环组父节点也参与重心计算，使用物品自身的 x 坐标
                 const valid_parents = parent_items.filter(p =>
-                    positions.has(p) && !deferred_set.has(p) && !cycle_set.has(p)
+                    positions.has(p) && !deferred_set.has(p)
                 );
                 if (valid_parents.length > 0) {
                     const avg_x = valid_parents.reduce((sum, p) => sum + positions.get(p).x, 0) / valid_parents.length;
@@ -986,6 +987,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const [show_deleted_list, setShowDeletedList] = useState(false);
     const [show_debug_panel, setShowDebugPanel] = useState(false);
     const [hide_scc_external_edges, setHideSccExternalEdges] = useState(true);
+    const [hide_power_edges, setHidePowerEdges] = useState(true);
     const [first_layer_moved, setFirstLayerMoved] = useState(0);
     const [show_needs_only, setShowNeedsOnly] = useState(() => {
         try {
@@ -1079,6 +1081,10 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             const filtered_edges = engineGraphData.edges.filter(e =>
                 !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to !== '电力'
             );
+            // 电力边集合（用于可选渲染）
+            const power_edges = engineGraphData.edges.filter(e =>
+                !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to === '电力'
+            );
             const filtered_items = new Set();
             filtered_edges.forEach(e => {
                 filtered_items.add(e.from);
@@ -1101,7 +1107,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                 });
             }
 
-            return {edges: filtered_edges, items: filtered_items, proliferator_edges: filtered_proliferator_edges, sccs: filtered_sccs};
+            return {edges: filtered_edges, items: filtered_items, proliferator_edges: filtered_proliferator_edges, power_edges, sccs: filtered_sccs};
         }
 
         // 全部配方模式：从全量数据中过滤已删除物品
@@ -1113,6 +1119,8 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         );
         // 渲染边集（过滤电力边）
         const filtered_edges = full_edges.filter(e => e.to !== '电力');
+        // 电力边集合（用于可选渲染）
+        const power_edges = full_edges.filter(e => e.to === '电力');
 
         // filtered_items 从渲染边集构建，不包含孤立物品
         const filtered_items = new Set();
@@ -1134,7 +1142,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
             .filter(scc => scc.size > 0);
 
-        return {edges: filtered_edges, items: filtered_items, proliferator_edges, sccs: filtered_sccs};
+        return {edges: filtered_edges, items: filtered_items, proliferator_edges, power_edges, sccs: filtered_sccs};
     }, [full_graph_data, deleted_items, show_needs_only, needs_list, engineGraphData]);
 
     const edge_colors = useMemo(() => {
@@ -1531,6 +1539,76 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         });
     };
 
+    const render_power_edges = () => {
+        if (hide_power_edges || !filtered_graph.power_edges || filtered_graph.power_edges.length === 0) return null;
+
+        const NODE_R = 32;
+        const is_node_highlighting = !legend_hover && highlighted_items.size > 0;
+        const POWER_COLOR = '#f59e0b'; // 琥珀色，区别于普通边
+        const CYCLE_DOT_OFFSET = 15;
+
+        return filtered_graph.power_edges.map((edge, index) => {
+            const edge_key = `${edge.from}->${edge.to}`;
+            const is_edge_highlighted = !legend_hover && highlighted_edges.size > 0 && highlighted_edges.has(edge_key);
+            const edge_opacity = legend_hover ? 0.15 : (is_node_highlighting ? (is_edge_highlighted ? 1 : 0.15) : 1);
+            const stroke_width = is_edge_highlighted ? 3 : 2;
+
+            const from_pos = positions.get(edge.from);
+            const to_pos = positions.get(edge.to);
+            if (!from_pos || !to_pos) return null;
+
+            const from_in_cycle = from_pos.is_cycle;
+            const to_in_cycle = to_pos.is_cycle;
+            const same_cycle_group = from_in_cycle && to_in_cycle;
+
+            // 起点（产物端）：循环组内用上偏移点
+            let x1, y1;
+            if (from_in_cycle) {
+                x1 = from_pos.x - CYCLE_DOT_OFFSET;
+                y1 = from_pos.y - NODE_R;
+            } else {
+                x1 = from_pos.x;
+                y1 = from_pos.y - NODE_R;
+            }
+
+            // 终点（电力端）：循环组内用上偏移点
+            let x2, y2;
+            if (to_in_cycle) {
+                x2 = to_pos.x + CYCLE_DOT_OFFSET;
+                y2 = to_pos.y - NODE_R;
+            } else {
+                x2 = to_pos.x;
+                y2 = to_pos.y + NODE_R;
+            }
+
+            let control_offset = 0;
+            if (same_cycle_group) {
+                const dx = Math.abs(x2 - x1);
+                const MIN_OFFSET = 5;
+                const MAX_OFFSET = 60;
+                const MAX_DX = 200;
+                control_offset = MIN_OFFSET + (MAX_OFFSET - MIN_OFFSET) * Math.min(dx / MAX_DX, 1);
+            }
+            const path = same_cycle_group
+                ? generate_simple_path(x1, y1, x2, y2, layout_detect_y_array, control_offset)
+                : generate_simple_path(x1, y1, x2, y2, layout_detect_y_array);
+
+            return (
+                <g key={`power-${edge.from}->${edge.to}-${index}`} style={{ opacity: edge_opacity }}>
+                    <path
+                        d={path}
+                        stroke={POWER_COLOR}
+                        strokeWidth={stroke_width}
+                        fill="none"
+                        strokeDasharray="6 3"
+                        markerStart="url(#dot-blue)"
+                        markerEnd="url(#dot-black)"
+                    />
+                </g>
+            );
+        });
+    };
+
     const render_scc_groups = () => {
         if (!layout_scc_info || layout_scc_info.length === 0) return null;
 
@@ -1668,6 +1746,16 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                         <span>{hide_scc_external_edges ? '显示增产剂线' : '隐藏增产剂线'}</span>
                     </button>
                 )}
+                {filtered_graph.power_edges?.length > 0 && (
+                    <button
+                        className={`btn btn-sm d-inline-flex align-items-center gap-1 ${hide_power_edges ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                        onClick={() => setHidePowerEdges(!hide_power_edges)}
+                        title={hide_power_edges ? '显示电力依赖线' : '隐藏电力依赖线'}
+                    >
+                        <FaBolt/>
+                        <span>{hide_power_edges ? '显示电力线' : '隐藏电力线'}</span>
+                    </button>
+                )}
                 {needs_list && Object.keys(needs_list).length > 0 && (
                     <button
                         className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_needs_only ? 'btn-success' : 'btn-outline-success'}`}
@@ -1741,6 +1829,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                                     </marker>
                                 </defs>
                                 {render_edges()}
+                                {render_power_edges()}
                             </svg>
 
                             {render_scc_groups()}

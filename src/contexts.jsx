@@ -4,6 +4,7 @@ import {init_scheme_data} from './scheme_data';
 import {default_game_data} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
+import './engine/debug.js'; // 初始化 __DEBUG 全局开关
 
 /** set_game_name_and_data(game_name, game_data) */
 export const GameInfoSetterContext = createContext(null);
@@ -16,6 +17,7 @@ export const GameInfoContext = createContext(null);
 export const ValidationContext = createContext(null);
 export const EngineGraphDataContext = createContext(null);
 export const EngineCalculateContext = createContext(null);
+export const CalculationErrorContext = createContext(null);
 export const FuelContext = createContext(null);
 export const FuelSetterContext = createContext(null);
 
@@ -137,28 +139,40 @@ export function ContextProvider({children}) {
     }, [game_info, scheme_data, settings]);  // 移除 global_state.sprayCosts 依赖，避免数组引用变化导致重复创建
 
     const [engineGraphData, setEngineGraphData] = useState(null);
+    const [calculationError, setCalculationError] = useState(null);
 
     // 主引擎计算函数
     const engineCalculate = useMemo(() => {
         return function(needs_dict) {
+            // 需求为空时清除错误
+            if (!needs_dict || Object.keys(needs_dict).length === 0) {
+                setTimeout(() => setCalculationError(null), 0);
+                return null;
+            }
             // needs_dict 格式: {物品名: 数量}，转换为数组格式
             const needsArray = Object.entries(needs_dict).map(([id, count]) => ({
                 id,
                 name: id,
                 count
             }));
-            const result = engine.calculate(needsArray, game_info.game_data.recipe_data);
-            // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
-            if (engine.graph && engine.edges) {
-                const graphData = {
-                    edges: engine.edges,
-                    sccs: engine.sccs || [],
-                    graph: engine.graph,
-                    proliferatorEdgeKeys: engine.proliferatorEdgeKeys || new Set()
-                };
-                setTimeout(() => setEngineGraphData(graphData), 0);
+            try {
+                const result = engine.calculate(needsArray, game_info.game_data.recipe_data);
+                // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
+                setTimeout(() => setCalculationError(null), 0);
+                if (engine.graph && engine.edges) {
+                    const graphData = {
+                        edges: engine.edges,
+                        sccs: engine.sccs || [],
+                        graph: engine.graph,
+                        proliferatorEdgeKeys: engine.proliferatorEdgeKeys || new Set()
+                    };
+                    setTimeout(() => setEngineGraphData(graphData), 0);
+                }
+                return result;
+            } catch (e) {
+                setTimeout(() => setCalculationError(e.message), 0);
+                return null;
             }
-            return result;
         };
     }, [engine, game_info]);
 
@@ -192,6 +206,7 @@ export function ContextProvider({children}) {
         <GameInfoContext.Provider value={game_info}>
             <GlobalStateContext.Provider value={global_state}>
                 <EngineCalculateContext.Provider value={engineCalculate}>
+                    <CalculationErrorContext.Provider value={calculationError}>
                     <ValidationContext.Provider value={validationContext}>
                         <EngineGraphDataContext.Provider value={engineGraphData}>
                             <GameInfoSetterContext.Provider value={set_game_data}>
@@ -209,6 +224,7 @@ export function ContextProvider({children}) {
                             </GameInfoSetterContext.Provider>
                         </EngineGraphDataContext.Provider>
                     </ValidationContext.Provider>
+                    </CalculationErrorContext.Provider>
                 </EngineCalculateContext.Provider>
             </GlobalStateContext.Provider>
         </GameInfoContext.Provider>

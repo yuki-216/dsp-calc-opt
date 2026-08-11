@@ -1,3 +1,4 @@
+import { DEBUG } from './debug.js';
 /**
  * 单位成本计算模块（系数表版本）
  * 职责：用系数表实现符号化成本追踪，按 SCC 顺序代入展开
@@ -23,7 +24,7 @@ const TRUNCATE_EPSILON = 1 / ROUND_FACTOR;     // 1e-7
  * @param {Array<Set<string>>} sccs - SCC分组（逆拓扑序：顶层在前，底层在后）
  * @param {Map<string,Set>} byproductMap - 副产物映射
  */
-export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map()) {
+export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map(), recipeMap = new Map()) {
   // 计时统计（已禁用）
   // const timings = {
   //   matrixInverse: 0,  // 矩阵求逆耗时
@@ -119,16 +120,14 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     }
 
     // 调试输出：展开/逆生产后的solution
-    // const action = isReverse ? '逆生产' : '展开';
-    // console.log(`[substitute-${action}] "${key}" 后 solution:`, JSON.stringify(solution));
+    const action = isReverse ? '逆生产' : '展开';
   }
 
   // ====== 阶段1：SCC展开（逆拓扑序，从顶层开始） ======
-  // console.log('[展开] SCC总数:', sccs.length, '顺序:');
-  // for (let i = 0; i < sccs.length; i++) {
-  //   console.log(`  SCC[${i}]:`, [...sccs[i]].join(', '));
-  // }
-  // console.log('[展开] 初始 solution:', JSON.stringify(solution));
+  for (let i = 0; i < sccs.length; i++) {
+    if (DEBUG) console.log(`  SCC[${i}]:`, [...sccs[i]].join(', '));
+  }
+  if (DEBUG) console.log('[展开] 初始 solution:', JSON.stringify(solution));
 
   for (let i = 0; i < sccs.length; i++) {
     const scc = sccs[i];
@@ -140,20 +139,20 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       if (coeff > 0) {
         const itemCost = costs.get(itemId);
         if (itemCost) {
-          // console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+          if (DEBUG) console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
           substitute(itemId, itemCost);
-          // console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+          if (DEBUG) console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
         }
       }
     } else {
       // 多节点 SCC（循环组）：矩阵求逆一次性解出全部物品
 
-      solveSCCByMatrix(scc, costs);
+      solveSCCByMatrix(scc, costs, graph, recipeMap);
       // 打印求解后的 cost
-      // for (const itemId of scc) {
-      //   const cost = costs.get(itemId);
-      //   if (cost) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
-      // }
+      for (const itemId of scc) {
+        const cost = costs.get(itemId);
+        if (cost) if (DEBUG) console.log(`  ${itemId} 解:`, JSON.stringify(cost));
+      }
 
       // 优化2：先检查solution有没有正需求，再展开常数项
       for (const itemId of scc) {
@@ -161,9 +160,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         if (coeff > 0) {
           const itemCost = costs.get(itemId);
           if (itemCost) {
-            // console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+            if (DEBUG) console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
             substitute(itemId, itemCost);
-            // console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
+            if (DEBUG) console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
         }
       }
@@ -172,7 +171,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       for (const [key, val] of Object.entries(solution)) {
         if (key.startsWith('$')) continue;
         if (val < 0 && !reverseProductionList.has(key)) {
-          // console.log(`[阶段1] SCC[${i}] 循环组求解后，"${key}" 有负系数=${val.toFixed(6)}，加入待逆生产列表`);
+          if (DEBUG) console.log(`[阶段1] SCC[${i}] 循环组求解后，"${key}" 有负系数=${val.toFixed(6)}，加入待逆生产列表`);
           reverseProductionList.add(key);
         }
       }
@@ -187,7 +186,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   let loopCount = 0;
   const maxLoops = 1000;
 
-  // console.log('[阶段2] 开始, expansionList:', [...expansionList], 'reverseProductionList:', [...reverseProductionList]);
+  if (DEBUG) console.log('[阶段2] 开始, expansionList:', [...expansionList], 'reverseProductionList:', [...reverseProductionList]);
 
   while ((reverseProductionList.size > 0 || expansionList.size > 0) && loopCount < maxLoops) {
     loopCount++;
@@ -206,9 +205,9 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
       const itemCost = costs.get(itemId);
       if (itemCost) {
-        // console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
+        if (DEBUG) console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
         substitute(itemId, itemCost);
-        // console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
+        if (DEBUG) console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
       }
     }
 
@@ -225,7 +224,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         continue;
       }
 
-      // console.log(`[阶段2-逆生产] "${itemId}" (系数=${v.toFixed(6)})`);
+      if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" (系数=${v.toFixed(6)})`);
 
 
       const itemSelfKey = `$${itemId}`;
@@ -239,18 +238,18 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
 
         // 截断：抵消量太小，跳过
         if (cancelAmount < PHASE2_TRUNCATE_EPSILON) {
-          // console.log(`[阶段2-逆生产] "${itemId}" 可抵消=${cancelAmount.toFixed(6)} < ${PHASE2_TRUNCATE_EPSILON}, 截断`);
+          if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 可抵消=${cancelAmount.toFixed(6)} < ${PHASE2_TRUNCATE_EPSILON}, 截断`);
           continue;
         }
 
         if (cancelAmount > 0) {
-          // console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
-          // console.log(`[阶段2-逆生产] "${itemId}" 成本:`, JSON.stringify(itemCost));
-          // const scaledCost = {};
-          // for (const [key, val] of Object.entries(itemCost)) {
-          //   scaledCost[key] = val * (-cancelAmount);
-          // }
-          // console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
+          if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 多余=${v.toFixed(6)}, 可抵消=${cancelAmount.toFixed(6)}`);
+          if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 成本:`, JSON.stringify(itemCost));
+          const scaledCost = {};
+          for (const [key, val] of Object.entries(itemCost)) {
+            scaledCost[key] = val * (-cancelAmount);
+          }
+          if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
           substitute(itemId, itemCost, -cancelAmount);  // 负号表示抵消
 
           // 恢复抵消后的系数（substitute 内部会删除 solution[itemId]）
@@ -258,11 +257,11 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
           if (newV !== 0) {
             solution[itemId] = newV;
             if (newV < 0) {
-              // console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
+              if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 还有剩余=${newV.toFixed(6)}, 重新加入待逆生产列表`);
               reverseProductionList.add(itemId);  // 还有剩余，重新加入
             }
           }
-          // console.log(`[阶段2-逆生产后] solution:`, JSON.stringify(solution));
+          if (DEBUG) console.log(`[阶段2-逆生产后] solution:`, JSON.stringify(solution));
         }
       }
     }
@@ -271,7 +270,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   // timings.other += performance.now() - otherStart;
   // timings.total = performance.now() - totalStart;
 
-  // console.log('[expandSCC] 最终 solution 成本:', JSON.stringify(solution));
+  if (DEBUG) console.log('[expandSCC] 最终 solution 成本:', JSON.stringify(solution));
 
   // 阶段2完成后，只检查循环组（多节点SCC）中的物品是否有负需求
   for (const scc of sccs) {
@@ -285,7 +284,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
   }
 
   // 输出计时结果（已禁用）
-  // console.log('[SCC展开计时]', {
+  // if (DEBUG) console.log('[SCC展开计时]', {
   //   '矩阵求逆': timings.matrixInverse.toFixed(2) + ' ms',
   //   '代入展开': timings.substitute.toFixed(2) + ' ms',
   //   '其他开销': timings.other.toFixed(2) + ' ms',
@@ -304,15 +303,60 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
  * 3. 矩阵求逆后，列向量是执行次数
  * 4. 展开成本时，直接用执行次数乘以单位次数的常数项
  *
+ * 配方变量法：
+ * 当同一配方的多个产物（如精炼油和氢气）同时出现在 SCC 中时，
+ * 它们的成本方程线性相关（a₂·b₂=1），导致矩阵奇异。
+ * 解决方案：将同一配方的多个产物合并为一个"配方执行次数"变量，
+ * 降低矩阵维度，消除线性相关。
+ *
  * @param {Set<string>} scc - SCC物品ID集合
  * @param {Map} costs - 系数表映射（会被修改）
+ * @param {Map} graph - 物品图（可选，用于配方合并）
+ * @param {Map} recipeMap - 配方映射（可选，用于配方合并）
  */
-function solveSCCByMatrix(scc, costs) {
+function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
   const sccArray = [...scc];
-  const n = sccArray.length;
   const sccSet = scc;
-  const sccIndex = new Map();
-  sccArray.forEach((id, i) => sccIndex.set(id, i));
+
+  // ====== 配方变量法：检测并合并同配方产物 ======
+  const mergeMap = new Map(); // coProductId → { representative, ratio }
+  const recipeGroups = new Map(); // recipeId → [itemIds]
+
+  if (graph && recipeMap) {
+    // 1. 按配方分组
+    for (const itemId of sccArray) {
+      const node = graph.get(itemId);
+      const recipeId = node?.recipeId;
+      if (recipeId != null) {
+        if (!recipeGroups.has(recipeId)) recipeGroups.set(recipeId, []);
+        recipeGroups.get(recipeId).push(itemId);
+      }
+    }
+
+    // 2. 找出需要合并的配方组（大小 > 1）
+    for (const [recipeId, items] of recipeGroups) {
+      if (items.length <= 1) continue;
+      const recipe = recipeMap.get(String(recipeId));
+      if (!recipe?.产物) continue;
+      const outputs = recipe.产物;
+      const representative = items[0];
+      const repOutput = outputs[representative] || 1;
+      for (let k = 1; k < items.length; k++) {
+        const coOutput = outputs[items[k]] || 1;
+        mergeMap.set(items[k], {
+          representative,
+          ratio: coOutput / repOutput
+        });
+      }
+      if (DEBUG) console.log(`[solveSCCByMatrix] 配方 ${recipeId} 合并: ${items.join(',')} → 代表=${representative}`);
+    }
+  }
+
+  // 3. 构建 reducedArray（排除被合并的联产物）
+  const reducedArray = sccArray.filter(id => !mergeMap.has(id));
+  const n = reducedArray.length;
+  const reducedIndex = new Map();
+  reducedArray.forEach((id, i) => reducedIndex.set(id, i));
 
   // 直接构建目标矩阵
   // 对角线放$x，循环组内消耗放负系数
@@ -322,33 +366,84 @@ function solveSCCByMatrix(scc, costs) {
   const constTerms = new Map();
 
   for (let j = 0; j < n; j++) {
-    const cost = costs.get(sccArray[j]);
+    const itemId = reducedArray[j];
+    const cost = costs.get(itemId);
     if (!cost) continue;
 
     // 对角线放$x（成本公式中的执行次数）
-    const xKey = `$${sccArray[j]}`;
+    const xKey = `$${itemId}`;
     const xValue = cost[xKey] || 1; // 默认为1
     A[j][j] = xValue;
 
     // 提取常数项（排除循环组内引用），并处理成单位次数的常数项
     const constTerm = {};
     for (const [key, coeff] of Object.entries(cost)) {
-      if (sccSet.has(key)) {
-        // 循环组内引用 → 矩阵变量
-        A[sccIndex.get(key)][j] = -coeff;
+      if (key === xKey) continue;
+
+      // 确定实际目标列（联产物 → 合并到代表物品）
+      let targetId = key;
+      let targetCoeff = coeff;
+      if (mergeMap.has(key)) {
+        const { representative, ratio } = mergeMap.get(key);
+        targetId = representative;
+        targetCoeff = coeff * ratio;
+      }
+
+      if (sccSet.has(targetId) && reducedIndex.has(targetId)) {
+        // 循环组内引用（且在 reducedArray 中）→ 矩阵变量
+        A[reducedIndex.get(targetId)][j] += -targetCoeff;
       } else {
         // 常数项 → 处理成单位次数的常数项（除以$x）
-        constTerm[key] = coeff / xValue;
+        constTerm[targetId] = (constTerm[targetId] || 0) + targetCoeff / xValue;
       }
     }
-    constTerms.set(sccArray[j], constTerm);
+    constTerms.set(itemId, constTerm);
 
     // 输出依赖项（循环组内引用）
-    // const deps = {};
-    // for (const [key, coeff] of Object.entries(cost)) {
-    //   if (sccSet.has(key)) deps[key] = coeff;
-    // }
-    // console.log(`[solveSCCByMatrix] ${sccArray[j]}: 依赖项=${JSON.stringify(deps)}, 常数项=${JSON.stringify(constTerm)}`);
+    const deps = {};
+    for (const [key, coeff] of Object.entries(cost)) {
+      if (key === xKey) continue;
+      let targetId = key;
+      if (mergeMap.has(key)) targetId = mergeMap.get(key).representative;
+      if (sccSet.has(targetId) && reducedIndex.has(targetId)) deps[targetId] = coeff;
+    }
+    if (DEBUG) console.log(`[solveSCCByMatrix] ${itemId}: 依赖项=${JSON.stringify(deps)}, 常数项=${JSON.stringify(constTerm)}`);
+  }
+
+  // 对于代表物品，合并联产物的常数项（按产出比加权）
+  for (const [recipeId, items] of recipeGroups) {
+    if (items.length <= 1) continue;
+    const recipe = recipeMap.get(String(recipeId));
+    if (!recipe?.产物) continue;
+    const outputs = recipe.产物;
+    const representative = items[0];
+    const repOutput = outputs[representative] || 1;
+
+    for (let k = 1; k < items.length; k++) {
+      const coProductId = items[k];
+      const coProductCost = costs.get(coProductId);
+      if (!coProductCost) continue;
+
+      const ratio = (outputs[coProductId] || 1) / repOutput;
+      const repConstTerm = constTerms.get(representative) || {};
+
+      // 提取联产物的常数项
+      for (const [key, coeff] of Object.entries(coProductCost)) {
+        if (key.startsWith('$')) continue;
+        let targetId = key;
+        let targetCoeff = coeff;
+        if (mergeMap.has(key)) {
+          const { representative: rep, ratio: r } = mergeMap.get(key);
+          targetId = rep;
+          targetCoeff = coeff * r;
+        }
+        if (!sccSet.has(targetId) || !reducedIndex.has(targetId)) {
+          // 加权合并
+          repConstTerm[targetId] = (repConstTerm[targetId] || 0) + targetCoeff * ratio;
+        }
+      }
+      constTerms.set(representative, repConstTerm);
+    }
   }
 
   // 求逆矩阵
@@ -356,21 +451,17 @@ function solveSCCByMatrix(scc, costs) {
   try {
     A_inv = invertMatrix(A);
   } catch (e) {
-    console.error('[solveSCCByMatrix] 矩阵奇异! SCC成员:', sccArray);
-    console.error('[solveSCCByMatrix] 矩阵A:', JSON.stringify(A));
-    for (const itemId of scc) {
-      const cost = costs.get(itemId);
-      console.error(`  ${itemId} cost:`, JSON.stringify(cost));
+    if (e.message === 'SINGULAR_MATRIX') {
+      const members = reducedArray.join('、');
+      throw new Error(`矩阵不可逆，循环组存在死循环：${members}`);
     }
     throw e;
   }
 
-
-
   // 更新 costs：每个 SCC 物品的真实成本
   // 对于配方j，其单位成本 = Σ(A_inv[i][j] * 物品i的单位次数常数项)
   for (let j = 0; j < n; j++) {
-    const itemId = sccArray[j];
+    const itemId = reducedArray[j];
     const newCost = {};
 
     // 对于每个循环组内物品i，将其单位次数常数项 × A_inv[i][j] 累加到配方j的成本中
@@ -381,11 +472,14 @@ function solveSCCByMatrix(scc, costs) {
       if (execCount < 0) {
         // 负依赖（副产物）：不展开常数项，只记录依赖关系
         // 保留 $物品: execCount，让阶段2判断是否需要逆生产
-        const itemSelfKey = `$${sccArray[i]}`;
+        const itemSelfKey = `$${reducedArray[i]}`;
         newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
       } else {
-        // 正依赖（原料）：展开常数项
-        const constTerm = constTerms.get(sccArray[i]);
+        // 正依赖（原料）：展开常数项 + 添加执行次数
+        // $物品 代表该配方的执行次数，是逆生产机制的基础
+        const itemSelfKey = `$${reducedArray[i]}`;
+        newCost[itemSelfKey] = (newCost[itemSelfKey] || 0) + execCount;
+        const constTerm = constTerms.get(reducedArray[i]);
         if (!constTerm) continue;
         for (const [key, coeff] of Object.entries(constTerm)) {
           newCost[key] = (newCost[key] || 0) + coeff * execCount;
@@ -396,8 +490,15 @@ function solveSCCByMatrix(scc, costs) {
     costs.set(itemId, newCost);
   }
 
-  // 输出结果
-  // for (let i = 0; i < n; i++) {
-  //   console.log(`[solveSCCByMatrix] ${sccArray[i]}:`, costs.get(sccArray[i]));
-  // }
+  // 联产物成本 = 代表物品成本 × ratio
+  for (const [coProductId, { representative, ratio }] of mergeMap) {
+    const repCost = costs.get(representative);
+    if (!repCost) continue;
+    const coProductCost = {};
+    for (const [key, coeff] of Object.entries(repCost)) {
+      coProductCost[key] = coeff * ratio;
+    }
+    costs.set(coProductId, coProductCost);
+    if (DEBUG) console.log(`[solveSCCByMatrix] 联产物 ${coProductId} 成本 = ${representative} × ${ratio}:`, JSON.stringify(coProductCost));
+  }
 }

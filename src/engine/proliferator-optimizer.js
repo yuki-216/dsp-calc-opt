@@ -375,9 +375,13 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   // 5. 第二阶段：单物品优化
   if (onLog) onLog('\n========== 第二阶段：单物品优化 ==========');
 
-  // 5.1 重新SCC分析
+  // 5.1 重新SCC分析并更新当前耗电
   const secondResult = calculatePower(gameData, currentScheme, settings, needs);
   const secondSccsForward = [...secondResult.sccs].reverse();
+
+  // 更新当前耗电（第二阶段开始时，其他物品配置已改变，需要重新计算基准）
+  currentPower = secondResult.totalEnergyCost;
+  if (onLog) onLog(`第二阶段初始耗电: ${formatPowerValue(currentPower)}`);
 
   // 5.2 按SCC正序收集需要优化的物品
   const itemsToOptimize = [];
@@ -414,6 +418,8 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     let bestChoice = { level: 0, mode: 0, name: '无' };
     let bestCost = currentPower;
 
+    if (onLog) onLog(`  当前耗电: ${formatPowerValue(currentPower)}, 可选策略: ${choices.length}个`);
+
     for (const choice of choices) {
       // 临时修改选择
       const tempScheme = structuredClone(currentScheme);
@@ -423,6 +429,8 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
       // 计算成本
       const result = calculatePower(gameData, tempScheme, settings, needs);
       const cost = result.totalEnergyCost;
+
+      if (onLog) onLog(`  测试 ${choice.name}: ${formatPowerValue(cost)} ${cost < bestCost ? '✓ 更优' : ''}`);
 
       if (cost < bestCost) {
         bestCost = cost;

@@ -1,3 +1,4 @@
+import { DEBUG } from './debug.js';
 /**
  * DAG层级计算模块
  * 职责：将物品关系转换为DAG并计算拓扑层级
@@ -92,19 +93,18 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
     // 视为原矿的物品，跳过配方查找
     const mineralizeList = settings.mineralize_list || {};
     if (itemId in mineralizeList) {
-      // console.log(`[buildItemGraph] ${itemId} 在原矿化列表中，跳过配方查找`);
+      if (DEBUG) console.log(`[buildItemGraph] ${itemId} 在原矿化列表中，跳过配方查找`);
       continue;
     }
 
     // 过滤列表中的物品，不寻找主配方，直接当原矿处理
     if (filterList.has(itemId)) {
-      // console.log(`[buildItemGraph] ${itemId} 在过滤列表中，当原矿处理`);
+      if (DEBUG) console.log(`[buildItemGraph] ${itemId} 在过滤列表中，当原矿处理`);
       continue;
     }
 
     // 从用户选择的主配方获取
     let foundRecipe = null;
-    // console.log(`[buildItemGraph] 查找 ${itemId} 的主配方...`);
 
     // 特殊处理"电力"物品：使用用户选择的燃料配方
     if (itemId === '电力') {
@@ -127,7 +127,7 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
       const choiceIndex = schemeData?.item_recipe_choices?.[itemId] ?? 0;
       const recipeIndex = itemData[itemId][choiceIndex];
 
-      // console.log(`[buildItemGraph] ${itemId}: itemData=`, itemData[itemId], `choiceIndex=${choiceIndex}, recipeIndex=${recipeIndex}`);
+      if (DEBUG) console.log(`[buildItemGraph] ${itemId}: itemData=`, itemData[itemId], `choiceIndex=${choiceIndex}, recipeIndex=${recipeIndex}`);
 
       if (recipeIndex !== undefined && recipes[recipeIndex]) {
         foundRecipe = recipes[recipeIndex];
@@ -188,8 +188,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
             if (proMode === 2) {
               outputMultiplier = proEffect['增产效果'] || 1;
             }
-
-            // console.log(`[buildItemGraph] ${itemId} 使用增产剂: ${proItemName}, 等级=${safeLevel}, 模式=${proMode}, 喷涂成本=${sprayCost}, 产出倍率=${outputMultiplier.toFixed(4)}, 原料总数=${totalMaterialCount.toFixed(4)}, 增产剂需求=${proAmount.toFixed(4)}`);
           }
         }
       }
@@ -226,8 +224,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
           const selfConsumption = recipe.原料?.[itemId] || 0;
           // 净产出 = 总产出 - 自身消耗
           let netOutput = totalOutput - selfConsumption;
-          // console.log(`[设备计算] ${itemId}: 总产出=${totalOutput}, 自身消耗=${selfConsumption}, 净产出=${netOutput}, 配方时间=${recipe.时间 || '无'}`);
-
           if (netOutput > 0) {
             // 增产剂效果
             const proMode = Number(schemeRecipe?.['增产模式']) || 0;
@@ -240,13 +236,11 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
                   const accEffect = proEffect["加速效果"] || 1;
                   const oldOutput = netOutput;
                   netOutput *= accEffect;
-                  // console.log(`[设备计算] ${itemId}: 加速模式, 加速效果=${accEffect.toFixed(4)}, 净产出=${oldOutput.toFixed(4)}*${accEffect.toFixed(4)}=${netOutput.toFixed(4)}`);
                 } else if (proMode === 2) {
                   // 增产模式：净产出 * 增产效果
                   const proEffectValue = proEffect["增产效果"] || 1;
                   const oldOutput = netOutput;
                   netOutput *= proEffectValue;
-                  // console.log(`[设备计算] ${itemId}: 增产模式, 增产效果=${proEffectValue.toFixed(4)}, 净产出=${oldOutput.toFixed(4)}*${proEffectValue.toFixed(4)}=${netOutput.toFixed(4)}`);
                 }
               }
             }
@@ -258,30 +252,22 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
             // 公式: 单次执行设备数 = 1 / timeTick / (netOutput / recipe.时间) / factorySpeed
             const outputRate = netOutput / (recipe.时间 || 1); // 每秒产出
             const singleExecBuildNumber = 1 / timeTick / outputRate / factorySpeed;
-            // console.log(`[设备计算] ${itemId}: 设备=${factoryName}`);
-            // console.log(`[设备计算] ${itemId}: 净产出=${netOutput}, 配方时间=${recipe.时间 || 1}, 建筑倍率=${factorySpeed}, 时间单位=${timeTick}`);
-            // console.log(`[设备计算] ${itemId}: 产出倍率=净产出/配方时间=${netOutput}/${recipe.时间 || 1}=${outputRate.toFixed(6)}`);
-            // console.log(`[设备计算] ${itemId}: 单次执行设备数=1/时间单位/产出倍率/建筑倍率=1/${timeTick}/${outputRate.toFixed(6)}/${factorySpeed}=${singleExecBuildNumber.toFixed(6)}`);
 
             // 计算单次执行耗电 = 单次执行设备数 * 初始功率
             // 单位物品耗电 = 单次执行耗电 * $x（执行次数），在成本公式中累加
             let unitPowerCost = singleExecBuildNumber * factoryPower;
-            // console.log(`[设备计算] ${itemId}: 初始功率=${factoryPower}`);
-            // console.log(`[设备计算] ${itemId}: 单次执行耗电=单次执行设备数*初始功率=${singleExecBuildNumber.toFixed(6)}*${factoryPower}=${unitPowerCost.toFixed(6)}`);
-            // console.log(`[设备计算] ${itemId}: 单位物品耗电=单次执行耗电*$x(执行次数)，在成本公式中累加`);
-
             // 特殊处理
             if (factoryName === "大型采矿机" && settings?.mining_efficiency_large) {
               const eff = settings.mining_efficiency_large / 100.0;
               const oldPower = unitPowerCost;
               unitPowerCost = (eff * eff * (2.94 - 0.168) + 0.168) / netOutput * timeTick;
-              // console.log(`[设备计算] ${itemId}: 大型采矿机特殊处理, 效率=${eff.toFixed(4)}, 单位物品耗电=${oldPower.toFixed(6)}->${unitPowerCost.toFixed(6)}`);
+              if (DEBUG) console.log(`[设备计算] ${itemId}: 大型采矿机特殊处理, 效率=${eff.toFixed(4)}, 单位物品耗电=${oldPower.toFixed(6)}->${unitPowerCost.toFixed(6)}`);
             }
             if (factoryName.endsWith("分馏塔") && settings?.fractionating_speed > 30) {
               const multiplier = (settings.fractionating_speed * 0.036 - 0.36) / 0.72;
               const oldPower = unitPowerCost;
               unitPowerCost *= multiplier;
-              // console.log(`[设备计算] ${itemId}: 分馏塔特殊处理, 分馏速度=${settings.fractionating_speed}, 倍率=${multiplier.toFixed(4)}, 单位物品耗电=${oldPower.toFixed(6)}*${multiplier.toFixed(4)}=${unitPowerCost.toFixed(6)}`);
+              if (DEBUG) console.log(`[设备计算] ${itemId}: 分馏塔特殊处理, 分馏速度=${settings.fractionating_speed}, 倍率=${multiplier.toFixed(4)}, 单位物品耗电=${oldPower.toFixed(6)}*${multiplier.toFixed(4)}=${unitPowerCost.toFixed(6)}`);
             }
             if (proMode > 0 && proLevel > 0) {
               const proEffect = gameData.proliferator_effect?.[proLevel];
@@ -289,7 +275,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
                 const powerMultiplier = proEffect["耗电倍率"] || 1;
                 const oldPower = unitPowerCost;
                 unitPowerCost *= powerMultiplier;
-                // console.log(`[设备计算] ${itemId}: 增产剂耗电倍率=${powerMultiplier}, 单位物品耗电=${oldPower.toFixed(6)}*${powerMultiplier}=${unitPowerCost.toFixed(6)}`);
               }
             }
 
@@ -300,7 +285,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
               unitPowerCost,
               isMiner: ["采矿机", "大型采矿机", "抽水机", "原油萃取站"].includes(factoryName)
             };
-            // console.log(`[设备计算] ${itemId} 最终结果: 设备=${factoryName}, 单次执行设备数=${singleExecBuildNumber.toFixed(6)}, 单位物品耗电=${unitPowerCost.toFixed(6)}`);
           }
         }
       }

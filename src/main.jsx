@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import {Header, IconStyles, ThemeProvider} from './ui_components.jsx';
@@ -24,9 +24,22 @@ document.getElementById('header').style.display = 'none';
  * ContextProvider 和 Header 在此组件内渲染，确保切换页面时 context 不丢失
  * needs_list 状态提升到此处，确保切换页面时需求列表不丢失
  */
+const STORAGE_KEY_NEEDS = 'dsp-calc-needs-list';
+
 function RootApp() {
     const [page, setPage] = useState('calculator'); // 'calculator' | 'dependency-graph'
-    const [needs_list, set_needs_list] = useState({});
+    const [needs_list, set_needs_list] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_NEEDS);
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return {};
+    });
+
+    // 需求表变更时持久化
+    useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY_NEEDS, JSON.stringify(needs_list)); } catch {}
+    }, [needs_list]);
 
     // 使用 CSS display 切换而非条件渲染，避免切换页面时卸载/重挂组件导致 useMemo 重复计算
     // display: contents 让子组件像直接子元素一样布局，display: none 保持挂载但隐藏

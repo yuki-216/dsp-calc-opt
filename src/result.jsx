@@ -1,11 +1,12 @@
 import {useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
-import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext, FuelContext} from './contexts';
+import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
 import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
+import allowed_recipes from '../data/allowed_recipes.json';
 
 // 智能格式化数字：整数显示整数，小数显示到必要位数但不超过fixedNum
 const formatValue = (value, fixedNum) => {
@@ -59,25 +60,52 @@ export function RecipeSelect({item, choice, onChange, compact}) {
     let game_data = global_state.game_data;
     let item_data = global_state.item_data;
 
-    if (item_data[item].length == 2) {
-        let recipe_index = item_data[item][1];
+    // 构建 recipe_data索引 -> item_data位置 的映射
+    let recipe_index_to_position = {};
+    for (let i = 1; i < item_data[item].length; i++) {
+        recipe_index_to_position[item_data[item][i]] = i;
+    }
+
+    // 根据 allowed_recipes 决定可选配方及顺序
+    let allowed = allowed_recipes[item];
+    let filtered_indices = [];
+    if (allowed) {
+        // 按 allowed_recipes 中的顺序遍历
+        for (let recipe_index of allowed) {
+            if (recipe_index_to_position[recipe_index] !== undefined) {
+                filtered_indices.push(recipe_index_to_position[recipe_index]);
+            }
+        }
+    }
+
+    // 校验：如果缓存的 choice 不在 allowed_recipes 允许范围内，自动重置
+    useEffect(() => {
+        if (filtered_indices.length > 0 && !filtered_indices.includes(choice)) {
+            onChange(filtered_indices[0]);
+        }
+    }, [choice, filtered_indices.length]);
+
+    // 如果过滤后只剩一个配方，直接显示
+    if (filtered_indices.length <= 1) {
+        let idx = filtered_indices[0] || 1;
+        let recipe_index = item_data[item][idx];
         let recipe = game_data.recipe_data[recipe_index];
         return <div className="my-1 px-2 py-1"><Recipe recipe={recipe} compact={compact}/></div>
-    } else {
-        let doms = [];
-        for (let i = 1; i < item_data[item].length; i++) {
-            let recipe_index = item_data[item][i];
-            let recipe = game_data.recipe_data[recipe_index];
-            let bg_class = (i == choice) ? "selected" : "";
-            doms.push(<a key={i}
-                         className={`recipe-item px-2 py-1 d-block text-decoration-none text-reset cursor-pointer ${bg_class}`}
-                         onClick={() => onChange(i)}>
-                <Recipe recipe={recipe} compact={compact}/>
-            </a>);
-        }
-
-        return <div className="border-recipe-item">{doms}</div>;
     }
+
+    // 多个配方，显示选择列表
+    let doms = filtered_indices.map(i => {
+        let recipe_index = item_data[item][i];
+        let recipe = game_data.recipe_data[recipe_index];
+        let bg_class = (i == choice) ? "selected" : "";
+        return <a key={i}
+                  className={`recipe-item px-2 py-1 d-block text-decoration-none text-reset cursor-pointer ${bg_class}`}
+                  onClick={() => onChange(i)}>
+            <Recipe recipe={recipe} compact={compact}/>
+        </a>;
+    });
+
+    return <div className="border-recipe-item">{doms}</div>;
 }
 
 export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
@@ -203,6 +231,7 @@ const isEqual = (obj1, obj2) => {
 export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore_popup, show_building_popup, set_show_building_popup}) {
     const global_state = useContext(GlobalStateContext);
     const engineCalculate = useContext(EngineCalculateContext);
+    const calculationError = useContext(CalculationErrorContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
@@ -278,7 +307,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     let mineralize_list = settings.mineralize_list;
     // 主引擎计算
     const engineResult = useMemo(() => {
-        console.log("CALCULATING (CoreEngine)");
         if (!engineCalculate || !needs_list || Object.keys(needs_list).length === 0) {
             return null;
         }
@@ -496,9 +524,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         // 缓存配方和方案数据，避免重复查找
         let recipe = game_data.recipe_data[recipe_id];
         let scheme_recipe = scheme_data.scheme_for_recipe[recipe_id];
-        // 纯无中生有物品（Type = -2）始终隐藏在结果表格中
-        // 普通原矿化物品或无原料配方（当 hide_mines 开启时隐藏）
-        if (recipe["Type"] === -2 || (settings.hide_mines && ((i in mineralize_list) || Object.keys(recipe["原料"]).length < 1))) {
+        // 纯无中生有物品（Type = -2）始终隐藏
+        // 视为原矿的物品始终隐藏
+        // 无原料配方（当 hide_mines 开启时隐藏）
+        if (recipe["Type"] === -2 || (i in mineralize_list) || (settings.hide_mines && Object.keys(recipe["原料"]).length < 1)) {
             continue;
         }
         let factory_number = get_factory_number(result_dict[i], i);
@@ -668,6 +697,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }, [engineResult]);
 
     return <div className="result-container">
+        {/* 计算错误提示 */}
+        {calculationError && (
+            <div className="alert alert-danger m-2" role="alert">
+                <strong>计算错误：</strong>{calculationError}
+            </div>
+        )}
         {/* 左侧：结果表格独立滚动区域 */}
         <div className="result-table-scroll">
         <table className="table table-sm align-middle w-auto result-table">

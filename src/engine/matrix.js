@@ -6,10 +6,11 @@
 
 /**
  * 高斯消元法求解线性方程组 Ax = b
- * 支持奇异矩阵：自由变量设为0，求特解
+ * 奇异矩阵时抛出异常（存在死循环依赖）
  * @param {number[][]} A - n×n 系数矩阵（二维数组）
  * @param {number[]} b - n 维常数向量
  * @returns {number[]} n 维解向量
+ * @throws {Error} 矩阵不可逆时抛出
  */
 function solveLinearSystem(A, b) {
   const n = A.length;
@@ -33,7 +34,7 @@ function solveLinearSystem(A, b) {
     }
 
     if (maxVal < 1e-12) {
-      continue; // 此列无主元，跳过（自由变量）
+      continue; // 此列无主元，跳过
     }
 
     // 交换行
@@ -54,12 +55,17 @@ function solveLinearSystem(A, b) {
     curRow++;
   }
 
-  // 回代（自由变量设为0）
+  // 检查是否奇异：存在无主元的列 → 矩阵不可逆
+  for (let col = 0; col < n; col++) {
+    if (pivotRow[col] === -1) {
+      throw new Error('SINGULAR_MATRIX');
+    }
+  }
+
+  // 回代
   const x = new Array(n).fill(0);
   for (let col = n - 1; col >= 0; col--) {
     const row = pivotRow[col];
-    if (row === -1) continue; // 自由变量，保持0
-
     let sum = aug[row][n];
     for (let j = col + 1; j < n; j++) {
       sum -= aug[row][j] * x[j];
