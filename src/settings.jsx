@@ -273,7 +273,7 @@ export function FuelSelect() {
     );
 }
 
-export function BatchSetting({needs_list}) {
+export function BatchSetting({needs_list, set_show_ore_quantities}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
@@ -287,8 +287,18 @@ export function BatchSetting({needs_list}) {
     const [optimResult, setOptimResult] = useState(null);
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
-    const [optimStrategy, setOptimStrategy] = useState('min_power');
+    const [optimStrategy, setOptimStrategy] = useState('min_net_heat');
     const logContainerRef = useRef(null);
+
+    // 切换优化目标时自动调整：最小占地→展开矿物可用量+全部模式；其他→仅增产
+    useEffect(() => {
+        if (optimStrategy === 'min_footprint') {
+            set_show_ore_quantities?.(true);
+            set_settings({proliferate_no_accelerate: false});
+        } else {
+            set_settings({proliferate_no_accelerate: true});
+        }
+    }, [optimStrategy]);
 
     // 自动滚动到底部
     useEffect(() => {

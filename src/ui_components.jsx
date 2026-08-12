@@ -161,7 +161,7 @@ export function Header({onNavigate, currentPage}) {
                         <FaProjectDiagram/>
                         <span>依赖图</span>
                     </Nav.Link>
-                    {/* <Nav.Link href="https://github.com/DSPCalculator/dsp-calc">开源仓库</Nav.Link> */}
+                    <Nav.Link href="https://github.com/yuki-216/dsp-calc-opt" target="_blank">开源仓库</Nav.Link>
                     {/* <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link> */}
                     {/* <Nav.Link href="https://space.bilibili.com/16051534">联系作者</Nav.Link> */}
                 </Nav>

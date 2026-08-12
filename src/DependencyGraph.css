@@ -80,7 +80,7 @@
 .graph-node-name {
     font-size: 11px;
     white-space: nowrap;
-    color: var(--bs-body-color);
+    color: #3a7ca5;
 }
 
 /* 无数据提示 */
