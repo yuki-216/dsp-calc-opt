@@ -8,11 +8,7 @@
     "build": "node --no-deprecation node_modules/vite/bin/vite.js build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "test": "mocha test/**/*.test.js",
-    "test:engine": "mocha test/engine.test.js",
-    "test:compare": "mocha test/engine-compare.test.js"
+    "generate:recipes": "node scripts/generate_allowed_recipes.cjs"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
@@ -33,7 +29,6 @@
     "serialize-javascript": "^7.0.5"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-legacy": "^8.0.1",

@@ -37,3 +37,9 @@ restart.ps1
 
 # 参考项目（备份，不需要提交）
 reference/
+
+# 生成的文件
+graph_data.json
+
+# 备份文件
+*.bak

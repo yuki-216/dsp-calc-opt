@@ -152,44 +152,13 @@ function get_sprite_plugins(mode) {
     });
 }
 
-// When building inside Tauri, TAURI_ENV_PLATFORM is set by the Tauri CLI.
-// WebView2 (Chromium-based) does not need the IE11 legacy polyfill bundle.
-const is_tauri_build = !!process.env.TAURI_ENV_PLATFORM;
-
-/** Stub for `virtual:pwa-register/react` when VitePWA plugin is not loaded (Tauri builds). */
-function pwaStubPlugin() {
-    const virtualId = 'virtual:pwa-register/react';
-    const resolvedId = '\0' + virtualId;
-    return {
-        name: 'pwa-stub',
-        resolveId(id) {
-            if (id === virtualId) return resolvedId;
-        },
-        load(id) {
-            if (id === resolvedId) {
-                return `export function useRegisterSW() {
-                    return {
-                        offlineReady: [false, () => {}],
-                        needRefresh: [false, () => {}],
-                        updateServiceWorker: () => {},
-                    };
-                }`;
-            }
-        },
-    };
-}
-
 // https://vitejs.dev/config/
 export default defineConfig(({mode}) => ({
     base: "./",
     define: {
         'import.meta.env.VITE_APP_VERSION': JSON.stringify(require('./package.json').version),
     },
-    resolve: {
-        alias: {
-            '~bootstrap': path.resolve(__dirname, 'node_modules/bootstrap'),
-        }
-    },
+    resolve: {},
     css: {
         preprocessorOptions: {
             scss: {
@@ -239,12 +208,11 @@ export default defineConfig(({mode}) => ({
     plugins: [
         react(),
         ...get_sprite_plugins(mode),
-        ...(!is_tauri_build ? [legacy({
+        legacy({
             targets: ['edge>=79', 'firefox>=67', 'chrome>=64', 'safari>=12'],
             additionalLegacyPolyfills:['regenerator-runtime/runtime'],
-        })] : []),
-        ...(is_tauri_build ? [pwaStubPlugin()] : []),
-        ...(!is_tauri_build ? [VitePWA({
+        }),
+        VitePWA({
             registerType: 'prompt',
             injectRegister: false,
             manifest: {
@@ -311,6 +279,6 @@ export default defineConfig(({mode}) => ({
             devOptions: {
                 enabled: false,
             },
-        })] : []),
+        }),
     ]
 }))

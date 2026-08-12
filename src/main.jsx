@@ -8,7 +8,7 @@ import {DependencyGraphPage} from './DependencyGraphPage.jsx';
 // Not using 'bootstrap/dist/js/bootstrap.min.js' here, because it breaks dropdown-list
 import 'bootstrap';
 
-import '../css/styles.scss';
+import 'bootstrap/scss/bootstrap.scss';
 // app-specific CSS
 import '../css/App.css';
 
