@@ -28,7 +28,20 @@ const STORAGE_KEY_NEEDS = 'dsp-calc-needs-list';
 
 function RootApp() {
     const [page, setPage] = useState('calculator'); // 'calculator' | 'dependency-graph'
+    const [newTabData, setNewTabData] = useState(null);
     const [needs_list, set_needs_list] = useState(() => {
+        try {
+            // 检查是否有新标签页数据
+            const saved = localStorage.getItem('dsp-calc-new-tab-data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                localStorage.removeItem('dsp-calc-new-tab-data');
+                // 延迟设置newTabData，避免在useState initializer中调用setState
+                setTimeout(() => setNewTabData(data), 0);
+                // 返回包含新物品的需求表
+                return { [data.item]: data.count };
+            }
+        } catch {}
         try {
             const saved = localStorage.getItem(STORAGE_KEY_NEEDS);
             if (saved) return JSON.parse(saved);
@@ -47,7 +60,7 @@ function RootApp() {
         <ContextProvider>
             <Header onNavigate={setPage} currentPage={page}/>
             <div style={{display: page === 'calculator' ? 'contents' : 'none'}}>
-                <App needs_list={needs_list} set_needs_list={set_needs_list}/>
+                <App needs_list={needs_list} set_needs_list={set_needs_list} newTabData={newTabData}/>
             </div>
             <div style={{display: page === 'dependency-graph' ? 'contents' : 'none'}}>
                 <DependencyGraphPage onBack={() => setPage('calculator')} needs_list={needs_list} isActive={page === 'dependency-graph'}/>

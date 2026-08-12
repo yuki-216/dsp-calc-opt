@@ -8,6 +8,7 @@ import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
+import {FaExternalLinkAlt} from 'react-icons/fa';
 
 /**
  * 创建 scheme_data 更新闭包
@@ -314,6 +315,20 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     let item_data = global_state.item_data;
     let time_tick = settings.is_time_unit_minute ? 60 : 1;
 
+    /**
+     * 在新窗口计算：原页面将物品视为原矿，新标签页添加为需求
+     * @param {string} item - 物品名
+     * @param {number} count - 数量（从输出表继承）
+     */
+    function openInNewTab(item, count) {
+        // 原页面：标记为原矿
+        mineralize(item);
+        // 传递数据到新标签页（不标记为原矿）
+        const data = { item, count, asOre: false };
+        localStorage.setItem('dsp-calc-new-tab-data', JSON.stringify(data));
+        window.open(window.location.href, '_blank');
+    }
+
     // TODO refactor to a simple list
     let mineralize_list = settings.mineralize_list;
     // 主引擎计算
@@ -535,15 +550,22 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         result_table_rows.push(<tr className={row_class} key={i}>
             {/* 操作 */}
             <td>
-                {is_mineralized ?
-                    <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
-                            onClick={() => unmineralize(i)}>恢复</button> :
-                    <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
-                            onClick={() => mineralize(i)}>
-                        <div>视为</div>
-                        <div>原矿</div>
+                <div className="d-flex gap-1">
+                    {is_mineralized ?
+                        <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
+                                onClick={() => unmineralize(i)}>恢复</button> :
+                        <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
+                                onClick={() => mineralize(i)}>
+                            <div>视为</div>
+                            <div>原矿</div>
+                        </button>
+                    }
+                    <button className="btn btn-sm btn-outline-secondary ssmall"
+                            onClick={() => openInNewTab(i, get_gross_output(result_dict[i], i))}
+                            title="在新窗口计算（视为原矿）">
+                        <FaExternalLinkAlt/>
                     </button>
-                }
+                </div>
             </td>
             {/* 目标物品 */}
             <td>

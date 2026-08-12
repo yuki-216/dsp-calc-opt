@@ -99,7 +99,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings}) {
     );
 }
 
-export default function App({needs_list, set_needs_list}) {
+export default function App({needs_list, set_needs_list, newTabData}) {
     const game_info = useContext(GameInfoContext);
     const set_game_data = useContext(GameInfoSetterContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
@@ -123,6 +123,13 @@ export default function App({needs_list, set_needs_list}) {
             set_scheme_data(init_scheme_data(default_game_data));
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 处理新标签页数据：清空原矿化列表（新页面不继承原页面的原矿表）
+    useEffect(() => {
+        if (newTabData) {
+            set_settings({ mineralize_list: {} });
+        }
+    }, [newTabData]);
 
     useEffect(() => {
         // 只有当游戏名称真正变化时（不是组件重新挂载导致对象引用变化），才清空 needs_list
