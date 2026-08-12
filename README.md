@@ -42,7 +42,7 @@ npm run preview
 
 - QQ: 1610241445
 - QQ群: 暂无
-
+如果计算器对你有帮助，请给本项目加个star吧，感谢。
 ## 参考资源
 
 - [DSPCalculator/dsp-calc](https://github.com/DSPCalculator/dsp-calc) - 原始项目
