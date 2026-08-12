@@ -14,7 +14,7 @@
 - **React 19** - UI框架
 - **Vite 8** - 构建工具
 - **Bootstrap 5** - UI组件库
-- **javascript-lp-solver** - 线性规划求解器
+- **Tarjan SCC + 矩阵求逆** - 核心计算引擎
 
 ## 本地开发
 
@@ -50,4 +50,4 @@ npm run preview
 
 ## 许可证
 
-MIT License
+[木兰宽松许可证, 第2版](LICENSE)
