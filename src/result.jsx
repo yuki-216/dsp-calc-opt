@@ -40,16 +40,6 @@ const formatValue = (value, fixedNum) => {
     return str.replace(/\.?0+$/, '') || '0';
 };
 
-// 进1法格式化数字：向上取整到指定小数位数
-const formatValueCeil = (value, fixedNum) => {
-    if (Number.isInteger(value)) return value.toString();
-    const factor = Math.pow(10, fixedNum);
-    const ceiled = Math.ceil(value * factor) / factor;
-    const str = ceiled.toFixed(fixedNum);
-    // 去除末尾的0，但保留至少一位小数
-    return str.replace(/\.?0+$/, '') || '0';
-};
-
 const ValueWithDifference = ({currentValue, previousValue}) => {
     const global_state = useContext(GlobalStateContext);
     const fixedNum = global_state.settings.fixed_num;
@@ -400,18 +390,19 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }, [result_dict, byproductSources]);
 
     function mineralize(item) {
-        let new_mineralize_list = {...mineralize_list, [item]: true};
-        set_settings({"mineralize_list": new_mineralize_list});
+        set_settings(prev => ({mineralize_list: {...prev.mineralize_list, [item]: true}}));
     }
 
     function unmineralize(item) {
-        let new_mineralize_list = {...mineralize_list};
-        delete new_mineralize_list[item];
-        set_settings({"mineralize_list": new_mineralize_list});
+        set_settings(prev => {
+            const new_list = {...prev.mineralize_list};
+            delete new_list[item];
+            return {mineralize_list: new_list};
+        });
     }
 
     function clear_mineralize_list() {
-        set_settings({"mineralize_list": {}});
+        set_settings({mineralize_list: {}});
     }
 
     let mineralize_doms = Object.keys(mineralize_list).map(item => (
@@ -434,18 +425,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
         let base_value = +disp_value;
 
-        function set_needs_in_row() {
-            return function (e_or_value) {
-                // Either an event [e] or a raw [value] is supported
-                if (base_value != 0) {
-                    let new_value = e_or_value.target ? e_or_value.target.value : e_or_value;
-                    let new_needs_list = {};
-                    for (let i in needs_list) {
-                        new_needs_list[i] = needs_list[i] * new_value / base_value;
-                    }
-                    set_needs_list(new_needs_list);
-                }
-            }
+        function set_needs_in_row(e_or_value) {
+            if (base_value == 0) return;
+            let new_value = e_or_value.target ? e_or_value.target.value : e_or_value;
+            let ratio = new_value / base_value;
+            set_needs_list(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, v * ratio])));
         }
 
         return <span data-tooltip="等比例调整需求" className="fast-tooltip">
