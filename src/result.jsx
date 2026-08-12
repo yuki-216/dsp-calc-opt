@@ -436,7 +436,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             <AutoSizedInput
                 delayed={true}
                 value={disp_value}
-                onChange={set_needs_in_row()}/>
+                onChange={set_needs_in_row}/>
         </span>;
     };
 
