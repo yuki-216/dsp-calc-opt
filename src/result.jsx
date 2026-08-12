@@ -5,7 +5,7 @@ import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, Setting
 import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
-import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
+import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
 

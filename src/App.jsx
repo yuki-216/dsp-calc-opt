@@ -102,7 +102,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings}) {
     );
 }
 
-function AppWithContexts({needs_list, set_needs_list}) {
+export default function App({needs_list, set_needs_list}) {
     const game_info = useContext(GameInfoContext);
     const set_game_data = useContext(GameInfoSetterContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
@@ -183,8 +183,4 @@ function AppWithContexts({needs_list, set_needs_list}) {
                     show_building_popup={show_building_popup} set_show_building_popup={set_show_building_popup}/>
         </div>
     </div>;
-}
-
-export default function App({needs_list, set_needs_list}) {
-    return <AppWithContexts needs_list={needs_list} set_needs_list={set_needs_list}/>;
 }

@@ -57,10 +57,9 @@ export const FUEL_DATA_BASE = [
 
 /**
  * 获取完整的燃料数据
- * @param {Object} gameData - 游戏数据对象（保留兼容性，现在直接返回 FUEL_DATA_BASE）
  * @returns {Array} 完整的燃料数据数组
  */
-export function getFuelData(gameData) {
+export function getFuelData() {
   return FUEL_DATA_BASE;
 }
 
