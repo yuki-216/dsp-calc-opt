@@ -147,7 +147,7 @@ function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel
  */
 function layout_graph(items, edges, canvas_width, canvas_height, custom_first_layer_positions = null, page_width = null, precomputed_sccs = null, proliferator_edges = new Set()) {
     const positions = new Map();
-    const MARGIN_X = 100;
+    const MARGIN_X = 50;
     const MARGIN_Y = 80;
 
     // 1-3. SCC 分解 + DAG 压缩（优先使用核心计算的 SCC）
@@ -359,7 +359,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     if (custom_first_layer_positions && custom_first_layer_positions.has(item)) {
                         x = custom_first_layer_positions.get(item).x;
                     }
-
                     positions.set(item, {
                         x: x,
                         y: base_y,
@@ -377,6 +376,9 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     const cycle_start_x = effective_page_width - MARGIN_X - cycle_group_width + gap / 2;
                     cycle_items_in_layer.forEach((item, i) => {
                         let x = cycle_start_x + i * gap;
+                        if (custom_first_layer_positions && custom_first_layer_positions.has(item)) {
+                            x = custom_first_layer_positions.get(item).x;
+                        }
                         positions.set(item, {
                             x: x,
                             y: base_y,
@@ -680,6 +682,16 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             deferred_layers.forEach(layer_idx => {
                 const deferred_items = deferred_by_layer.get(layer_idx);
                 const base_y = layer_y.get(layer_idx);
+                const layer_all_items = layers_map.get(layer_idx) || [];
+
+                // 计算该层的 SCC id
+                const layer_scc_ids = new Set();
+                layer_all_items.forEach(item => {
+                    const scc_id = node_to_scc.get(item);
+                    if (scc_id !== undefined && scc_groups[scc_id].size > 1) {
+                        layer_scc_ids.add(scc_id);
+                    }
+                });
 
                 // 计算延迟节点的理想位置（靠近子节点）
                 const ideal_positions = new Map();
@@ -694,15 +706,17 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     }
                 });
 
-                // 只将延迟节点加入布局，使用重心法排列
-                const items_to_layout = deferred_items.map(item => ({
-                    item,
-                    ideal_x: ideal_positions.get(item)
-                }));
-                const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP);
+                // 该层所有节点一起进入重叠处理：非延迟节点用当前 x，延迟节点用重心位置
+                const all_items_for_layout = layer_all_items
+                    .filter(item => !layer_scc_ids.has(node_to_scc.get(item)))
+                    .map(item => ({
+                        item,
+                        ideal_x: deferred_set.has(item) ? (ideal_positions.get(item) ?? final_canvas_width / 2) : positions.get(item).x
+                    }));
+                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP);
 
-                deferred_items.forEach(item => {
-                    const x = layout_result.get(item) ?? ideal_positions.get(item);
+                all_items_for_layout.forEach(({item}) => {
+                    const x = layout_result.get(item) ?? positions.get(item)?.x ?? final_canvas_width / 2;
                     positions.set(item, {
                         x: x,
                         y: base_y,
@@ -1192,7 +1206,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         return result;
     }, [filtered_graph, first_layer_moved, active_custom_positions, container_width, show_needs_only]);
 
-    // 合并自定义位置，只对首层物品生效
+    // 合并自定义位置，只对首层物品生效，并做重叠处理
     const positions = useMemo(() => {
         const merged = new Map(base_positions);
         active_custom_positions.forEach((pos, item) => {
@@ -1201,6 +1215,39 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                 merged.set(item, {...base, x: pos.x});
             }
         });
+
+        // 首层重叠处理：按层分组，每层内按 x 排序后迭代推开重叠
+        const first_layer_items = [];
+        merged.forEach((pos, item) => {
+            if (pos.is_first_layer) first_layer_items.push({ item, x: pos.x, layer: pos.layer });
+        });
+        const by_layer = new Map();
+        first_layer_items.forEach(it => {
+            if (!by_layer.has(it.layer)) by_layer.set(it.layer, []);
+            by_layer.get(it.layer).push(it);
+        });
+        const NODE_W = 60; // NODE_WIDTH + 4
+        by_layer.forEach(layer_items => {
+            layer_items.sort((a, b) => a.x - b.x);
+            let shifted = true;
+            let iter = 0;
+            while (shifted && iter < 50) {
+                shifted = false;
+                iter++;
+                for (let i = 1; i < layer_items.length; i++) {
+                    const min_x = layer_items[i - 1].x + NODE_W;
+                    if (layer_items[i].x < min_x) {
+                        layer_items[i].x = min_x;
+                        shifted = true;
+                    }
+                }
+            }
+            layer_items.forEach(it => {
+                const pos = merged.get(it.item);
+                if (pos) merged.set(it.item, {...pos, x: it.x});
+            });
+        });
+
         return merged;
     }, [base_positions, active_custom_positions]);
 

@@ -35,11 +35,9 @@ npm run preview
 ## 文档
 
 - [部署指南](docs/deploy.md)
-- [设计规格文档](docs/design-spec.md)
-- [核心算法文档](docs/core-algorithm.md)
+- [代码分析文档](docs/code-analysis.md)
 - [依赖图模块文档](docs/dependency_graph.md)
 - [增产策略优化算法详解](docs/增产策略优化算法详解.md)
-- [代码分析文档](docs/code-analysis.md)
 
 ## 联系方式
 
