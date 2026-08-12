@@ -4,7 +4,7 @@
 
 ## 项目目标
 
-- 保留原有核心计算功能
+- 重构原有核心计算功能
 - 添加燃料计算模块
 - 实现增产剂自动优化
 - 支持占地计算与优化
@@ -34,7 +34,6 @@ npm run preview
 
 ## 文档
 
-- [部署指南](docs/deploy.md)
 - [代码分析文档](docs/code-analysis.md)
 - [依赖图模块文档](docs/dependency_graph.md)
 - [增产策略优化算法详解](docs/增产策略优化算法详解.md)
