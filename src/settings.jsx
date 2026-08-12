@@ -473,12 +473,14 @@ export function BatchSetting({needs_list}) {
             >
                 <option value="min_power">最小电力</option>
                 <option value="min_raw_ore">最小原矿</option>
+                <option value="min_net_heat">最小净热值</option>
+                <option value="min_footprint">最小占地</option>
             </select>
             <button
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}
                 disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
-                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿输出' : '最小化总耗电'}）`}
+                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿输出' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
             >
                 <FaMagic/>
                 <span className="compact-hide-text">

@@ -183,6 +183,8 @@ export function get_game_data() {
         }
         let time = recipe.TimeSpend / 60.0;
         let proliferator = recipe.Proliferator;
+        const isPlanetaryBase = recipe.Factories && recipe.Factories.includes(1);
+        const hasNonBaseFactory = recipe.Factories && recipe.Factories.some(f => f !== 1);
         data.recipe_data.push({
             "Type": recipe.Type,
             "原料": material,
@@ -190,6 +192,8 @@ export function get_game_data() {
             "设施": factory,
             "时间": time,
             "增产": proliferator,
+            "行星基地": isPlanetaryBase,
+            "可采集": hasNonBaseFactory,
         });
     })
     //data.factory_data

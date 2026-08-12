@@ -218,6 +218,59 @@ export class CoreEngine {
       }
     }
 
+    // 8. 计算占地
+    const footprintDetails = {};
+    let totalFootprint = 0;
+    const recipeData = this.gameData?.recipe_data || [];
+    const stackM = this.settings?.stack_research_lab || 15;
+
+    for (const [itemId, detail] of Object.entries(buildingDetails)) {
+      if (detail.设备数量 <= 0) continue;
+      const node = this.graph.get(itemId);
+      if (!node || node.recipeId === undefined || node.recipeId === null) continue;
+      const recipe = recipeData[node.recipeId];
+      if (!recipe) continue;
+
+      const n = Math.ceil(detail.设备数量);
+      const factoryName = detail.factoryName;
+
+      // 计算 l: 原料种类数 + 产物种类数
+      const rawInputs = recipe.原料 || {};
+      const rawOutputs = recipe.产物 || {};
+      const l = Object.keys(rawInputs).length + Object.keys(rawOutputs).length;
+
+      let area = 0;
+      if (factoryName.includes('制造台')) {
+        area = (4 * n - 1) * (3 + l / 2);
+      } else if (factoryName.includes('熔炉')) {
+        area = 3 * n * (3 + l / 2);
+      } else if (factoryName === '原油精炼厂') {
+        area = 3 * n * (6 + l / 2);
+      } else if (factoryName.includes('分馏塔')) {
+        area = (11 / 2) * (4 * n - 1);
+      } else if (factoryName.includes('化工厂')) {
+        area = 7 * n * (4 + l / 2);
+      } else if (factoryName === '微型粒子对撞机') {
+        area = 5 * n * (9 + l / 2);
+      } else if (factoryName.includes('研究站')) {
+        const researchStations = Math.ceil(n / stackM);
+        if (node.recipeId === 73) { // 宇宙矩阵配方索引
+          area = 12 * (5.5 * researchStations);
+        } else {
+          area = 5 * researchStations * (5 + l / 2);
+        }
+      } else if (factoryName === '射线接收站') {
+        area = Math.pow(8 * Math.sqrt(n) - 1, 2);
+      } else if (factoryName === '人造恒星') {
+        area = 49;
+      } else if (factoryName === '火力发电厂' || factoryName === '微型聚变发电站') {
+        area = 28;
+      }
+
+      footprintDetails[itemId] = { area, n, l, factoryName };
+      totalFootprint += area;
+    }
+
     // 提取自消耗系数和副产物来源
     const selfConsumption = {};
     const byproductSources = {};  // {物品: {来源物品: 每单位净产出的副产物量}}
@@ -245,6 +298,8 @@ export class CoreEngine {
     aggregated.energyCost = energyCost;
     aggregated.minerEnergyCost = minerEnergyCost;
     aggregated.totalEnergyCost = totalEnergyCost;
+    aggregated.footprintDetails = footprintDetails;
+    aggregated.totalFootprint = totalFootprint;
     if (DEBUG) console.log('[Engine] ====== 计算结束 ======');
 
     return aggregated;

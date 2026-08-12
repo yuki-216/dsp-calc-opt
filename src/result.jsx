@@ -7,6 +7,7 @@ import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components/auto_sized_input.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
+import {DEBUG} from './engine/debug.js';
 
 // 智能格式化数字：整数显示整数，小数显示到必要位数但不超过fixedNum
 const formatValue = (value, fixedNum) => {
@@ -332,11 +333,27 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const [historyValues, setHistoryValues] = useState([]);
 
     let fixed_num = settings.fixed_num;
+
+    // 调试日志：占地详情
+    useEffect(() => {
+        if (DEBUG && engineResult?.footprintDetails) {
+            console.group('[占地计算]');
+            console.log('n = ceil(设备数量), l = 原料种类数 + 产物种类数');
+            console.log('总占地:', engineResult.totalFootprint?.toFixed(2), '格');
+            Object.entries(engineResult.footprintDetails).forEach(([item, info]) => {
+                console.log(`  ${item}: ${info.factoryName} n=${info.n} l=${info.l} 面积=${info.area.toFixed(2)}`);
+            });
+            console.groupEnd();
+        }
+    }, [engineResult]);
+
     // 从新引擎获取耗电和建筑数据
     let energy_cost = engineResult?.energyCost || 0;
     let miner_energy_cost = engineResult?.minerEnergyCost || 0;
     let building_list = engineResult?.buildingList || {};
     let building_details = engineResult?.buildingDetails || {};
+    let total_footprint = engineResult?.totalFootprint || 0;
+    let footprint_details = engineResult?.footprintDetails || {};
 
     function get_factory_number(amount, item) {
         // 从引擎的 buildingDetails 中获取设备数量
@@ -796,6 +813,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             </div>
                         </div>
                     </fieldset>}
+
+                {/* 预估占地：仅 mobile 布局时显示 */}
+                {is_mobile && total_footprint > 0 &&
+                    <fieldset className="w-fit">
+                        <legend><small>预估占地</small></legend>
+                        <div className="d-flex flex-column">
+                            <span>{formatValue(total_footprint, fixed_num)} 格</span>
+                        </div>
+                    </fieldset>}
             </div>
 
             {/* 两列布局：左列多余产物+原矿+电力，右列建筑统计 */}
@@ -876,6 +902,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        </fieldset>}
+
+                    {/* 预估占地 */}
+                    {!is_mobile && total_footprint > 0 &&
+                        <fieldset className="w-fit">
+                            <legend><small>预估占地</small></legend>
+                            <div className="d-flex flex-column">
+                                <span>{formatValue(total_footprint, fixed_num)} 格</span>
                             </div>
                         </fieldset>}
                 </div>

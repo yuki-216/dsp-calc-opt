@@ -4,33 +4,50 @@ import {GameInfoContext, GlobalStateContext} from './contexts';
 import {ItemIcon} from './ui_components';
 import {ItemSelect} from './item_select';
 
+function NeedItem({item, count, needs_list, set_needs_list}) {
+    const [editing, setEditing] = useState(null);
+
+    function edit_count(e) {
+        let str = e.target.value;
+        setEditing(str);
+        let val = Number(str);
+        if (!isNaN(val) && val >= 0) {
+            let new_needs_list = structuredClone(needs_list);
+            new_needs_list[item] = val;
+            set_needs_list(new_needs_list);
+        }
+    }
+
+    function blur_count() {
+        setEditing(null);
+    }
+
+    function remove() {
+        let new_needs_list = structuredClone(needs_list);
+        delete new_needs_list[item];
+        set_needs_list(new_needs_list);
+    }
+
+    return <div className="d-inline-flex align-items-center">
+        <ItemIcon item={item}/>
+        <span className="ms-1 me-2">x</span>
+        <div className="input-group input-group-sm w-fit d-inline-flex">
+            <input type="text" className="form-control" style={{width: "6em"}}
+                   value={editing !== null ? editing : count}
+                   onChange={edit_count} onBlur={blur_count}/>
+            <button className="btn btn-outline-danger d-inline-flex align-items-center" onClick={remove}>
+                <FaTrash/>
+            </button>
+        </div>
+    </div>;
+}
+
 export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_show_building_popup}) {
     const global_state = useContext(GlobalStateContext);
     const count_ref = useRef(60);
     let item_data = global_state.item_data;
     let needs_doms = Object.entries(needs_list).map(([item, count]) => {
-        function edit_count(e) {
-            let new_needs_list = structuredClone(needs_list);
-            new_needs_list[item] = Number(e.target.value);
-            set_needs_list(new_needs_list);
-        }
-
-        function remove() {
-            let new_needs_list = structuredClone(needs_list);
-            delete new_needs_list[item];
-            set_needs_list(new_needs_list);
-        }
-
-        return <div key={item} className="d-inline-flex align-items-center">
-            <ItemIcon item={item}/>
-            <span className="ms-1 me-2">x</span>
-            <div key={item} className="input-group input-group-sm w-fit d-inline-flex">
-                <input type="text" className="form-control" style={{width: "6em"}} value={count} onChange={edit_count}/>
-                <button className="btn btn-outline-danger d-inline-flex align-items-center" onClick={remove}>
-                    <FaTrash/>
-                </button>
-            </div>
-        </div>
+        return <NeedItem key={item} item={item} count={count} needs_list={needs_list} set_needs_list={set_needs_list}/>;
     });
 
     function add_need(item) {
