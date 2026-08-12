@@ -25,25 +25,21 @@ npm install
 # 启动开发服务器
 npm run dev
 
-# 访问地址
-http://localhost:5173
+# 构建生产版本
+npm run build
+
+# 预览生产版本
+npm run preview
 ```
-
-## 项目阶段
-
-| 阶段 | 目标 | 状态 |
-|------|------|------|
-| 阶段1 | 项目理解与裁剪 | ✅ 已完成 |
-| 阶段2 | 燃料计算模块 | ✅ 已完成 |
-| 阶段3 | 增产剂自动优化 | ✅ 已完成 |
-| 阶段4 | 占地模块与完善优化 | ✅ 已完成 |
 
 ## 文档
 
+- [部署指南](docs/deploy.md)
 - [设计规格文档](docs/design-spec.md)
 - [核心算法文档](docs/core-algorithm.md)
 - [依赖图模块文档](docs/dependency_graph.md)
 - [增产策略优化算法详解](docs/增产策略优化算法详解.md)
+- [代码分析文档](docs/code-analysis.md)
 
 ## 联系方式
 

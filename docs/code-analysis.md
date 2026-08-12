@@ -26,18 +26,19 @@
 
 ```
 src/
-├── main.jsx                    # 应用入口，渲染多个React根节点
-├── App.jsx                     # 主应用组件，整体布局
+├── main.jsx                    # 应用入口
+├── App.jsx                     # 主应用组件
 ├── contexts.jsx                # React Context定义，全局状态管理
-├── game_data.jsx               # 游戏数据加载与转换（GameData + GlobalState）
+├── game_data.jsx               # 游戏数据加载与转换
 ├── scheme_data.jsx             # 配方方案管理与存储
 ├── needs_list.jsx              # 需求列表管理
 ├── result.jsx                  # 结果显示与计算调用
-├── settings.jsx                # 设置面板 + 批量预设（Settings + BatchSetting）
+├── settings.jsx                # 设置面板 + 批量预设
 ├── recipe.jsx                  # 配方显示组件
 ├── ui_components.jsx           # UI组件（图标、主题、头部、PWA提示）
 ├── item_select.jsx             # 物品选择弹窗
-├── DependencyGraphPage.jsx      # 依赖图页面
+├── DependencyGraphPage.jsx     # 依赖图页面
+├── DependencyGraph.css         # 依赖图样式
 ├── ui_components/
 │   └── auto_sized_input.jsx    # 自适应输入框组件
 ├── engine/                     # 计算引擎
@@ -45,10 +46,9 @@ src/
 │   ├── dag.js                  # DAG层级计算（BFS构建图）
 │   ├── graph-utils.js          # 图算法工具（Tarjan SCC、拓扑排序）
 │   ├── unit-cost.js            # 系数表成本计算+矩阵求解
-│   ├── proliferator-optimizer.js  # 增产策略优化器
-│   └── matrix.js               # 稀疏矩阵求逆
-└── engine-compare/             # 双引擎对比验证
-    └── index.js                # EngineComparator类
+│   ├── proliferator-optimizer.js # 增产策略优化器
+│   ├── matrix.js               # 稀疏矩阵求逆
+│   └── debug.js                # 调试工具
 ```
 
 ---
@@ -133,7 +133,6 @@ ContextProvider
 
 **引擎结构**：
 - `engine/` — 计算引擎（DAG+SCC+矩阵求逆）
-- `engine-compare/` — 对比验证器（用于验证优化正确性）
 
 **两段式计算架构**：
 
@@ -327,19 +326,13 @@ export async function optimizeProliferatorStrategy(
 )
 ```
 
-### 7.2 两阶段优化算法
+### 7.2 一阶段优化算法
 
-**第一阶段：循环组优化**
-1. 强制所有物品使用最高等级增产剂
-2. SCC分析找出循环组
-3. 坐标下降优化循环组
-4. 持久化最优策略
+优化算法采用一阶段策略，在最高等级配置下按 SCC 顺序一次性完成所有物品的优化：
 
-**第二阶段：单物品优化**
-1. 重新SCC分析
-2. 按SCC正序遍历所有物品
-3. 跳过已持久化的物品（循环组成员）
-4. 对每个未持久化物品尝试所有增产选择
+1. **初始化** - 强制所有物品使用最高等级增产剂
+2. **SCC 分析** - 在最高等级配置下分析 SCC 结构
+3. **按 SCC 顺序优化** - 单节点逐个优化，循环组坐标下降
 
 ### 7.3 多目标策略
 

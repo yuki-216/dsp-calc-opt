@@ -84,15 +84,14 @@ BFS构建图   SCC检测      系数表+矩阵求逆  资源/设备/电力/占�
 | ItemIcon | 图标显示 | ui_components.jsx |
 | Header | 顶部导航 | ui_components.jsx |
 
-### 新计算引擎算法
+### 计算引擎算法
 
-**三段式计算架构**：
+**两段式计算架构**：
 
 1. **DAG层级计算**：BFS从需求出发构建依赖图，Tarjan SCC检测循环组
 2. **单位成本计算**：系数表追踪成本，按SCC顺序展开：
    - 单节点SCC：直接代入依赖方
    - 多节点SCC（循环组）：构建矩阵，求逆求解
-3. **按需求量放大**：需求量 × 单位成本 = 总资源消耗
 
 **关键算法**：
 - 系数表：`$`前缀区分执行次数，负数表示副产物
@@ -198,33 +197,26 @@ src/
 ├── main.jsx                    # 应用入口
 ├── App.jsx                     # 主应用组件
 ├── contexts.jsx                # React Context定义
-├── global_state.jsx            # 旧计算逻辑（GameInfo、GlobalState类，供参考）
-├── GameData.jsx                # 游戏数据加载与转换
+├── game_data.jsx               # 游戏数据加载与转换
 ├── scheme_data.jsx             # 配方方案管理与存储
 ├── needs_list.jsx              # 需求列表管理
 ├── result.jsx                  # 结果显示与计算调用
-├── batch_setting.jsx           # 批量预设（增产剂、建筑）
-├── settings.jsx                # 设置面板
+├── settings.jsx                # 设置面板 + 批量预设
 ├── recipe.jsx                  # 配方显示组件
-├── icon.jsx                    # 图标组件
+├── ui_components.jsx           # UI组件（图标、主题、头部、PWA提示）
 ├── item_select.jsx             # 物品选择弹窗
-├── header.jsx                  # 顶部导航栏
-├── ThemeContext.jsx             # 主题上下文
-├── natural_production_line.jsx  # 现有产线管理
-├── DependencyGraphPage.jsx      # 依赖图页面
+├── DependencyGraphPage.jsx     # 依赖图页面
+├── DependencyGraph.css         # 依赖图样式
 ├── ui_components/
 │   └── auto_sized_input.jsx    # 自适应输入框
-├── engine/                     # 新计算引擎（主引擎）
+├── engine/                     # 计算引擎
 │   ├── index.js                # 主入口（CoreEngine类）
 │   ├── dag.js                  # DAG层级计算（BFS构建图）
-│   ├── scc.js                  # Tarjan SCC算法
+│   ├── graph-utils.js          # 图算法工具（Tarjan SCC、拓扑排序）
 │   ├── unit-cost.js            # 系数表成本计算+矩阵求解
-│   ├── scale.js                # 按需求量缩放
-│   └── matrix.js               # 稀疏矩阵求逆
-├── engine-v1/                  # 旧引擎快照（用于双引擎验证）
-│   └── ...
-└── engine-compare/             # 双引擎对比验证
-    └── index.js
+│   ├── proliferator-optimizer.js # 增产策略优化器
+│   ├── matrix.js               # 稀疏矩阵求逆
+│   └── debug.js                # 调试工具
 ```
 
 ---
