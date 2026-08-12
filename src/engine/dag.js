@@ -4,7 +4,7 @@ import { DEBUG } from './debug.js';
  * 职责：将物品关系转换为DAG并计算拓扑层级
  */
 
-import { ApplyBuildingMultiplier } from '../game_data.jsx';
+import { ApplyBuildingMultiplier, buildItemRecipeIndex } from '../game_data.jsx';
 import { tarjanSCC as sharedTarjanSCC } from './graph-utils.js';
 
 /**
@@ -50,19 +50,8 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
   const proliferatorItems = new Set(); // 记录所有增产剂物品名
 
   // 1. 构建item_data（物品可用配方列表）
-  const itemData = {};
   const recipeData = gameData.recipe_data || [];
-
-  for (let i = 0; i < recipeData.length; i++) {
-    const recipe = recipeData[i];
-    for (const item of Object.keys(recipe.产物 || {})) {
-      if (!(item in itemData)) {
-        itemData[item] = [0];
-      }
-      itemData[item].push(i);
-      itemData[item][0]++;
-    }
-  }
+  const itemData = buildItemRecipeIndex(recipeData);
 
   // 2. 初始化需求物品节点
   for (const need of needs) {
@@ -119,8 +108,8 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
       if (!foundRecipe) {
         continue;
       }
-    } else if (itemData[itemId] && itemData[itemId][0] > 0) {
-      const choiceIndex = schemeData?.item_recipe_choices?.[itemId] ?? 0;
+    } else if (itemData[itemId] && itemData[itemId].length > 1) {
+      const choiceIndex = schemeData?.item_recipe_choices?.[itemId] ?? 1;
       const recipeIndex = itemData[itemId][choiceIndex];
 
       if (DEBUG) console.log(`[buildItemGraph] ${itemId}: itemData=`, itemData[itemId], `choiceIndex=${choiceIndex}, recipeIndex=${recipeIndex}`);

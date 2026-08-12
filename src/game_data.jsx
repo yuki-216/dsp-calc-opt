@@ -352,6 +352,28 @@ export function build_item_data(recipe_data) {
     return item_data;
 }
 
+/**
+ * 构建物品名到配方索引列表的映射
+ * 格式: { "铁板": [null, 0, 1], "铁矿": [null] }
+ * 第一个元素为空（占位），后续为配方索引，与 item_recipe_choices 的 1-based 索引兼容
+ * 供 dag.js 和 proliferator-optimizer.js 使用
+ * @param {Array} recipe_data - 配方数据数组
+ * @returns {Object} 物品->配方索引列表映射
+ */
+export function buildItemRecipeIndex(recipe_data) {
+    const itemData = {};
+    for (let i = 0; i < recipe_data.length; i++) {
+        const recipe = recipe_data[i];
+        for (const item of Object.keys(recipe.产物 || {})) {
+            if (!(item in itemData)) {
+                itemData[item] = [null]; // 占位元素，保持 1-based 索引
+            }
+            itemData[item].push(i);
+        }
+    }
+    return itemData;
+}
+
 export class GameInfo {
     game_data;        // 原始游戏数据
     item_data;        // 物品名->[物品ID, 配方索引1, ...]

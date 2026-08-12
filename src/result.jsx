@@ -1,7 +1,7 @@
 import {useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
-import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, ValidationContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
+import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
 import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
@@ -258,7 +258,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
-    const validation = useContext(ValidationContext);
     const selectedFuel = useContext(FuelContext);
     const is_compact = compact_mode !== "full";
     const is_mobile = compact_mode === "mobile";
@@ -340,15 +339,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const surplusByproducts = engineResult?.surplusByproducts || {};
     const selfConsumption = engineResult?.selfConsumption || {};
     const byproductSources = engineResult?.byproductSources || {};
-
-    // 双引擎验证（复用已计算的新引擎结果）
-    useEffect(() => {
-        if (validation?.enabled && validation?.runValidation && needs_list && Object.keys(needs_list).length > 0) {
-            validation.runValidation(needs_list, engineResult).catch(e => {
-                console.warn("双引擎验证失败:", e);
-            });
-        }
-    }, [engineResult, validation?.enabled]);
 
     // 用于存储历史值的数组，最多保留两个版本
     const [historyValues, setHistoryValues] = useState([]);

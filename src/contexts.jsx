@@ -14,7 +14,6 @@ export const SettingsSetterContext = createContext(null);
 export const GlobalStateContext = createContext(null);
 export const SettingsContext = createContext(null);
 export const GameInfoContext = createContext(null);
-export const ValidationContext = createContext(null);
 export const EngineGraphDataContext = createContext(null);
 export const EngineCalculateContext = createContext(null);
 export const CalculationErrorContext = createContext(null);
@@ -177,15 +176,6 @@ export function ContextProvider({children}) {
         };
     }, [engine, game_info]);
 
-    // 临时占位：提供空的 validation context 以避免其他组件报错
-    const validationContext = {
-        enabled: false,
-        result: null,
-        toggle: () => {},
-        runValidation: async () => null,
-        comparator: null
-    };
-
     // 燃料选择状态（从 scheme_data 中读取）
     const selected_fuel = scheme_data.selected_fuel || "无";
 
@@ -208,7 +198,6 @@ export function ContextProvider({children}) {
             <GlobalStateContext.Provider value={global_state}>
                 <EngineCalculateContext.Provider value={engineCalculate}>
                     <CalculationErrorContext.Provider value={calculationError}>
-                    <ValidationContext.Provider value={validationContext}>
                         <EngineGraphDataContext.Provider value={engineGraphData}>
                             <GameInfoSetterContext.Provider value={set_game_data}>
                                 <SchemeDataSetterContext.Provider value={set_scheme_data}>
@@ -224,7 +213,6 @@ export function ContextProvider({children}) {
                                 </SchemeDataSetterContext.Provider>
                             </GameInfoSetterContext.Provider>
                         </EngineGraphDataContext.Provider>
-                    </ValidationContext.Provider>
                     </CalculationErrorContext.Provider>
                 </EngineCalculateContext.Provider>
             </GlobalStateContext.Provider>

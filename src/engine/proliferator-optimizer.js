@@ -8,7 +8,7 @@
  */
 
 import { CoreEngine } from './index.js';
-import { GlobalState, FUEL_DATA_BASE } from '../game_data.jsx';
+import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
 
 /**
  * 计算给定方案下的总耗电
@@ -279,27 +279,17 @@ function getAvailableChoices(recipe, settings = {}) {
  * @returns {Map} 物品->配方索引映射
  */
 function buildItemToRecipeMap(recipeData, schemeData) {
-  // 构建 itemData：物品 -> [配方数量, 配方索引1, 配方索引2, ...]
-  const itemData = {};
-  for (let i = 0; i < recipeData.length; i++) {
-    const recipe = recipeData[i];
-    for (const item of Object.keys(recipe.产物 || {})) {
-      if (!(item in itemData)) {
-        itemData[item] = [0];
-      }
-      itemData[item].push(i);
-      itemData[item][0]++;
-    }
-  }
+  // 使用共享函数构建 itemData
+  const itemData = buildItemRecipeIndex(recipeData);
 
   const itemToRecipe = new Map();
   const selectedFuel = schemeData?.selected_fuel;
 
   // 根据用户的配方选择构建映射
   for (const item of Object.keys(itemData)) {
-    const choiceIndex = schemeData?.item_recipe_choices?.[item] ?? 0;
+    const choiceIndex = schemeData?.item_recipe_choices?.[item] ?? 1;
     const recipeIndex = itemData[item][choiceIndex];
-    if (recipeIndex !== undefined) {
+    if (recipeIndex !== undefined && recipeIndex !== null) {
       itemToRecipe.set(item, recipeIndex);
     }
   }
@@ -798,31 +788,3 @@ export function formatPowerValue(value) {
   return value.toFixed(2) + ' kW';
 }
 
-/**
- * 格式化增产模式名称
- * @param {number} mode - 增产模式
- * @returns {string} 模式名称
- */
-export function formatProliferatorMode(mode) {
-  switch (mode) {
-    case 0: return '不使用';
-    case 1: return '加速';
-    case 2: return '增产';
-    default: return '未知';
-  }
-}
-
-/**
- * 格式化增产剂等级名称
- * @param {number} level - 增产剂等级
- * @returns {string} 等级名称
- */
-export function formatProliferatorLevel(level) {
-  switch (level) {
-    case 0: return '无';
-    case 1: return 'Mk.I';
-    case 2: return 'Mk.II';
-    case 3: return 'Mk.III';
-    default: return '未知';
-  }
-}
