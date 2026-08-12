@@ -9,6 +9,28 @@ import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
 
+/**
+ * 创建 scheme_data 更新闭包
+ * @param {Function} set_scheme_data - state setter
+ * @param {string} type - 'recipe_choice' | 'recipe_field'
+ * @param {number} recipeId - 配方索引（recipe_field 类型时使用）
+ * @param {string} key - 字段名（recipe_field 类型时使用）
+ */
+function makeSchemeUpdater(set_scheme_data, type, recipeId, key) {
+    return (value) => {
+        set_scheme_data(old => {
+            const s = structuredClone(old);
+            if (type === 'recipe_choice') {
+                s.item_recipe_choices[recipeId] = value;
+            } else {
+                if (!s.scheme_for_recipe[recipeId]) return old;
+                s.scheme_for_recipe[recipeId][key] = value;
+            }
+            return s;
+        });
+    };
+}
+
 // 智能格式化数字：整数显示整数，小数显示到必要位数但不超过fixedNum
 const formatValue = (value, fixedNum) => {
     if (Number.isInteger(value)) return value.toString();
@@ -457,33 +479,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             const fuelRecipeIndex = game_data.recipe_data.findIndex(r => r.isFuelRecipe && r.fuelName === selectedFuel);
             const fuelScheme = fuelRecipeIndex >= 0 ? scheme_data.scheme_for_recipe[fuelRecipeIndex] : null;
 
-            const changeFuelProMode = (value) => {
-                if (fuelRecipeIndex < 0) return;
-                set_scheme_data(old => {
-                    let s = structuredClone(old);
-                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
-                    s.scheme_for_recipe[fuelRecipeIndex]["增产模式"] = value;
-                    return s;
-                });
-            };
-            const changeFuelProNum = (value) => {
-                if (fuelRecipeIndex < 0) return;
-                set_scheme_data(old => {
-                    let s = structuredClone(old);
-                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
-                    s.scheme_for_recipe[fuelRecipeIndex]["增产剂等级"] = value;
-                    return s;
-                });
-            };
-            const changeFuelFactory = (value) => {
-                if (fuelRecipeIndex < 0) return;
-                set_scheme_data(old => {
-                    let s = structuredClone(old);
-                    if (!s.scheme_for_recipe[fuelRecipeIndex]) return old;
-                    s.scheme_for_recipe[fuelRecipeIndex]["建筑"] = value;
-                    return s;
-                });
-            };
+            const changeFuelProMode = fuelRecipeIndex >= 0 ? makeSchemeUpdater(set_scheme_data, 'recipe_field', fuelRecipeIndex, "增产模式") : () => {};
+            const changeFuelProNum = fuelRecipeIndex >= 0 ? makeSchemeUpdater(set_scheme_data, 'recipe_field', fuelRecipeIndex, "增产剂等级") : () => {};
+            const changeFuelFactory = fuelRecipeIndex >= 0 ? makeSchemeUpdater(set_scheme_data, 'recipe_field', fuelRecipeIndex, "建筑") : () => {};
 
             result_table_rows.unshift(
                 <tr key="__power__" className="table-info">
@@ -555,37 +553,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         let is_mineralized = i in mineralize_list;
         let row_class = is_mineralized ? "table-secondary" : "";
 
-        const change_recipe = (value) => {
-            set_scheme_data(old_scheme_data => {
-                let scheme_data = structuredClone(old_scheme_data);
-                scheme_data.item_recipe_choices[i] = value;
-                return scheme_data;
-            })
-        };
-
-        const change_pro_num = (value) => {
-            set_scheme_data(old_scheme_data => {
-                let scheme_data = structuredClone(old_scheme_data);
-                scheme_data.scheme_for_recipe[recipe_id]["增产剂等级"] = value;
-                return scheme_data;
-            })
-        };
-
-        const change_pro_mode = (value) => {
-            set_scheme_data(old_scheme_data => {
-                let scheme_data = structuredClone(old_scheme_data);
-                scheme_data.scheme_for_recipe[recipe_id]["增产模式"] = value;
-                return scheme_data;
-            })
-        };
-
-        const change_factory = (value) => {
-            set_scheme_data(old_scheme_data => {
-                let scheme_data = structuredClone(old_scheme_data);
-                scheme_data.scheme_for_recipe[recipe_id]["建筑"] = value;
-                return scheme_data;
-            })
-        };
+        const change_recipe = makeSchemeUpdater(set_scheme_data, 'recipe_choice', i);
+        const change_pro_num = makeSchemeUpdater(set_scheme_data, 'recipe_field', recipe_id, "增产剂等级");
+        const change_pro_mode = makeSchemeUpdater(set_scheme_data, 'recipe_field', recipe_id, "增产模式");
+        const change_factory = makeSchemeUpdater(set_scheme_data, 'recipe_field', recipe_id, "建筑");
 
         result_table_rows.push(<tr className={row_class} key={i}>
             {/* 操作 */}

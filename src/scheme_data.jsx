@@ -1,6 +1,7 @@
 import {useContext, useEffect, useState} from 'react';
 import {GameInfoContext, GlobalStateContext, SchemeDataSetterContext} from './contexts.jsx';
 import {FaRegSave, FaRegFolderOpen, FaTrash} from 'react-icons/fa';
+import {build_item_data} from './game_data.jsx';
 
 const DEFAULT_SCHEME_DATA = {
     "item_recipe_choices": {"氢": 1},
@@ -21,26 +22,9 @@ const DEFAULT_SCHEME_DATA = {
     },
 };
 
-function get_item_data(game_data) {
-    //通过读取配方表得到配方中涉及的物品信息，item_data中的键名为物品名，键值为
-    //此物品在计算器中的id与用于生产此物品的配方在配方表中的序号
-    var item_data = {};
-    var i = 0;
-    for (var num = 0; num < game_data.recipe_data.length; num++) {
-        for (var item in game_data.recipe_data[num].产物) {
-            if (!(item in item_data)) {
-                item_data[item] = [i];
-                i++;
-            }
-            item_data[item].push(num);
-        }
-    }
-    return item_data;
-}
-
 export function init_scheme_data(game_data) {
     let scheme_data = structuredClone(DEFAULT_SCHEME_DATA);
-    let item_data = get_item_data(game_data);
+    let item_data = build_item_data(game_data.recipe_data);
     scheme_data.item_recipe_choices = {};
     scheme_data.scheme_for_recipe = [];
     scheme_data.selected_fuel = "无";

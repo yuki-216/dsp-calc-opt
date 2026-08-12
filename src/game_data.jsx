@@ -331,6 +331,27 @@ export function getFuelRecipe(fuelName) {
  * - all_target_items: 所有可生产的物品名列表
  * - icon_grid: 图标网格布局信息
  */
+
+/**
+ * 构建物品名到 [物品ID, 配方索引1, ...] 的映射
+ * @param {Array} recipe_data - 配方数据数组
+ * @returns {Object} item_data 映射
+ */
+export function build_item_data(recipe_data) {
+    const item_data = {};
+    let i = 0;
+    for (let num = 0; num < recipe_data.length; num++) {
+        for (const item in recipe_data[num].产物) {
+            if (!(item in item_data)) {
+                item_data[item] = [i];
+                i++;
+            }
+            item_data[item].push(num);
+        }
+    }
+    return item_data;
+}
+
 export class GameInfo {
     game_data;        // 原始游戏数据
     item_data;        // 物品名->[物品ID, 配方索引1, ...]
@@ -403,19 +424,7 @@ export class GameInfo {
      * }
      */
     init_item_data() {
-        let item_data = {};
-        let recipe_data = this.game_data.recipe_data;
-        var i = 0;
-        for (var num = 0; num < recipe_data.length; num++) {
-            for (var item in recipe_data[num].产物) {
-                if (!(item in item_data)) {
-                    item_data[item] = [i];
-                    i++;
-                }
-                item_data[item].push(num);
-            }
-        }
-        this.item_data = item_data;
+        this.item_data = build_item_data(this.game_data.recipe_data);
     }
 }
 

@@ -4,7 +4,8 @@ import {
     GameInfoSetterContext,
     SchemeDataSetterContext,
     SettingsContext,
-    SettingsSetterContext
+    SettingsSetterContext,
+    safe_parse_json
 } from './contexts.jsx';
 import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
@@ -13,10 +14,6 @@ import {Settings, BatchSetting, FuelSelect} from './settings.jsx';
 import {default_game_data} from "./game_data.jsx";
 import {ItemIcon} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
-
-function safe_parse_json(str) {
-    try { return JSON.parse(str); } catch { return null; }
-}
 
 function UserSettings({show}) {
     let class_show = show ? "" : "d-none";

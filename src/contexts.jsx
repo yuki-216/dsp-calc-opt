@@ -56,7 +56,7 @@ function get_compact_mode(width) {
 
 export const CompactModeContext = createContext("full");
 
-function safe_parse_json(str) {
+export function safe_parse_json(str) {
     try {
         return JSON.parse(str);
     } catch {
