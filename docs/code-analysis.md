@@ -18,6 +18,7 @@
 | 2026-07-31 | 代码清理：删除未使用文件，优化性能，统一建筑倍率计算 |
 | 2026-07-31 | 引擎优化：多来源物品识别、延迟展开、循环组矩阵求逆优化 |
 | 2026-08-04 | 代码整合：合并文件减少数量，删除 scale.js，清理注释代码 |
+| 2026-08-12 | 新增燃料计算、占地计算系统、多目标优化策略 |
 
 ---
 
@@ -44,6 +45,7 @@ src/
 │   ├── dag.js                  # DAG层级计算（BFS构建图）
 │   ├── graph-utils.js          # 图算法工具（Tarjan SCC、拓扑排序）
 │   ├── unit-cost.js            # 系数表成本计算+矩阵求解
+│   ├── proliferator-optimizer.js  # 增产策略优化器
 │   └── matrix.js               # 稀疏矩阵求逆
 └── engine-compare/             # 双引擎对比验证
     └── index.js                # EngineComparator类
@@ -115,17 +117,7 @@ ContextProvider
 └── EngineGraphDataContext    # 引擎图数据
 ```
 
-### 3.2 数据流
-
-```
-用户输入 → 组件事件 → Context更新 → 重新渲染
-   ↓           ↓           ↓           ↓
-需求列表    onClick    set_needs_list  Result
-设置修改    onChange   set_settings    Settings
-方案选择    onChange   set_scheme_data BatchSetting
-```
-
-### 3.3 数据持久化
+### 3.2 数据持久化
 
 | 数据 | localStorage键 | 说明 |
 |------|----------------|------|
@@ -148,7 +140,7 @@ ContextProvider
 ```
 用户需求 → DAG层级计算 → 单位成本计算 → 结果汇总
   ↓           ↓              ↓            ↓
-BFS构建图   SCC检测      系数表+矩阵求逆  资源/设备/电力
+BFS构建图   SCC检测      系数表+矩阵求逆  资源/设备/电力/占地
   ↓           ↓              ↓            ↓
 依赖图      循环组         成本展开      最终结果
 ```
@@ -172,7 +164,7 @@ class CoreEngine {
 3. **单位成本计算**（unit-cost.js）：系数表追踪成本，按SCC顺序展开
    - 单节点SCC：直接代入依赖方
    - 多节点SCC（循环组）：构建矩阵，求逆求解
-4. **结果汇总**（index.js）：从虚拟"解"物品提取资源消耗、设备数量、电力等
+4. **结果汇总**（index.js）：从虚拟"解"物品提取资源消耗、设备数量、电力、占地等
 
 ### 4.4 系数表设计
 
@@ -182,14 +174,7 @@ class CoreEngine {
 - 无前缀：物品总成本符号
 - 负数：副产物（产出而非消耗）
 
-### 4.5 逆生产处理
-
-当副产物的系数为负（表示有剩余），且该物品已有执行次数时：
-- 计算可抵消量
-- 使用代入加和抵消成本
-- 处理自身副产物合并
-
-### 4.6 增产剂处理
+### 4.5 增产剂处理
 
 **增产剂等级**：
 
@@ -209,17 +194,7 @@ class CoreEngine {
 | 增产 | 2 | 产出倍率 × 增产效果 |
 | 透镜 | 3 | 产出倍率 × 加速效果（仅特定配方） |
 
-**喷涂成本计算**：
-- Mk.I: 1/12
-- Mk.II: 1/24（普通）或 1/27（自增产）
-- Mk.III: 1/60（普通）或 1/74（自增产）
-
-**UI行为**：
-- 增产模式选择（ProModeSelect）：若配方无增产选项（`增产`字段为0），组件返回null隐藏
-- 增产剂等级选择（ProNumSelect）：若配方无增产模式选项，组件返回null隐藏
-- 原矿等无增产配方不会显示增产剂等级选择图标
-
-### 4.7 建筑倍率（ApplyBuildingMultiplier）
+### 4.6 建筑倍率（ApplyBuildingMultiplier）
 
 根据建筑类型应用不同的产出倍率：
 
@@ -234,62 +209,171 @@ class CoreEngine {
 
 ---
 
-## 5. 引擎优化设计
+## 5. 燃料计算系统
 
-### 5.1 优化目标
-
-减少逆生产计算次数，提高计算性能。
-
-### 5.2 核心思路
-
-通过跳过多来源物品的展开，最后批量处理，减少逆生产计算次数。
-
-### 5.3 多来源物品识别
-
-在DAG构建阶段识别多来源物品（有多个配方产出的物品）：
+### 5.1 燃料数据
 
 ```javascript
-// 在buildItemGraph函数中
-const multiSourceItems = new Set();
-const outputRecipeIndices = new Map();
+export const FUEL_DATA_BASE = [
+  { name: "无", heatValue: 0, device: "", restrict: "" },
+  { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
+  { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
+  // ... 更多燃料
+];
 
-// BFS搜索中，给配方中的所有产物计数加1
-for (const outputId of Object.keys(recipe.产物 || {})) {
-  if (!outputRecipeIndices.has(outputId)) {
-    outputRecipeIndices.set(outputId, 0);
-  }
-  outputRecipeIndices.set(outputId, outputRecipeIndices.get(outputId) + 1);
-}
-
-// 识别多来源物品：计数 > 1 的就是多来源物品
-for (const [itemId, count] of outputRecipeIndices) {
-  if (count > 1) {
-    multiSourceItems.add(itemId);
-  }
-}
+export const DEVICE_POWER_CONSUMPTION = {
+  "火力发电厂": 2.16,
+  "微型聚变发电站": 15,
+  "人造恒星": 72
+};
 ```
 
-### 5.4 展开顺序处理
+### 5.2 燃料配方生成
 
-1. SCC分析得到展开顺序
-2. 按顺序展开物品
-3. 在展开过程中检查物品是否是多来源物品，如果是就跳过展开
-4. 最后统一展开多来源物品（deferredItems）
+在 `get_game_data()` 函数中，自动添加燃料配方：
 
-### 5.5 循环组处理
+```javascript
+FUEL_DATA.forEach(fuel => {
+  if (fuel.name === "无") return;
+  const recipe = {
+    Type: 3,
+    原料: { [fuel.name]: 1 },
+    产物: { "电力": fuel.heatValue / devicePower },
+    设施: factoryIndex,
+    时间: 1,
+    增产: getFuelProliferatorCode(fuel.restrict),
+    isFuelRecipe: true,
+    fuelName: fuel.name
+  };
+  data.recipe_data.push(recipe);
+});
+```
 
-- 循环组不跳过，直接进行矩阵求逆
-- 矩阵求逆后，只有非多来源物品才代入到依赖边
+### 5.3 计算逻辑
+
+燃料配方初始化后，完全复用现有计算逻辑：
+- 电力作为"物品"参与BFS建边和SCC分析
+- 燃料原料被正确追溯
+- 增产剂影响：加速模式减少设备数量，增产模式减少燃料需求
 
 ---
 
-## 6. 数据层分析（game_data.jsx）
+## 6. 占地计算系统
 
-### 6.1 数据来源
+### 6.1 占地公式
+
+```javascript
+// 在 CoreEngine.calculate() 中
+const footprintDetails = {};
+let totalFootprint = 0;
+
+for (const [itemId, detail] of Object.entries(buildingDetails)) {
+  const n = Math.ceil(detail.设备数量);  // 进一法取整
+  const l = Object.keys(rawInputs).length + Object.keys(rawOutputs).length;  // 种类数之和
+  
+  let area = 0;
+  if (factoryName.includes('制造台')) {
+    area = (4 * n - 1) * (3 + l / 2);
+  } else if (factoryName.includes('研究站')) {
+    const researchStations = Math.ceil(n / stackM);
+    if (node.recipeId === 73) {  // 宇宙矩阵
+      area = 12 * (5.5 * researchStations);
+    } else {
+      area = 5 * researchStations * (5 + l / 2);
+    }
+  }
+  // ... 其他建筑类型
+  
+  footprintDetails[itemId] = { area, n, l, factoryName };
+  totalFootprint += area;
+}
+```
+
+### 6.2 建筑类型公式
+
+| 建筑类型 | 公式 |
+|----------|------|
+| 制造台 | (4n-1) × (3+l/2) |
+| 熔炉 | 3n × (3+l/2) |
+| 原油精炼厂 | 3n × (6+l/2) |
+| 分馏塔 | 5.5 × (4n-1) |
+| 化工厂 | 7n × (4+l/2) |
+| 微型粒子对撞机 | 5n × (9+l/2) |
+| 研究站 | 5×ceil(n/m) × (5+l/2) |
+| 宇宙矩阵 | 12 × (5.5×ceil(n/m)) |
+| 射线接收站 | (8√n-1)² |
+| 人造恒星 | 49 |
+| 火力/微型聚变发电 | 28 |
+
+### 6.3 参数说明
+
+- `n` = ceil(设备数量)，进一法取整
+- `l` = 原料种类数 + 产物种类数（不需要GCD简化）
+- `m` = 研究站堆叠数（默认15）
+- 宇宙矩阵使用配方索引号73识别
+
+---
+
+## 7. 增产策略优化器
+
+### 7.1 优化器架构
+
+```javascript
+// src/engine/proliferator-optimizer.js
+export async function optimizeProliferatorStrategy(
+  gameData, schemeData, settings, needs,
+  onProgress = null, onLog = null,
+  strategy = 'min_power'  // 'min_power' | 'min_raw_ore' | 'min_footprint'
+)
+```
+
+### 7.2 两阶段优化算法
+
+**第一阶段：循环组优化**
+1. 强制所有物品使用最高等级增产剂
+2. SCC分析找出循环组
+3. 坐标下降优化循环组
+4. 持久化最优策略
+
+**第二阶段：单物品优化**
+1. 重新SCC分析
+2. 按SCC正序遍历所有物品
+3. 跳过已持久化的物品（循环组成员）
+4. 对每个未持久化物品尝试所有增产选择
+
+### 7.3 多目标策略
+
+| 策略 | 标识 | 目标函数 | 说明 |
+|------|------|---------|------|
+| 最小电力 | `min_power` | totalEnergyCost | 最小化总耗电（默认） |
+| 最小原矿 | `min_raw_ore` | totalRawOre | 最小化原矿消耗总量 |
+| 最小占地 | `min_footprint` | totalFootprint | 最小化总占地面积 |
+
+### 7.4 返回值结构
+
+```javascript
+{
+  optimalScheme,        // 最优方案
+  initialPower,         // 初始耗电
+  optimalPower,         // 最终耗电
+  strategy,             // 使用的策略标识
+  initialObjective,     // 初始目标值
+  optimalObjective,     // 最终目标值
+  changes,              // 策略变更列表
+  processedCount,       // 已处理物品数
+  totalCount            // 总物品数
+}
+```
+
+---
+
+## 8. 数据层分析（game_data.jsx）
+
+### 8.1 数据来源
 
 从 `data/Vanilla.json` 文件加载原版游戏数据。
 
-### 6.2 数据转换
+### 8.2 数据转换
 
 原始JSON → 游戏数据结构：
 
@@ -305,18 +389,7 @@ game_data = {
 }
 ```
 
-### 6.3 核心类
-
-**GameInfo类**：游戏数据预处理
-- `init_item_data()` — 构建物品→配方映射
-- `init_icon_layout()` — 构建图标网格布局
-
-**GlobalState类**：计算状态封装
-- 从 GameInfo 获取 game_data、item_data
-- 存储 scheme_data、settings
-- 预计算 sprayCosts（增产剂喷涂成本）
-
-### 6.3 配方数据结构
+### 8.3 配方数据结构
 
 ```javascript
 recipe_data[i] = {
@@ -328,7 +401,7 @@ recipe_data[i] = {
 }
 ```
 
-### 6.4 增产支持模式（位掩码）
+### 8.4 增产支持模式（位掩码）
 
 | 位 | 值 | 含义 |
 |----|-----|------|
@@ -338,51 +411,30 @@ recipe_data[i] = {
 
 ---
 
-## 7. 图标系统（ui_components.jsx）
+## 9. 图标系统（ui_components.jsx）
 
-### 7.1 精灵图加载
+### 9.1 精灵图加载
 
 通过 `import.meta.glob('../icon/*.json')` 加载精灵图元数据，构建 `image_indices` 映射。
 
-### 7.2 图标查找流程
+### 9.2 图标查找流程
 
 ```
 物品名称 → get_icon_by_item() → item_icon_name[名称] → 图标名（如 "accelerator-1"）
 图标名 → Icon组件 → image_indices["Vanilla"][图标名] → CSS背景定位
 ```
 
-### 7.3 图标资源
-
-- `icon/Vanilla.json` — 精灵图元数据（各图标的x/y/宽高）
-- `icon/Vanilla.png` / `icon/Vanilla.webp` — 精灵图图片
-
 ---
 
-## 8. 双引擎验证（engine-compare/）
+## 10. 双引擎验证（engine-compare/）
 
-### 8.1 目的
+### 10.1 目的
 
 通过同时运行基准版本和优化版本，对比结果验证优化的正确性。
 
-### 8.2 核心类
-
-```javascript
-class EngineComparator {
-  constructor(gameData, schemeData, settings)
-  compare(needs, options)  // 运行对比
-}
-```
-
-### 8.3 对比维度
+### 10.2 对比维度
 
 - 配方执行次数
 - 多余产物
 - 设备数量
 - 耗电
-
-### 8.4 验证流程
-
-1. 运行基准版本（engine-v1）
-2. 运行优化版本（engine）
-3. 对比结果
-4. 记录性能差异

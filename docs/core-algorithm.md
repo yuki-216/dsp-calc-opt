@@ -68,18 +68,6 @@ SCC 内部搜索优化
 | 循环间关系 | 无法表达 | DAG 压缩后自然表达 |
 | 增产优化 | 难以加入 | SCC 内部可独立优化 |
 
-### 3.4 为什么放弃传统递归
-
-传统量化计算：递归展开生产链（目标物品 → 原料 → 继续递归 → 直到矿物）。
-
-普通生产链没有问题，但循环（如 金刚石→石墨→MK2→金刚石）无法自然结束。
-
-传统解决方案：特判循环、等比数列、多轮迭代逼近。缺点：
-1. 逻辑复杂
-2. 容易遗漏特殊情况
-3. 难以加入增产优化
-4. 多层循环处理困难
-
 ---
 
 ## 4. 核心类设计
@@ -118,18 +106,29 @@ calculate(needs, recipes) {
   // 4. 按 SCC 逆拓扑序展开成本到 solution
   expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap, this.recipeMap);
 
-  // 5. 提取结果
+  // 5. 提取结果（资源消耗、设备数量、电力、占地等）
   // ...
 }
 ```
 
 ### 4.3 输出数据
 
-核心计算通过 `EngineGraphDataContext` 传递给依赖图模块：
-- `edges` - BFS 构建的边 `[{from: 产物, to: 原料}]`
-- `sccs` - SCC 分组（逆拓扑序）
-- `graph` - 物品图 `Map<itemId, ItemNode>`
-- `proliferatorEdgeKeys` - 增产剂边标记 `Set<string>`
+```javascript
+{
+  resourceUsage,        // 资源消耗
+  recipeExecutions,     // 配方执行次数
+  surplusByproducts,    // 剩余副产物
+  buildingDetails,      // 建筑详情 {设备数量, 执行次数, 单次执行设备数}
+  buildingList,         // 建筑数量汇总
+  selfConsumption,      // 自消耗系数
+  byproductSources,     // 副产物来源
+  energyCost,           // 生产设备耗电
+  minerEnergyCost,      // 采集设备耗电
+  totalEnergyCost,      // 总耗电
+  footprintDetails,     // 占地详情（每物品）
+  totalFootprint        // 总占地面积
+}
+```
 
 ---
 
@@ -219,8 +218,6 @@ function tarjanSCC(graph, edges) {
 
 Tarjan输出顺序：逆拓扑序（`sccGroups[0]`=最终产物/顶层，`sccGroups[last]`=原矿/底层）。
 
-注意：`graph-utils.js` 中的 `tarjanSCC` 已改为输出逆拓扑序，核心计算展开时正向遍历即可。
-
 ---
 
 ## 7. 单位成本计算（unit-cost.js）
@@ -235,188 +232,11 @@ Tarjan输出顺序：逆拓扑序（`sccGroups[0]`=最终产物/顶层，`sccGro
 
 ### 7.2 展开顺序
 
-按SCC逆拓扑序展开（从顶层/最终产物开始，正向遍历）：
+按SCC逆拓扑序展开（从顶层/最终产物开始，正向遍历）。
 
-```javascript
-function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap, recipeMap) {
-  for (let i = 0; i < sccs.length; i++) {
-    const scc = sccs[i];
+### 7.3 矩阵求解（solveSCCByMatrix）
 
-    if (scc.size === 1) {
-      // 单节点 SCC：直接代入
-      const itemId = scc.values().next().value;
-      substituteDeferred(solutionCost, solutionId, itemId, itemCost, ...);
-    } else {
-      // 多节点 SCC（循环组）：矩阵求逆（支持配方变量法）
-      solveSCCByMatrix(scc, costs, graph, recipeMap);
-      for (const itemId of scc) {
-        substituteDeferred(solutionCost, solutionId, itemId, itemCost, ...);
-      }
-    }
-  }
-}
-```
-
-### 7.3 代入函数（substituteDeferred）
-
-```javascript
-function substituteDeferred(target, targetItemId, key, source, costs, byproductMap, deferredItems) {
-  const coeff = target[key];
-  delete target[key];
-  
-  // 阶段1：代入加和
-  for (const [k, v] of Object.entries(source)) {
-    target[k] = (target[k] || 0) + coeff * v;
-  }
-  
-  // 阶段2：逆生产检测
-  // 检查副产物是否可以抵消
-  
-  // 阶段3：执行逆生产
-  // 使用代入加和抵消成本
-}
-```
-
-### 7.4 矩阵求解（solveSCCByMatrix）
-
-对循环组构建矩阵，求逆求解：
-
-```javascript
-function solveSCCByMatrix(scc, costs, graph, recipeMap) {
-  const sccArray = [...scc];
-  
-  // ====== 配方变量法：检测并合并同配方产物 ======
-  // 当同一配方的多个产物（如精炼油和氢气）同时出现在 SCC 中时，
-  // 它们的成本方程线性相关（a₂·b₂=1），导致矩阵奇异。
-  // 解决方案：将同一配方的多个产物合并为一个"配方执行次数"变量。
-  const mergeMap = new Map(); // coProductId → { representative, ratio }
-  
-  // 1. 按配方分组 SCC 中的物品
-  // 2. 同配方多产物 → 合并为一个矩阵变量（配方执行次数）
-  // 3. 联产物的系数按产出比合并到代表物品的列
-  // 4. 联产物的行被删除（与代表行线性相关）
-  
-  // 构建 reducedArray（排除被合并的联产物）
-  const reducedArray = sccArray.filter(id => !mergeMap.has(id));
-  const n = reducedArray.length;
-  
-  // 构建矩阵A + 常数项
-  const A = Array.from({ length: n }, () => new Array(n).fill(0));
-  const constTerms = new Map(); // itemId → { key: coeff }（单位次数的常数项）
-  
-  for (let j = 0; j < n; j++) {
-    const itemId = reducedArray[j];
-    const cost = costs.get(itemId);
-    
-    // 对角线放$x（执行次数）
-    const xKey = `$${itemId}`;
-    const xValue = cost[xKey] || 1;
-    A[j][j] = xValue;
-    
-    // 分离依赖项和常数项
-    const constTerm = {};
-    for (const [key, coeff] of Object.entries(cost)) {
-      // 1. 联产物引用（代表物品的成本中有 "精炼油:-2"）→ 常数项原样保留
-      if (mergeMap.has(key)) {
-        const { representative } = mergeMap.get(key);
-        if (representative === itemId) {
-          // 本物品是代表，联产物引用 → 常数项原样保留
-          constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
-          continue;
-        }
-        // 本物品不是代表，依赖联产物 → 转为依赖代表物品（÷(-ratio)）
-        const { ratio } = mergeMap.get(key);
-        const targetId = representative;
-        const targetCoeff = coeff / (-ratio);
-        A[reducedIndex.get(targetId)][j] += -targetCoeff;
-        continue;
-      }
-      
-      // 2. $物品 → 常数项（保留执行次数，求解后自动包含）
-      if (key === xKey) {
-        constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
-        continue;
-      }
-      
-      // 3. 循环组内引用（且在 reducedArray 中）→ 矩阵变量
-      if (scc.has(key) && reducedIndex.has(key)) {
-        A[reducedIndex.get(key)][j] += -coeff;
-        continue;
-      }
-      
-      // 4. 外部依赖 → 常数项
-      constTerm[key] = (constTerm[key] || 0) + coeff / xValue;
-    }
-    constTerms.set(itemId, constTerm);
-  }
-  
-  // 求逆矩阵
-  const A_inv = invertMatrix(A);
-  
-  // 更新 costs：每个物品的真实成本
-  // 常数项已包含 $物品，求解后自动包含执行次数，无需额外添加
-  for (let j = 0; j < n; j++) {
-    const itemId = reducedArray[j];
-    const newCost = {};
-    
-    for (let i = 0; i < n; i++) {
-      const execCount = A_inv[i][j];
-      if (execCount === 0) continue;
-      
-      if (execCount < 0) {
-        // 负依赖（副产物）：只记录 $物品，让阶段2判断逆生产
-        newCost[`$${reducedArray[i]}`] = (newCost[`$${reducedArray[i]}`] || 0) + execCount;
-      } else {
-        // 正依赖（原料）：展开常数项（已包含 $物品）
-        const constTerm = constTerms.get(reducedArray[i]);
-        if (!constTerm) continue;
-        for (const [key, coeff] of Object.entries(constTerm)) {
-          newCost[key] = (newCost[key] || 0) + coeff * execCount;
-        }
-      }
-    }
-    costs.set(itemId, newCost);
-  }
-  
-  // 联产物成本推导：从代表物品成本转换
-  // - $代表 → $联产物：只改名，不除以 ratio（$x 数量不变）
-  // - 联产物引用（精炼油:-2t）→ 代表物品引用（氢:-t/ratio²）：除以 ratio²
-  // - 其他所有项（外部依赖等）：除以 ratio
-  for (const [coProductId, { representative, ratio }] of mergeMap) {
-    const repCost = costs.get(representative);
-    if (!repCost) continue;
-    const coProductCost = {};
-    for (const [key, coeff] of Object.entries(repCost)) {
-      if (key === `$${representative}`) {
-        coProductCost[`$${coProductId}`] = coeff; // 只改名
-      } else if (key === coProductId) {
-        coProductCost[representative] = coeff / (ratio * ratio); // 除以 ratio²
-      } else {
-        coProductCost[key] = coeff / ratio; // 除以 ratio
-      }
-    }
-    costs.set(coProductId, coProductCost);
-  }
-}
-```
-
-#### 配方变量法详解
-
-**问题**：当同一配方的多个产物（如精炼油和氢气都选择 X 裂解配方）同时出现在 SCC 中时，它们的成本方程线性相关，矩阵不可逆。
-
-**数学原理**：
-- 设配方 X 产出 `r·A + h·B`，A 和 B 都选择配方 X
-- A 的成本方程：`a₁·cₐ + a₂·cᵦ = bₐ`（a₂ = -h/r 是 B 的副产品系数）
-- B 的成本方程：`b₁·cₐ + b₂·cᵦ = bᵦ`（b₁ = -r/h 是 A 的副产品系数）
-- 由于 `a₂·b₂ = 1`，两行线性相关，矩阵奇异
-
-**解决方案**：将 A 和 B 合并为一个"配方执行次数"变量 t：
-- A 的成本 = t·bₐ，B 的成本 = t·bᵦ × (h/r)
-- 矩阵维度降低 1，消除线性相关
-- 求解后，联产物成本从代表物品成本按三条规则推导：
-  1. `$代表` → `$联产物`：只改名（执行次数不变）
-  2. 联产物引用（如精炼油:-2）：除以 ratio²（变倒数关系）
-  3. 其他所有项（外部依赖等）：除以 ratio
+对循环组构建矩阵，求逆求解。支持配方变量法处理联产物线性相关问题。
 
 ---
 
@@ -440,57 +260,45 @@ function solveSCCByMatrix(scc, costs, graph, recipeMap) {
 | 增产 | 2 | 产出倍率 × 增产效果 |
 | 透镜 | 3 | 产出倍率 × 加速效果（仅特定配方） |
 
-### 8.3 喷涂成本计算
-
-```javascript
-let sprayCost;
-if (safeLevel === 1) {
-  sprayCost = 1 / 12;
-} else if (safeLevel === 2) {
-  sprayCost = proliferateItself ? 1 / 27 : 1 / 24;
-} else if (safeLevel === 3) {
-  sprayCost = proliferateItself ? 1 / 74 : 1 / 60;
-}
-
-// 增产剂需求 = 原料总数 × 喷涂成本
-const proAmount = totalMaterialCount * sprayCost;
-```
-
 ---
 
-## 9. 建筑倍率（ApplyBuildingMultiplier）
+## 9. 占地计算
 
-根据建筑类型应用不同的产出倍率：
+### 9.1 计算流程
+
+在 `calculate()` 函数中，步骤8计算占地面积：
 
 ```javascript
-function ApplyBuildingMultiplier(output_num, building_name, item, settings) {
-  if (building_name === "采矿机") {
-    output_num *= settings.mining_speed_multiple * settings.covered_veins_small;
-  } else if (building_name === "大型采矿机") {
-    output_num *= settings.mining_speed_multiple * settings.covered_veins_large * settings.mining_efficiency_large;
-  } else if (building_name === "原油萃取站") {
-    output_num *= settings.mining_speed_multiple * settings.mining_speed_oil;
-  } else if (building_name === "轨道采集器") {
-    output_num *= settings.mining_speed_multiple;
-    // 特定资源倍率...
-  } else if (building_name === "大气采集站") {
-    output_num *= settings.mining_speed_multiple;
-    // 特定气体倍率...
-  } else if (building_name.endsWith("分馏塔")) {
-    output_num *= settings.fractionating_speed;
+// 8. 计算占地
+for (const [itemId, detail] of Object.entries(buildingDetails)) {
+  const n = Math.ceil(detail.设备数量);  // 进一法取整
+  const l = Object.keys(recipe.原料).length + Object.keys(recipe.产物).length;  // 种类数之和
+  
+  // 根据建筑类型选择公式
+  if (factoryName.includes('制造台')) {
+    area = (4 * n - 1) * (3 + l / 2);
+  } else if (factoryName.includes('研究站')) {
+    const researchStations = Math.ceil(n / stackM);
+    if (recipeId === 73) {  // 宇宙矩阵
+      area = 12 * (5.5 * researchStations);
+    } else {
+      area = 5 * researchStations * (5 + l / 2);
+    }
   }
-  return output_num;
+  // ... 其他建筑类型
 }
 ```
+
+### 9.2 参数说明
+
+- `n` = ceil(设备数量)，进一法取整
+- `l` = 原料种类数 + 产物种类数（不需要GCD简化）
+- `m` = 研究站堆叠数（默认15）
+- 宇宙矩阵使用配方索引号73识别
 
 ---
 
 ## 10. 增产策略优化：两阶段优化算法
-
-> 本节描述阶段四的核心算法——在DAG层级会因增产选择而动态变化的约束下，寻找全局最优增产策略。
->
-> **当前实现**：已重构为两阶段优化算法，详见 `docs/增产策略优化算法详解.md`。
-> 支持多种优化目标函数（最小电力、最小原矿输出），通过 `strategy` 参数选择。
 
 ### 10.1 核心矛盾
 
@@ -498,178 +306,33 @@ DAG层级有两层功能：
 1. **遍历顺序**：按DAG顺序（低→高）遍历增产选择，可实现完美剪枝
 2. **计算顺序**：给单次计算成本提供迭代顺序
 
-但增产剂本身是物品，有自己的生产链。选择增产剂 = 添加新的原料依赖，会改变DAG层级：
-- 产物的DAG层级 > 所有原料的DAG层级
-- 低DAG物品选择高DAG增产剂 → 增产剂层级被拉低 → DAG结构变化
+但增产剂本身是物品，有自己的生产链。选择增产剂 = 添加新的原料依赖，会改变DAG层级。
 
-这形成了**循环依赖**：遍历顺序依赖DAG，DAG依赖增产选择。
+### 10.2 两阶段优化算法
 
-### 10.2 关键洞察
+**第一阶段：循环组优化**
+1. 强制所有物品使用最高等级增产剂
+2. SCC分析找出循环组
+3. 坐标下降优化循环组
+4. 持久化最优策略
 
-> **不需要等所有低层级物品都确定，只需要等该物品的所有上游物品确定即可。**
+**第二阶段：单物品优化**
+1. 重新SCC分析
+2. 按SCC正序遍历所有物品
+3. 跳过已持久化的物品（循环组成员）
+4. 对每个未持久化物品尝试所有增产选择
 
-上游物品必然在更低层，所以DAG顺序是"上游先确定"的充分条件。但更低层的物品不全是上游——这是包含关系。
+### 10.3 多目标策略支持
 
-### 10.3 三级递进假设
-
-| 层级 | 假设条件 | DAG变化 | 算法 |
-|------|---------|---------|------|
-| 第一层 | 只能选比自己层级低的增产剂 | 不变 | 标准DAG遍历 |
-| 第二层 | 增产剂产线不能用高于自己层级的增产剂 | 变化但无循环组 | 递归处理，必然终止 |
-| 第三层 | 完全自由选择 | 变化且有循环组 | 递归DFS + 动态SCC |
-
-### 10.4 第三层算法：递归DFS
-
-#### 核心思想
-
-递归DFS在DAG引导下搜索增产策略空间。**只有当选择高级增产剂创建新的循环依赖时才展开新的递归分支**，低级选择直接内联计算。
-
-这是"最短路径"：物品使用低级增产剂不会分散出无效的新遍历分支，只讨论发起循环组变化的必要分支。
-
-#### 选择分类
-
-| 选择类型 | 是否产生新分支 | 处理方式 |
-|---------|-------------|---------|
-| 无增产 | 否 | 直接计算 O(1) |
-| 低级增产剂（<物品层级） | 否 | 直接计算 O(1) |
-| 同级加速↔增产 | 否 | 直接计算 O(1)，无需重新SCC分析 |
-| 高级增产剂（>物品层级） | **是** | 形成/扩大SCC，递归处理 |
-
-#### 伪代码
-
-```python
-# 全局状态
-resolved = {}        # item → choice（已持久化的最优策略）
-edges = []           # 当前图的边（含增产剂边）
-dag_levels = {}      # item → dag_level
-
-CHOICES = [无, MK1加速, MK1增产, MK2加速, MK2增产, MK3加速, MK3增产]
-
-def main_optimize(items):
-    """主入口：按DAG顺序遍历所有物品"""
-    for item in sorted(items, key=lambda x: dag_levels[x]):
-        if item in resolved:
-            continue
-        optimize_item(item)
-    return resolved
-
-def optimize_item(item):
-    """优化单个物品的增产策略"""
-    best_q = -∞
-    best_choice = None
-
-    for choice in CHOICES:
-        # 保存状态（用于回溯）
-        saved_edges = copy(edges)
-        saved_dag = copy(dag_levels)
-
-        if choice == 无:
-            q = compute_q()
-        else:
-            new_dep = get_proliferator_item(choice)  # e.g., MK2
-
-            if dag_levels[new_dep] <= dag_levels[item]:
-                # 低级/同级选择：不产生新循环，直接计算
-                add_proliferator_edge(item, new_dep)
-                q = compute_q()
-            else:
-                # 高级选择：可能形成SCC
-                add_proliferator_edge(item, new_dep)
-                scc = run_scc_analysis()
-                scc_of_item = find_scc_containing(scc, item)
-                scc_items = list(scc_of_item)
-
-                # 递归处理SCC的外部上游
-                handle_unresolved_upstream(scc_items)
-
-                # SCC内部全遍历（此时外部上游已全部确定）
-                best_q_scc = -∞
-                traverse_scc(scc_items, set(), 0,
-                             lambda q: update_if_better(best_q_scc, q))
-                q = best_q_scc
-
-        if q > best_q:
-            best_q, best_choice = q, choice
-
-        # 回溯状态
-        edges = saved_edges
-        dag_levels = saved_dag
-
-    # 持久化最优策略（不可推翻）
-    resolved[item] = best_choice
-    return best_q
-```
-
-### 10.5 持久化与剪枝
-
-**持久化的正确性**：
-
-当一个物品（或循环组）的所有上游都已确定策略后，遍历其所有增产选择得到的最优策略可以**永久持久化**——因为上游不会再变，局部最优 = 全局最优。
-
-持久化后的物品/循环组**永远不会被重新考虑**，这是算法效率的关键来源。
-
-**SCC持久化**：
-
-当一个SCC的外部上游全部确定后，SCC内部全遍历得到的最优策略可以永久持久化。这提供了强大的剪枝——SCC内的物品一旦resolved，就不再参与后续搜索。
-
-### 10.6 为什么这是最短路径
-
-1. **低级选择不产生分支**：选低级增产剂直接内联计算，不展开递归
-2. **只有必要分支**：只有选高级增产剂形成循环时才展开
-3. **SCC内部全遍历**：一旦进入SCC，穷举所有组合，得到确定性最优
-4. **不重复**：同级选择（加速↔增产）不触发SCC分析
-
-搜索空间远小于 7^N（N为循环组最大成员数），而是只包含"必要分支"。
+| 策略 | 标识 | 目标函数 | 说明 |
+|------|------|---------|------|
+| 最小电力 | `min_power` | totalEnergyCost | 最小化总耗电（默认） |
+| 最小原矿 | `min_raw_ore` | totalRawOre | 最小化原矿消耗总量 |
+| 最小占地 | `min_footprint` | totalFootprint | 最小化总占地面积 |
 
 ---
 
-## 11. 优化设计：多来源物品延迟展开
-
-### 11.1 优化目标
-
-减少逆生产计算次数，提高计算性能。
-
-### 11.2 核心思路
-
-通过跳过多来源物品的展开，最后批量处理，减少逆生产计算次数。
-
-### 11.3 多来源物品识别
-
-在DAG构建阶段识别多来源物品（有多个配方产出的物品）：
-
-```javascript
-const multiSourceItems = new Set();
-const outputRecipeIndices = new Map();
-
-for (const outputId of Object.keys(recipe.产物 || {})) {
-  if (!outputRecipeIndices.has(outputId)) {
-    outputRecipeIndices.set(outputId, 0);
-  }
-  outputRecipeIndices.set(outputId, outputRecipeIndices.get(outputId) + 1);
-}
-
-for (const [itemId, count] of outputRecipeIndices) {
-  if (count > 1) {
-    multiSourceItems.add(itemId);
-  }
-}
-```
-
-### 11.4 展开顺序处理
-
-1. SCC分析得到展开顺序
-2. 按顺序展开物品
-3. 在展开过程中检查物品是否是多来源物品，如果是就跳过展开
-4. 最后统一展开多来源物品（deferredItems）
-
-### 11.5 循环组处理
-
-- 循环组不跳过，直接进行矩阵求逆
-- 矩阵求逆后，只有非多来源物品才代入到依赖边
-
----
-
-## 12. 最终关键决策表
+## 11. 最终关键决策表
 
 | 问题 | 最终决定 |
 |------|---------|
@@ -680,10 +343,8 @@ for (const [itemId, count] of outputRecipeIndices) {
 | 循环处理 | SCC |
 | 非循环区域 | DAG动态规划 |
 | 循环区域 | SCC内部搜索 |
-| 目标函数 | 最小电力 / 最小原矿（可选策略） |
+| 目标函数 | 最小电力 / 最小原矿 / 最小占地 |
 | 资源模型 | 多维资源统一向量 |
 | 电力处理 | 作为资源消耗 |
 | LP | 局部副产物平衡 |
 | 关键物品法 | 不作为核心 |
-| 权重法 | 放弃 |
-| Pareto | 暂不采用 |
