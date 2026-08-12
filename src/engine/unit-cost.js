@@ -377,6 +377,17 @@ function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
     const cost = costs.get(itemId);
     if (!cost) continue;
 
+    // [DEBUG] 输出物品主配方和增产剂信息
+    if (DEBUG && graph) {
+      const node = graph.get(itemId);
+      if (node) {
+        const recipeId = node.recipeId;
+        const proInfo = node.proliferatorInfo || { level: 0, mode: 0 };
+        const modeName = proInfo.mode === 0 ? '无' : proInfo.mode === 1 ? '加速' : '增产';
+        console.log(`[solveSCCByMatrix] ${itemId}: 主配方=${recipeId}, 增产剂=Mk${proInfo.level}${modeName}`);
+      }
+    }
+
     if (DEBUG) console.log(`[solveSCCByMatrix] ${itemId} 原始直接成本:`, JSON.stringify(cost));
 
     // 对角线放$x（成本公式中的执行次数）

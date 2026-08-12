@@ -625,7 +625,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         </tr>);
     }
 
-    let building_rows = Object.entries(building_list).map(([building, count]) => (
+    // 建筑统计按名称排序，保持静态顺序便于对比
+    let building_rows = Object.entries(building_list)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([building, count]) => (
         <tr key={building}>
             <td className="d-flex align-items-center text-nowrap">
                 <ItemIcon item={building} tooltip={false} size={mob_icon}/>
@@ -665,9 +668,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     const isRawMaterial = (item) => rawMaterialItems.has(item);
 
-    // 缓存原矿列表（用于主视图和Modal）
+    // 缓存原矿列表（用于主视图和Modal），按物品名称排序保持静态顺序
     const rawMaterials = useMemo(() => {
-        return Object.entries(result_dict).filter(([item]) => isRawMaterial(item));
+        return Object.entries(result_dict)
+            .filter(([item]) => isRawMaterial(item))
+            .sort(([a], [b]) => a.localeCompare(b));
     }, [result_dict, rawMaterialItems]);
 
     // 计算数值变化的差值
@@ -947,7 +952,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <div className="modal-body summary-modal-body">
                             {/* 原矿输入总需求 */}
                             {(() => {
-                                const rawMaterials = Object.entries(result_dict).filter(([item]) => isRawMaterial(item));
+                                const rawMaterials = Object.entries(result_dict)
+                                    .filter(([item]) => isRawMaterial(item))
+                                    .sort(([a], [b]) => a.localeCompare(b));
                                 return rawMaterials.length > 0 && (
                                     <fieldset className="w-fit">
                                         <legend><small>原矿输入总需求</small></legend>

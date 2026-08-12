@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "dsp-calc",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "identifier": "pro.dsp-calc.calculator",
   "build": {
     "frontendDist": "../dist",

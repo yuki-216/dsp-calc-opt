@@ -331,8 +331,9 @@ export function BatchSetting({needs_list}) {
                 setOptimResult(result);
                 setOptimLogs([...logs]);
 
-                // 应用优化结果
-                if (result.changes.length > 0) {
+                // 应用优化结果（只要有改进就应用，而不是只看 changes）
+                const hasImprovement = result.optimalObjective < result.initialObjective;
+                if (hasImprovement) {
                     set_scheme_data(result.optimalScheme);
                 }
             } catch (e) {
@@ -378,11 +379,34 @@ export function BatchSetting({needs_list}) {
         }
     });
 
+    // 增产剂等级多选
+    const settings = useContext(SettingsContext);
+    const allowed_levels = settings.proliferate_allowed_levels || [1, 2, 3];
+    const toggle_level = (level) => {
+        const new_levels = allowed_levels.includes(level)
+            ? allowed_levels.filter(l => l !== level)
+            : [...allowed_levels, level].sort();
+        // 至少保留一个等级
+        if (new_levels.length === 0) return;
+        set_settings({ proliferate_allowed_levels: new_levels });
+    };
+
     function change_pro_num(pro_num) {
         set_scheme_data(old_scheme_data => {
             let scheme_data = structuredClone(old_scheme_data);
+            const noAccelerate = settings.proliferate_no_accelerate || false;
             for (var i = 0; i < game_data.recipe_data.length; i++) {
-                scheme_data.scheme_for_recipe[i]["增产剂等级"] = pro_num;
+                const recipe = game_data.recipe_data[i];
+                const proliferator = recipe["增产"] || 0;
+                const canAccelerate = proliferator & 1;  // 配方本身支持加速
+                const canExtraProduct = proliferator & 2;  // 配方本身支持增产
+
+                // 如果开启了限制加速模式，且物品只能加速（不能增产），则设置为无增产剂
+                if (noAccelerate && canAccelerate && !canExtraProduct) {
+                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = 0;
+                } else {
+                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = pro_num;
+                }
             }
             return scheme_data;
         });
@@ -405,18 +429,6 @@ export function BatchSetting({needs_list}) {
         {value: 2, label: "增产", className: pro_mode_class[2]},
         {value: 1, label: "加速", className: pro_mode_class[1]},
     ];
-
-    // 增产剂等级多选
-    const settings = useContext(SettingsContext);
-    const allowed_levels = settings.proliferate_allowed_levels || [1, 2, 3];
-    const toggle_level = (level) => {
-        const new_levels = allowed_levels.includes(level)
-            ? allowed_levels.filter(l => l !== level)
-            : [...allowed_levels, level].sort();
-        // 至少保留一个等级
-        if (new_levels.length === 0) return;
-        set_settings({ proliferate_allowed_levels: new_levels });
-    };
 
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">

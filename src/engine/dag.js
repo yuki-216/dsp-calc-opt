@@ -290,6 +290,11 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
       }
     }
 
+    // 存储增产剂信息到节点（用于调试日志）
+    const proMode = Number(schemeRecipe?.['增产模式']) || 0;
+    const proLevel = Number(schemeRecipe?.['增产剂等级'] || schemeRecipe?.['增产点数']) || 0;
+    node.proliferatorInfo = { level: proLevel, mode: proMode };
+
     // 计算直接成本公式（仅为主物品，不为副产物建公式）
     // 增产模式下，产出 = 原产出 * 产出倍率
     // recipe.产物 格式: {物品: 数量}（对象格式）
@@ -346,18 +351,17 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
         depNode.dependents.push(itemId);
       }
 
-      // 配方所有产物（主产物+副产物）→ 原料
-      for (const outputId of Object.keys(recipe.产物 || {})) {
-        if (!graph.has(outputId)) {
-          graph.set(outputId, new ItemNode(outputId, outputId, 0));
-        }
-        const edgeKey = `${outputId}->${key}`;
-        if (!edgeSet.has(edgeKey)) {
-          edgeSet.add(edgeKey);
-          edges.push({ from: outputId, to: key });
-          if (proliferatorItems.has(key)) {
-            proliferatorEdgeKeys.add(edgeKey);
-          }
+      // 只为主产物（当前物品）→ 原料 建立边
+      // 联产物（如氢）不应该建立边进入 SCC，它们只是副产物
+      if (!graph.has(itemId)) {
+        graph.set(itemId, new ItemNode(itemId, itemId, 0));
+      }
+      const edgeKey = `${itemId}->${key}`;
+      if (!edgeSet.has(edgeKey)) {
+        edgeSet.add(edgeKey);
+        edges.push({ from: itemId, to: key });
+        if (proliferatorItems.has(key)) {
+          proliferatorEdgeKeys.add(edgeKey);
         }
       }
 
@@ -386,16 +390,15 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
         graph.set(key, new ItemNode(key, key, 0));
       }
 
-      // 配方所有产物 → 副产物（建立依赖边）
-      for (const outputId of Object.keys(recipe.产物 || {})) {
-        if (!graph.has(outputId)) {
-          graph.set(outputId, new ItemNode(outputId, outputId, 0));
-        }
-        const edgeKey = `${outputId}->${key}`;
-        if (!edgeSet.has(edgeKey)) {
-          edgeSet.add(edgeKey);
-          edges.push({ from: outputId, to: key });
-        }
+      // 只为主产物（当前物品）→ 副产物 建立边
+      // 联产物不应该建立边进入 SCC
+      if (!graph.has(itemId)) {
+        graph.set(itemId, new ItemNode(itemId, itemId, 0));
+      }
+      const edgeKey = `${itemId}->${key}`;
+      if (!edgeSet.has(edgeKey)) {
+        edgeSet.add(edgeKey);
+        edges.push({ from: itemId, to: key });
       }
 
       // 副产物不入队！只建立SCC边
