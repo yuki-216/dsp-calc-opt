@@ -681,17 +681,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 const deferred_items = deferred_by_layer.get(layer_idx);
                 const base_y = layer_y.get(layer_idx);
 
-                const existing_items = [];
-                const existing_positions_map = new Map();
-                const layer_all_items = layers_map.get(layer_idx) || [];
-                layer_all_items.forEach(item => {
-                    if (!deferred_set.has(item) && positions.has(item) && !cycle_set.has(item)) {
-                        existing_items.push(item);
-                        existing_positions_map.set(item, positions.get(item).x);
-                    }
-                });
-
-                // 收集该层的 SCC 包围盒
                 // 计算延迟节点的理想位置（靠近子节点）
                 const ideal_positions = new Map();
                 deferred_items.forEach(item => {
@@ -705,23 +694,17 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     }
                 });
 
-                // 合并已有节点和延迟节点，按理想位置排序
-                const all_items_for_layout = [];
-                existing_items.forEach(item => {
-                    all_items_for_layout.push({item, ideal_x: existing_positions_map.get(item)});
-                });
+                // 只将延迟节点加入布局，使用重心法排列
+                const items_to_layout = deferred_items.map(item => ({
+                    item,
+                    ideal_x: ideal_positions.get(item)
+                }));
+                const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP);
+
                 deferred_items.forEach(item => {
-                    all_items_for_layout.push({item, ideal_x: ideal_positions.get(item)});
-                });
-                all_items_for_layout.sort((a, b) => a.ideal_x - b.ideal_x);
-
-                // 简单排列（居中）
-                const total_width = all_items_for_layout.length * MIN_GAP;
-                const start_x = (final_canvas_width - total_width) / 2 + MIN_GAP / 2;
-
-                all_items_for_layout.forEach(({item}, i) => {
+                    const x = layout_result.get(item) ?? ideal_positions.get(item);
                     positions.set(item, {
-                        x: start_x + i * MIN_GAP,
+                        x: x,
                         y: base_y,
                         is_source: in_degree.get(item) === 0,
                         is_sink: out_degree.get(item) === 0,
@@ -734,9 +717,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         }
     }
 
-    // 执行布局（两遍重心法优化，第二遍处理延迟节点）
-    assign_positions();
-    assign_positions_by_barycenter();
+    // 执行布局
     assign_positions();
     assign_positions_by_barycenter();
 
