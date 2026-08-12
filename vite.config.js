@@ -158,7 +158,6 @@ export default defineConfig(({mode}) => ({
     define: {
         'import.meta.env.VITE_APP_VERSION': JSON.stringify(require('./package.json').version),
     },
-    resolve: {},
     css: {
         preprocessorOptions: {
             scss: {
@@ -192,9 +191,6 @@ export default defineConfig(({mode}) => ({
                         }
                         if (id.includes('/react-icons/')) {
                             return 'vendor-icons';
-                        }
-                        if (id.includes('/javascript-lp-solver/')) {
-                            return 'vendor-solver';
                         }
                     }
                     // 将游戏数据 JSON 文件分割到单独的 chunk

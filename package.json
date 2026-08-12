@@ -16,7 +16,6 @@
     "antd": "^6.3.5",
     "bootstrap": "^5.3.8",
     "fuzzysort": "^3.1.0",
-    "javascript-lp-solver": "^1.0.3",
     "pinyin-pro": "^3.28.0",
     "react": "^19.2.4",
     "react-bootstrap": "^2.10.10",
