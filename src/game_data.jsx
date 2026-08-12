@@ -56,12 +56,9 @@ export const FUEL_DATA_BASE = [
 ];
 
 /**
- * 获取完整的燃料数据
- * @returns {Array} 完整的燃料数据数组
+ * 获取完整的燃料数据（直接返回常量）
  */
-export function getFuelData() {
-  return FUEL_DATA_BASE;
-}
+export const getFuelData = () => FUEL_DATA_BASE;
 
 /**
  * 设备消耗速度（MW）

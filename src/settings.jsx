@@ -17,24 +17,25 @@ export function Settings() {
         mining_speed_multiple: Math.round(settings.mining_speed_multiple * 100),
     }
 
-    function change_int_setting(e, name, minVal) {
-        let val = Math.max(parseInt(e.target.value) || DEFAULT_SETTINGS[name], minVal);
+    // 通用设置变更函数
+    function change_setting(e, name, type = 'int', minVal = 0) {
+        if (type === 'bool') {
+            set_settings({[name]: !settings[name]});
+            return;
+        }
+
+        const parseFn = type === 'float' ? parseFloat : parseInt;
+        const defaultVal = type === 'percent' ? DEFAULT_SETTINGS[name] * 100 : DEFAULT_SETTINGS[name];
+        let val = Math.max(parseFn(e.target.value) || defaultVal, minVal);
+
+        if (type === 'percent') {
+            percent_val[name] = val;
+            val = val / 100;
+        } else if (type === 'float') {
+            val = Math.round(val * 10000) / 10000; // 输入框最多四位小数
+        }
+
         set_settings({[name]: val});
-    }
-
-    function change_float_setting(e, name, minVal) {
-        let val = Math.max(parseFloat(e.target.value) || DEFAULT_SETTINGS[name], minVal);
-        set_settings({[name]: Math.round(val * 10000) / 10000});//输入框最多四位小数
-    }
-
-    function change_percent_setting(e, name, minVal) {
-        let val = Math.max(parseInt(e.target.value) || (DEFAULT_SETTINGS[name] * 100), minVal);
-        percent_val[name] = val;
-        set_settings({[name]: val / 100});
-    }
-
-    function change_bool_setting(e, name) {
-        set_settings({[name]: !settings[name]});
     }
 
     const fractionating_speed = settings.is_time_unit_minute
@@ -57,7 +58,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.mining_speed_oil} step={0.10}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_float_setting(e, "mining_speed_oil", 0.01)}/>
+                           onChange={e => change_setting(e, "mining_speed_oil", 'float', 0.01)}/>
                 </td>
                 <td className="ps-2">{"/s（单个油井）"}</td>
             </tr>
@@ -66,7 +67,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.mining_speed_hydrogen} step={0.10}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_float_setting(e, "mining_speed_hydrogen", 0.01)}/>
+                           onChange={e => change_setting(e, "mining_speed_hydrogen", 'float', 0.01)}/>
                 </td>
                 <td className="ps-2">{"/s（星球资源详情）"}</td>
             </tr>
@@ -75,7 +76,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.mining_speed_deuterium} step={0.10}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_float_setting(e, "mining_speed_deuterium", 0.01)}/>
+                           onChange={e => change_setting(e, "mining_speed_deuterium", 'float', 0.01)}/>
                 </td>
                 <td className="ps-2">{"/s（星球资源详情）"}</td>
             </tr>
@@ -84,7 +85,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.mining_speed_gas_hydrate} step={0.10}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_float_setting(e, "mining_speed_gas_hydrate", 0.01)}/>
+                           onChange={e => change_setting(e, "mining_speed_gas_hydrate", 'float', 0.01)}/>
                 </td>
                 <td className="ps-2">{"/s（星球资源详情）"}</td>
             </tr>
@@ -96,7 +97,7 @@ export function Settings() {
                 <td>原矿显示</td>
                 <td className="ps-2">{settings.hide_mines ? "隐藏原矿" : "显示原矿"}</td>
                 <td className="ps-2">
-                    <button onClick={e => change_bool_setting(e, "hide_mines")}>
+                    <button onClick={e => change_setting(e, "hide_mines", 'bool')}>
                         {settings.hide_mines ? "显示原矿" : "隐藏原矿"}</button>
                 </td>
             </tr>
@@ -105,7 +106,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.covered_veins_small} step={1}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_int_setting(e, "covered_veins_small", 1)}/>
+                           onChange={e => change_setting(e, "covered_veins_small", 'int', 1)}/>
                 </td>
             </tr>
             <tr>
@@ -113,7 +114,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.covered_veins_large} step={1}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_int_setting(e, "covered_veins_large", 1)}/>
+                           onChange={e => change_setting(e, "covered_veins_large", 'int', 1)}/>
                 </td>
             </tr>
             <tr>
@@ -121,7 +122,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={percent_val["mining_efficiency_large"]} step={100}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_percent_setting(e, "mining_efficiency_large", 100)}/>
+                           onChange={e => change_setting(e, "mining_efficiency_large", 'percent', 100)}/>
                 </td>
                 <td className="ps-2">{"%"}</td>
             </tr>
@@ -130,7 +131,7 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={percent_val["mining_speed_multiple"]} step={10}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_percent_setting(e, "mining_speed_multiple", 100)}/>
+                           onChange={e => change_setting(e, "mining_speed_multiple", 'percent', 100)}/>
                 </td>
                 <td className="ps-2">{"%（科技面板右上）"}</td>
             </tr>
@@ -150,7 +151,7 @@ export function Settings() {
                 <td>速率单位</td>
                 <td className="ps-2">{settings.is_time_unit_minute ? "个/min" : "个/sec"}</td>
                 <td className="ps-2">
-                    <button onClick={e => change_bool_setting(e, "is_time_unit_minute")}>
+                    <button onClick={e => change_setting(e, "is_time_unit_minute", 'bool')}>
                         {settings.is_time_unit_minute ? "转化为秒" : "转化为分"}</button>
                 </td>
             </tr>
@@ -158,7 +159,7 @@ export function Settings() {
                 <td>精度位数</td>
                 <td className="ps-2">
                     <input type="number" value={settings.fixed_num} step={1} style={{maxWidth: '5em'}}
-                           onChange={e => change_int_setting(e, "fixed_num", 0)}/>
+                           onChange={e => change_setting(e, "fixed_num", 'int', 0)}/>
                 </td>
             </tr>
             <tr>
@@ -166,14 +167,14 @@ export function Settings() {
                 <td className="ps-2">
                     <input type="number" value={settings.stack_research_lab} step={1}
                            style={{maxWidth: '5em'}}
-                           onChange={e => change_int_setting(e, "stack_research_lab", 1)}/>
+                           onChange={e => change_setting(e, "stack_research_lab", 'int', 1)}/>
                 </td>
             </tr>
             <tr>
                 <td>增产剂自喷涂</td>
                 <td className="ps-2">{settings.proliferate_itself ? "启用" : "禁用"}</td>
                 <td className="ps-2">
-                    <button onClick={e => change_bool_setting(e, "proliferate_itself")}>
+                    <button onClick={e => change_setting(e, "proliferate_itself", 'bool')}>
                         {settings.proliferate_itself ? "改为禁用" : "改为启用"}</button>
                 </td>
             </tr>
@@ -181,7 +182,7 @@ export function Settings() {
                 <td>限制加速模式</td>
                 <td className="ps-2">{settings.proliferate_no_accelerate ? "仅增产" : "全部"}</td>
                 <td className="ps-2">
-                    <button onClick={e => change_bool_setting(e, "proliferate_no_accelerate")}>
+                    <button onClick={e => change_setting(e, "proliferate_no_accelerate", 'bool')}>
                         {settings.proliferate_no_accelerate ? "改为全部" : "改为仅增产"}</button>
                 </td>
             </tr>
