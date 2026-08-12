@@ -788,41 +788,6 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
 }
 
 /**
- * 应用优化策略到方案数据
- * 将优化器计算出的最优策略应用到方案数据中，生成新的方案数据。
- * 遍历持久化策略存储，跳过循环组整体策略（key 以 '[' 开头），
- * 将每个物品的增产模式和等级写入对应的配方配置中。
- *
- * @param {Map} resolved - 持久化策略存储（由 optimizeProliferatorStrategy 生成）
- * @param {Object} schemeData - 原始方案数据
- * @param {Map} graph - 物品图（包含 recipeId 等节点信息）
- * @returns {Object} 更新后的方案数据（深拷贝，不修改原数据）
- */
-export function applyOptimizedStrategies(resolved, schemeData, graph) {
-  // 1. 深拷贝方案数据，避免修改原数据
-  const newSchemeData = structuredClone(schemeData);
-
-  // 2. 遍历所有已确定的策略
-  for (const [item, strategyInfo] of resolved) {
-    // 跳过循环组整体策略（key 是 JSON 字符串，以 '[' 开头）
-    if (item.startsWith('[')) continue;
-
-    // 3. 获取物品节点
-    const node = graph.get(item);
-    if (!node || !node.recipeId) continue;
-
-    // 4. 应用策略到对应的配方配置
-    const { strategy } = strategyInfo;
-    if (newSchemeData.scheme_for_recipe[node.recipeId]) {
-      newSchemeData.scheme_for_recipe[node.recipeId]['增产模式'] = strategy.mode;
-      newSchemeData.scheme_for_recipe[node.recipeId]['增产剂等级'] = strategy.level;
-    }
-  }
-
-  return newSchemeData;
-}
-
-/**
  * 格式化电力值
  * @param {number} value - 电力值 (kW)
  * @returns {string} 格式化后的字符串

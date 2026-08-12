@@ -1,11 +1,11 @@
 import {useContext, useState, useCallback, useRef, useEffect} from 'react';
-import {CompactModeContext, DefaultSettingsContext, EngineGraphDataContext, FuelContext, FuelSetterContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
+import {CompactModeContext, DefaultSettingsContext, FuelContext, FuelSetterContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
 import {pro_mode_class} from './result.jsx';
-import {optimizeProliferatorStrategy, formatProliferatorLevel, formatProliferatorMode} from './engine/proliferator-optimizer.js';
+import {optimizeProliferatorStrategy} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
-import {FUEL_DATA, getFuelData} from './game_data.jsx';
+import {getFuelData} from './game_data.jsx';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -519,10 +519,4 @@ export function BatchSetting({needs_list}) {
             </div>
         )}
     </>;
-}
-
-function formatPower(value) {
-    if (value >= 1e6) return (value / 1e6).toFixed(2) + ' GW';
-    if (value >= 1e3) return (value / 1e3).toFixed(2) + ' MW';
-    return value.toFixed(2) + ' kW';
 }

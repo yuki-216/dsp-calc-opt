@@ -10,10 +10,7 @@ import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {init_scheme_data} from './scheme_data.jsx';
 import {Settings, BatchSetting, FuelSelect} from './settings.jsx';
-import {
-    default_game_data,
-    vanilla_game_version
-} from "./game_data.jsx";
+import {default_game_data} from "./game_data.jsx";
 import {ItemIcon} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
 

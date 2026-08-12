@@ -7,10 +7,6 @@ import { DEBUG } from './debug.js';
 import { ApplyBuildingMultiplier } from '../game_data.jsx';
 import { tarjanSCC as sharedTarjanSCC } from './graph-utils.js';
 
-// 浮点精度控制：四舍五入统一使用此精度
-const PRECISION = 7;                           // 小数位数
-const ROUND_FACTOR = Math.pow(10, PRECISION);  // 1e7
-
 /**
  * Tarjan SCC算法实现（适配器：接受Map格式的graph）
  * @param {Map} graph - 物品图 {itemId: ItemNode}
@@ -234,12 +230,10 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
                 if (proMode === 1) {
                   // 加速模式：净产出 * 加速效果
                   const accEffect = proEffect["加速效果"] || 1;
-                  const oldOutput = netOutput;
                   netOutput *= accEffect;
                 } else if (proMode === 2) {
                   // 增产模式：净产出 * 增产效果
                   const proEffectValue = proEffect["增产效果"] || 1;
-                  const oldOutput = netOutput;
                   netOutput *= proEffectValue;
                 }
               }

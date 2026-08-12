@@ -9,11 +9,6 @@ import { DEBUG } from './debug.js';
 
 import { invertMatrix } from './matrix.js';
 
-// 浮点精度控制：四舍五入和截断统一使用此精度
-const PRECISION = 7;                           // 小数位数
-const ROUND_FACTOR = Math.pow(10, PRECISION);  // 1e7
-const TRUNCATE_EPSILON = 1 / ROUND_FACTOR;     // 1e-7
-
 /**
  * 按 SCC 逆拓扑序展开物品成本到 solution
  * 从顶层（最终产物）开始，逐层将物品成本代入 solution，保持每个物品的成本公式简约
@@ -25,23 +20,12 @@ const TRUNCATE_EPSILON = 1 / ROUND_FACTOR;     // 1e-7
  * @param {Map<string,Set>} byproductMap - 副产物映射
  */
 export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map(), recipeMap = new Map()) {
-  // 计时统计（已禁用）
-  // const timings = {
-  //   matrixInverse: 0,  // 矩阵求逆耗时
-  //   substitute: 0,     // 代入展开耗时
-  //   other: 0,          // 其他开销（循环控制、Set操作等）
-  //   total: 0
-  // };
-
-  // const totalStart = performance.now();
-  // let otherStart = totalStart;
 
   // 负需求物品集合（用于迭代过滤）
   const negativeDemandItems = new Set();
 
   const solutionCost = costs.get(solutionId);
   if (!solutionCost) {
-    // timings.total = performance.now() - totalStart;
     return {};
   }
 
@@ -118,9 +102,6 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
         expansionList.delete(k);
       }
     }
-
-    // 调试输出：展开/逆生产后的solution
-    const action = isReverse ? '逆生产' : '展开';
   }
 
   // ====== 阶段1：SCC展开（逆拓扑序，从顶层开始） ======
@@ -267,9 +248,6 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     }
   }
 
-  // timings.other += performance.now() - otherStart;
-  // timings.total = performance.now() - totalStart;
-
   if (DEBUG) console.log('[expandSCC] 最终 solution 成本:', JSON.stringify(solution));
 
   // 阶段2完成后，只检查循环组（多节点SCC）中的物品是否有负需求
@@ -282,14 +260,6 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
       }
     }
   }
-
-  // 输出计时结果（已禁用）
-  // if (DEBUG) console.log('[SCC展开计时]', {
-  //   '矩阵求逆': timings.matrixInverse.toFixed(2) + ' ms',
-  //   '代入展开': timings.substitute.toFixed(2) + ' ms',
-  //   '其他开销': timings.other.toFixed(2) + ' ms',
-  //   '总计': timings.total.toFixed(2) + ' ms'
-  // });
 
   return { negativeDemandItems };
 }

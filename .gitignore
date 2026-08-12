@@ -1,6 +1,9 @@
 # 依赖目录
 node_modules/
 
+# Claude 本地配置
+.claude/
+
 # 构建输出
 dist/
 build/

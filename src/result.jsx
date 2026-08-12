@@ -297,7 +297,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
     }, [compact_mode, set_show_ore_popup, set_show_building_popup]);
     const mob_btn_icon = is_mobile ? 18 : undefined; // 表格内按钮图标
-    // const [result_dict, set_result_dict] = useState(global_state.calculate());
     let game_data = global_state.game_data;
     let scheme_data = global_state.scheme_data;
     let settings = global_state.settings;
@@ -749,28 +748,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         <div className="result-summary-scroll">
         {compact_mode !== "narrow" && compact_mode !== "mobile" &&
         <div className="d-flex flex-column gap-2 summary-panel-content">
-
-            {/* 双引擎验证状态（已禁用） */}
-            {/* {validation && (
-                <fieldset className="w-fit">
-                    <legend><small>双引擎验证</small></legend>
-                    ...
-                </fieldset>
-            )} */}
-
-            {/* 引擎性能对比计时（已禁用） */}
-            {/* {validation?.enabled && validation?.result?.details?.timing && (
-                <fieldset>
-                    ...
-                </fieldset>
-            )} */}
-
-            {/* 双引擎数据对比（已禁用） */}
-            {/* {validation?.enabled && validation?.result && !validation.result.match && validation.result.details && (
-                <fieldset>
-                    ...
-                </fieldset>
-            )} */}
 
             {/* 第一列：原矿化列表 + 多余产物（mobile 时还包含预估电力） */}
             <div className="d-flex flex-column gap-2 summary-col-1">

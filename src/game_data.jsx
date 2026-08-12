@@ -64,9 +64,6 @@ export function getFuelData(gameData) {
   return FUEL_DATA_BASE;
 }
 
-// 默认燃料数据（不含增产剂，用于初始化）
-export const FUEL_DATA = FUEL_DATA_BASE;
-
 /**
  * 设备消耗速度（MW）
  */
@@ -311,10 +308,6 @@ export function get_game_data() {
     return data;
 }
 
-export function get_icon_by_item(item) {
-    return default_game_data.item_icon_name[item];
-}
-
 /**
  * 获取指定燃料的配方
  * @param {string} fuelName - 燃料名称
@@ -323,23 +316,6 @@ export function get_icon_by_item(item) {
 export function getFuelRecipe(fuelName) {
     if (!fuelName || fuelName === "无") return null;
     return default_game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === fuelName) || null;
-}
-
-/**
- * 判断配方是否为燃料配方
- * @param {number} recipeIndex - 配方索引
- * @returns {boolean}
- */
-export function isFuelRecipe(recipeIndex) {
-    return default_game_data.recipe_data[recipeIndex]?.isFuelRecipe === true;
-}
-
-/**
- * 获取所有燃料配方
- * @returns {Array} 燃料配方数组
- */
-export function getFuelRecipes() {
-    return default_game_data.recipe_data.filter(r => r.isFuelRecipe);
 }
 
 /**
