@@ -12,9 +12,7 @@ function NeedItem({item, count, needs_list, set_needs_list}) {
         setEditing(str);
         let val = Number(str);
         if (!isNaN(val) && val >= 0) {
-            let new_needs_list = structuredClone(needs_list);
-            new_needs_list[item] = val;
-            set_needs_list(new_needs_list);
+            set_needs_list(prev => ({...prev, [item]: val}));
         }
     }
 
@@ -23,9 +21,11 @@ function NeedItem({item, count, needs_list, set_needs_list}) {
     }
 
     function remove() {
-        let new_needs_list = structuredClone(needs_list);
-        delete new_needs_list[item];
-        set_needs_list(new_needs_list);
+        set_needs_list(prev => {
+            const new_list = {...prev};
+            delete new_list[item];
+            return new_list;
+        });
     }
 
     return <div className="d-inline-flex align-items-center">
@@ -56,9 +56,7 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
             return;
         }
         let count = Number(count_ref.current.value);
-        let new_needs_list = structuredClone(needs_list);
-        new_needs_list[item] = (needs_list[item] || 0) + count;
-        set_needs_list(new_needs_list);
+        set_needs_list(prev => ({...prev, [item]: (prev[item] || 0) + count}));
     }
 
     const is_min = global_state.settings.is_time_unit_minute;
