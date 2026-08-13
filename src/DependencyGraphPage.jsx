@@ -8,7 +8,6 @@ import './DependencyGraph.css';
 const STORAGE_KEY_DELETED = 'dependency_graph_deleted_items';
 const STORAGE_KEY_POSITIONS = 'dependency_graph_custom_positions';
 const STORAGE_KEY_POSITIONS_NEEDS = 'dependency_graph_custom_positions_needs';
-const STORAGE_KEY_SHOW_NEEDS_ONLY = 'dependency_graph_show_needs_only';
 
 /**
  * 构建依赖图数据
@@ -1000,6 +999,12 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const [hide_scc_external_edges, setHideSccExternalEdges] = useState(true);
     const [hide_power_edges, setHidePowerEdges] = useState(true);
     const [first_layer_moved, setFirstLayerMoved] = useState(0);
+
+    // 清除旧的持久化数据
+    useEffect(() => {
+        localStorage.removeItem('dependency_graph_show_needs_only');
+    }, []);
+
     const [show_needs_only, setShowNeedsOnly] = useState(() => {
         // 根据需求表是否有内容决定默认模式
         return needs_list && Object.keys(needs_list).length > 0;
