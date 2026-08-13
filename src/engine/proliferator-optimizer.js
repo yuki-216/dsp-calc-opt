@@ -410,19 +410,10 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
     return calculateResult(gameData, tempScheme, settings, needs);
   }
 
-  // 计算当前方案的成本
-  function calculateCost(choices) {
-    const result = calculateFullResult(choices);
-    return getObjectiveValue(result, strategy);
-  }
-
-  // 计算初始成本和瓶颈数组
-  let currentCost = calculateCost(currentChoices);
-  let currentBottleneckArray = [];
-  if (strategy === 'min_raw_ore' && hasQuantities) {
-    const initResult = calculateFullResult(currentChoices);
-    currentBottleneckArray = initResult.bottleneckArray || [];
-  }
+  // 计算初始成本和瓶颈数组（一次计算，同时提取两个值）
+  const initResult = calculateFullResult(currentChoices);
+  let currentCost = getObjectiveValue(initResult, strategy);
+  let currentBottleneckArray = initResult.bottleneckArray || [];
 
   // 坐标下降迭代
   let totalCalculations = 0;
@@ -445,13 +436,13 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         const oldChoice = currentChoices[i];
         currentChoices[i] = choice;
 
-        const cost = calculateCost(currentChoices);
+        const result = calculateFullResult(currentChoices);
+        const cost = getObjectiveValue(result, strategy);
         totalCalculations++;
 
         let dominated = false;
         if (strategy === 'min_raw_ore' && hasQuantities) {
-          const fullResult = calculateFullResult(currentChoices);
-          const cmp = compareBottlenecks(fullResult.bottleneckArray || [], bestBottleneckArray);
+          const cmp = compareBottlenecks(result.bottleneckArray || [], bestBottleneckArray);
           if (cmp < 0) {
             dominated = true;
           } else if (cmp === 0 && cost < bestCost) {
@@ -464,10 +455,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         if (dominated) {
           bestCost = cost;
           bestChoice = choice;
-          if (strategy === 'min_raw_ore' && hasQuantities) {
-            const fullResult = calculateFullResult(currentChoices);
-            bestBottleneckArray = fullResult.bottleneckArray || [];
-          }
+          bestBottleneckArray = result.bottleneckArray || [];
         }
 
         currentChoices[i] = oldChoice;
