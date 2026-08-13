@@ -353,11 +353,8 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 setOptimResult(result);
                 setOptimLogs([...logs]);
 
-                // 应用优化结果（只要有改进就应用，而不是只看 changes）
-                const hasImprovement = result.optimalObjective < result.initialObjective;
-                if (hasImprovement) {
-                    set_scheme_data(result.optimalScheme);
-                }
+                // 应用优化结果
+                set_scheme_data(result.optimalScheme);
             } catch (e) {
                 console.error('优化失败:', e);
                 setOptimLogs(prev => [...prev, `\n优化失败: ${e.message}`]);
