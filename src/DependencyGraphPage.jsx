@@ -1260,6 +1260,8 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     useEffect(() => {
         if (isActive) {
             prev_layout_key_ref.current = null;
+            // 根据需求表重新判断默认模式
+            setShowNeedsOnly(needs_list && Object.keys(needs_list).length > 0);
         }
     }, [isActive]);
 
