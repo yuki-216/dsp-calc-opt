@@ -586,21 +586,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 }
             }
 
-            // 最终 SCC 避让检查：确保所有节点都不在 SCC 区域内
-            if (layer_scc_bboxes.length > 0) {
-                groups.forEach(group => {
-                    if (group.is_scc_obstacle) return;
-                    group.items.forEach(p => {
-                        if (p.item.startsWith('__scc_')) return;
-                        p.render_x = resolve_scc_overlap(p.render_x, layer_scc_bboxes);
-                    });
-                    // 更新组边界
-                    group.items.sort((a, b) => a.render_x - b.render_x);
-                    group.left = group.items.length > 0 ? group.items[0].render_x - get_half_width(group.items[0]) : 0;
-                    group.right = group.items.length > 0 ? group.items[group.items.length - 1].render_x + get_half_width(group.items[group.items.length - 1]) : 0;
-                });
-            }
-
             // 收集结果
             const result = new Map();
             groups.forEach(group => {
