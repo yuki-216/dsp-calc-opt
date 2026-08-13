@@ -43,12 +43,12 @@ npm run preview
 1. 访问 [GitHub Actions](https://github.com/yuki-216/dsp-calc-opt/actions) 页面
 2. 点击最新的 workflow run
 3. 在 "Artifacts" 区域下载 `github-pages` 压缩包
-4. 解压得到 `dist` 文件夹
-5. 在 `dist` 文件夹内打开终端，运行：
+4. 解压得到 `artifact` 文件夹
+5. 在 `artifact` 文件夹内打开终端，运行：
    ```bash
    # Python 3
    python -m http.server 8080
-   
+
    # 或 Python 2
    python -m SimpleHTTPServer 8080
    ```
@@ -56,7 +56,7 @@ npm run preview
 
 **方式二：使用 Node.js**
 ```bash
-npx serve dist
+npx serve artifact
 ```
 
 **方式三：使用 VS Code**
