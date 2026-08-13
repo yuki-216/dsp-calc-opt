@@ -330,3 +330,40 @@
     font-size: 0.8rem;
 }
 
+/* ============================================================
+   深色模式
+   ============================================================ */
+[data-bs-theme="dark"] .dependency-graph-page,
+[data-bs-theme="dark"] .dependency-graph-container {
+    background: #1e1e2e;
+}
+
+[data-bs-theme="dark"] .dependency-graph-header {
+    background: rgba(30, 30, 46, 0.95);
+}
+
+[data-bs-theme="dark"] .graph-node-html {
+    background: #2d2d44;
+    border-color: #7c3aed;
+}
+
+[data-bs-theme="dark"] .graph-node-html:hover {
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.5);
+}
+
+[data-bs-theme="dark"] .graph-legend {
+    background: rgba(45, 45, 68, 0.95);
+}
+
+[data-bs-theme="dark"] .graph-controls {
+    background: rgba(45, 45, 68, 0.95);
+}
+
+[data-bs-theme="dark"] .deleted-items-panel {
+    background: rgba(45, 45, 68, 0.95);
+}
+
+[data-bs-theme="dark"] .debug-panel {
+    background: rgba(45, 45, 68, 0.95);
+}
+
