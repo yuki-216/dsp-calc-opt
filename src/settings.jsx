@@ -290,10 +290,14 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     const [optimStrategy, setOptimStrategy] = useState('min_net_heat');
     const logContainerRef = useRef(null);
 
-    // 切换优化目标时自动调整：最小原矿→展开矿物可用量+全部模式；其他→仅增产
+    // 切换优化目标时自动调整
     useEffect(() => {
+        // 最小原矿→展开矿物可用量
         if (optimStrategy === 'min_raw_ore') {
             set_show_ore_quantities?.(true);
+        }
+        // 最小占地→全部模式；其他→仅增产
+        if (optimStrategy === 'min_footprint') {
             set_settings({proliferate_no_accelerate: false});
         } else {
             set_settings({proliferate_no_accelerate: true});
