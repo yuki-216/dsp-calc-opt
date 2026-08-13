@@ -741,6 +741,13 @@ body > .p-3 {
     color: var(--bs-body-color) !important;
 }
 
+[data-bs-theme="dark"] .table-info {
+    --bs-table-bg: #1a2332;
+    --bs-table-color: var(--bs-body-color);
+    background-color: #1a2332 !important;
+    color: var(--bs-body-color) !important;
+}
+
 [data-bs-theme="dark"] .bg-selected,
 [data-bs-theme="dark"] .recipe-item.selected {
     background-color: var(--bs-success) !important;
