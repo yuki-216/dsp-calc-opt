@@ -1,7 +1,7 @@
 /**
  * 增产策略优化器
  * 职责：优化增产策略
- * 支持多种目标函数：最小电力、最小原矿输出
+ * 支持多种目标函数：最小电力、最小原矿瓶颈
  *
  * 算法核心：
  * 最高等级配置下，按 SCC 顺序优化（单节点逐个优化，循环组坐标下降）
@@ -696,7 +696,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     : calculatePower; // min_power 和 min_footprint 都用 calculatePower
 
   // 1. 输出初始信息
-  const strategyName = strategy === 'min_raw_ore' ? '最小原矿输出'
+  const strategyName = strategy === 'min_raw_ore' ? '最小原矿瓶颈'
     : strategy === 'min_net_heat' ? '最小净热值'
     : strategy === 'min_footprint' ? '最小占地'
     : '最小电力';
