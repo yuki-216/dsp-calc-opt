@@ -2,6 +2,8 @@
 
 基于 [dsp-calc](https://github.com/DSPCalculator/dsp-calc) 开源项目进行功能修剪和新增。
 
+🔗 **在线使用**：https://yuki-216.github.io/dsp-calc-opt/
+
 ## 功能特性
 
 - **依赖关系图** — 可视化物品依赖关系，支持 SCC 循环组展示、重心法布局、拖拽交互、引线绕行
@@ -34,6 +36,15 @@ npm run build
 # 预览生产版本
 npm run preview
 ```
+
+## 本地部署（无需开发环境）
+
+1. 访问 [GitHub Actions](https://github.com/yuki-216/dsp-calc-opt/actions) 页面
+2. 点击最新的 workflow run
+3. 在 "Artifacts" 区域下载 `github-pages` 压缩包
+4. 解压后得到 `dist` 文件夹，直接用浏览器打开 `index.html` 即可使用
+
+> 注意：本地打开时 Service Worker 不生效，其他功能正常。
 
 ## 文档
 
