@@ -1001,10 +1001,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const [hide_power_edges, setHidePowerEdges] = useState(true);
     const [first_layer_moved, setFirstLayerMoved] = useState(0);
     const [show_needs_only, setShowNeedsOnly] = useState(() => {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY_SHOW_NEEDS_ONLY);
-            if (saved !== null) return JSON.parse(saved);
-        } catch {}
+        // 根据需求表是否有内容决定默认模式
         return needs_list && Object.keys(needs_list).length > 0;
     });
 
@@ -1050,10 +1047,6 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         custom_positions_needs.forEach((v, k) => obj[k] = v);
         localStorage.setItem(STORAGE_KEY_POSITIONS_NEEDS, JSON.stringify(obj));
     }, [custom_positions_needs, show_needs_only]);
-
-    useEffect(() => {
-        localStorage.setItem(STORAGE_KEY_SHOW_NEEDS_ONLY, JSON.stringify(show_needs_only));
-    }, [show_needs_only]);
 
     const handle_toggle_needs_only = useCallback(() => {
         setShowNeedsOnly(prev => !prev);
@@ -1804,10 +1797,10 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                     <button
                         className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_needs_only ? 'btn-success' : 'btn-outline-success'}`}
                         onClick={handle_toggle_needs_only}
-                        title={show_needs_only ? '点击显示全部配方' : '点击只显示需求表相关配方'}
+                        title={show_needs_only ? '点击显示全部物品' : '点击只显示需求表相关物品'}
                     >
                         <FaFilter/>
-                        <span>{show_needs_only ? '仅需求' : '全部配方'}</span>
+                        <span>{show_needs_only ? '仅需求' : '全部物品'}</span>
                     </button>
                 )}
                 {deleted_items_list.length > 0 && (
