@@ -545,11 +545,17 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       }
 
       // 遍历所有增产选择，找到最优
-      let bestChoice = null;
-      let bestCost = Infinity;
-      let bestBottleneckArray = currentBottleneckArray;
+      // 用第一个选择初始化，避免 bestChoice 为 null
+      const initScheme = structuredClone(currentScheme);
+      initScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choices[0].level;
+      initScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choices[0].mode;
+      const initResult = calculateResult(gameData, initScheme, settings, needs);
+      let bestChoice = choices[0];
+      let bestCost = getObjectiveValue(initResult, strategy);
+      let bestBottleneckArray = strategy === 'min_raw_ore' ? (initResult.bottleneckArray || []) : currentBottleneckArray;
 
-      for (const choice of choices) {
+      for (let ci = 1; ci < choices.length; ci++) {
+        const choice = choices[ci];
         const tempScheme = structuredClone(currentScheme);
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
         tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;

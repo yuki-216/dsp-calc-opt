@@ -287,7 +287,14 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     const [optimResult, setOptimResult] = useState(null);
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
-    const [optimStrategy, setOptimStrategy] = useState('min_net_heat');
+    const [optimStrategy, setOptimStrategy] = useState(() => {
+        return localStorage.getItem('dsp-optim-strategy') || 'min_net_heat';
+    });
+
+    // 持久化优化策略选择
+    useEffect(() => {
+        localStorage.setItem('dsp-optim-strategy', optimStrategy);
+    }, [optimStrategy]);
     const logContainerRef = useRef(null);
 
     // 切换优化目标时自动调整
