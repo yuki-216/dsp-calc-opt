@@ -39,12 +39,28 @@ npm run preview
 
 ## 本地部署（无需开发环境）
 
+**方式一：使用 Python 本地服务器**
 1. 访问 [GitHub Actions](https://github.com/yuki-216/dsp-calc-opt/actions) 页面
 2. 点击最新的 workflow run
 3. 在 "Artifacts" 区域下载 `github-pages` 压缩包
-4. 解压后得到 `dist` 文件夹，直接用浏览器打开 `index.html` 即可使用
+4. 解压得到 `dist` 文件夹
+5. 在 `dist` 文件夹内打开终端，运行：
+   ```bash
+   # Python 3
+   python -m http.server 8080
+   
+   # 或 Python 2
+   python -m SimpleHTTPServer 8080
+   ```
+6. 浏览器访问 `http://localhost:8080`
 
-> 注意：本地打开时 Service Worker 不生效，其他功能正常。
+**方式二：使用 Node.js**
+```bash
+npx serve dist
+```
+
+**方式三：使用 VS Code**
+安装 [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) 扩展，右键 `index.html` 选择 "Open with Live Server"
 
 ## 文档
 
