@@ -742,9 +742,9 @@ body > .p-3 {
 }
 
 [data-bs-theme="dark"] .table-info {
-    --bs-table-bg: #1a2332;
+    --bs-table-bg: #2a3a5c;
     --bs-table-color: var(--bs-body-color);
-    background-color: #1a2332 !important;
+    background-color: #2a3a5c !important;
     color: var(--bs-body-color) !important;
 }
 
