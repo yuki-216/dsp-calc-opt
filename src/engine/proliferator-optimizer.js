@@ -544,18 +544,12 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         continue;
       }
 
-      // 遍历所有增产选择，找到最优
-      // 用第一个选择初始化，避免 bestChoice 为 null
-      const initScheme = structuredClone(currentScheme);
-      initScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choices[0].level;
-      initScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choices[0].mode;
-      const initResult = calculateResult(gameData, initScheme, settings, needs);
-      let bestChoice = choices[0];
-      let bestCost = getObjectiveValue(initResult, strategy);
-      let bestBottleneckArray = strategy === 'min_raw_ore' ? (initResult.bottleneckArray || []) : currentBottleneckArray;
+      // 遍历所有增产选择，找到优于当前状态的最优选择
+      let bestChoice = null;
+      let bestCost = currentObjective;
+      let bestBottleneckArray = currentBottleneckArray;
 
-      for (let ci = 1; ci < choices.length; ci++) {
-        const choice = choices[ci];
+      for (const choice of choices) {
         const tempScheme = structuredClone(currentScheme);
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
         tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
@@ -580,10 +574,15 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         }
       }
 
-      // 应用最佳选择
-      currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
-      currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
-      currentObjective = bestCost;
+      // 仅当找到更优选择时才应用
+      if (bestChoice) {
+        currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
+        currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
+        currentObjective = bestCost;
+      } else {
+        // 没有更优选择，用第一个选择作为默认（避免 null）
+        bestChoice = choices[0];
+      }
 
       // 重新计算当前状态，获取最新的瓶颈矿物
       const afterApplyResult = calculateResult(gameData, currentScheme, settings, needs);
