@@ -574,38 +574,39 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         }
       }
 
-      // 仅当找到更优选择时才应用
+      // 仅当找到更优选择时才应用并更新状态
       if (bestChoice) {
         currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = bestChoice.level;
         currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
         currentObjective = bestCost;
-      } else {
-        // 没有更优选择，用第一个选择作为默认（避免 null）
-        bestChoice = choices[0];
+        // 重新计算获取最新的瓶颈矿物和耗电
+        const afterApplyResult = calculateResult(gameData, currentScheme, settings, needs);
+        currentPower = afterApplyResult.totalEnergyCost;
+        if (strategy === 'min_raw_ore') {
+          bottleneckOre = afterApplyResult.bottleneckOre || '';
+          currentBottleneckArray = afterApplyResult.bottleneckArray || [];
+        }
       }
 
-      // 重新计算当前状态，获取最新的瓶颈矿物
-      const afterApplyResult = calculateResult(gameData, currentScheme, settings, needs);
-      currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
-      if (strategy === 'min_raw_ore') {
-        bottleneckOre = afterApplyResult.bottleneckOre || '';
-        currentBottleneckArray = afterApplyResult.bottleneckArray || [];
+      resolved.set(itemId, { strategy: bestChoice || choices[0], cost: bestCost });
+      // 仅当实际应用了更优选择时才记录 changes
+      if (bestChoice) {
+        changes.push({
+          itemId,
+          recipeIndex,
+          newLevel: bestChoice.level,
+          newMode: bestChoice.mode,
+          powerAfter: currentPower,
+          objectiveAfter: bestCost
+        });
       }
-
-      resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
-      changes.push({
-        itemId,
-        recipeIndex,
-        newLevel: bestChoice.level,
-        newMode: bestChoice.mode,
-        powerAfter: currentPower,
-        objectiveAfter: bestCost
-      });
 
       if (onLog) {
+        const appliedChoice = bestChoice || choices[0];
+        const status = bestChoice ? '' : ' (已最优)';
         const oreTag = strategy === 'min_raw_ore' && bottleneckOre ? ` 瓶颈:${bottleneckOre}` : '';
-        onLog(`[${changes.length}] ${itemId} (单节点) → ${bestChoice.name} (${formatObjectiveValue(bestCost, strategy, bottleneckOre, initialMaxBottleneck)}${oreTag})`);
-      };
+        onLog(`[${changes.length}] ${itemId} (单节点) → ${appliedChoice.name}${status} (${formatObjectiveValue(bestCost, strategy, bottleneckOre, initialMaxBottleneck)}${oreTag})`);
+      }
 
     } else {
       // ====== 多节点 SCC（循环组）：坐标下降优化 ======
