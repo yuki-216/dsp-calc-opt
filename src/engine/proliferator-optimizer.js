@@ -111,6 +111,7 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
   let maxBottleneck = 0;
   let bottleneckOre = '';
   let totalRawOre = 0; // 退化模式（无可用量设置时使用）
+  const bottleneckArray = []; // 收集所有矿物的瓶颈度
 
   for (const [item, amount] of Object.entries(result.resourceUsage)) {
     if (amount <= 0) continue; // 跳过副产物/盈余
@@ -124,6 +125,7 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
       }
       if (available > 0) {
         const bottleneck = amount / available;
+        bottleneckArray.push({ item, bottleneck });
         if (bottleneck > maxBottleneck) {
           maxBottleneck = bottleneck;
           bottleneckOre = item;
@@ -132,10 +134,29 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
     }
   }
 
+  // 按瓶颈度降序排列
+  bottleneckArray.sort((a, b) => b.bottleneck - a.bottleneck);
+
   // 未设置任何可用量时，退化为无权重累加
   const finalRawOre = hasQuantities ? maxBottleneck : totalRawOre;
 
-  return { totalRawOre: finalRawOre, bottleneckOre, ...result };
+  return { totalRawOre: finalRawOre, bottleneckOre, bottleneckArray, ...result };
+}
+
+/**
+ * 比较两个瓶颈数组（字典序，越小越好）
+ * @param {Array} aArray - 瓶颈数组A [{item, bottleneck}]
+ * @param {Array} bArray - 瓶颈数组B [{item, bottleneck}]
+ * @returns {number} 负数=A更优，0=相等，正数=B更优
+ */
+function compareBottlenecks(aArray, bArray) {
+  const len = Math.max(aArray.length, bArray.length);
+  for (let i = 0; i < len; i++) {
+    const aVal = aArray[i]?.bottleneck ?? 0;
+    const bVal = bArray[i]?.bottleneck ?? 0;
+    if (aVal !== bVal) return aVal - bVal;
+  }
+  return 0;
 }
 
 /**
@@ -353,6 +374,8 @@ function getMaxAllowedLevel(settings) {
  */
 async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, baseScheme, itemToRecipe, onLog, strategy = 'min_power') {
   const recipeData = gameData.recipe_data || [];
+  const oreQuantities = settings.ore_quantities || {};
+  const hasQuantities = Object.keys(oreQuantities).length > 0;
 
   // 根据策略选择计算函数
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
@@ -372,8 +395,8 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
     return itemChoices[idx][0];
   });
 
-  // 计算当前方案的成本
-  function calculateCost(choices) {
+  // 计算当前方案的结果（返回完整结果，用于瓶颈数组比较）
+  function calculateFullResult(choices) {
     const tempScheme = structuredClone(baseScheme);
     for (let i = 0; i < cycleItems.length; i++) {
       const item = cycleItems[i];
@@ -384,12 +407,22 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
       }
     }
-    const result = calculateResult(gameData, tempScheme, settings, needs);
+    return calculateResult(gameData, tempScheme, settings, needs);
+  }
+
+  // 计算当前方案的成本
+  function calculateCost(choices) {
+    const result = calculateFullResult(choices);
     return getObjectiveValue(result, strategy);
   }
 
-  // 计算初始成本
+  // 计算初始成本和瓶颈数组
   let currentCost = calculateCost(currentChoices);
+  let currentBottleneckArray = [];
+  if (strategy === 'min_raw_ore' && hasQuantities) {
+    const initResult = calculateFullResult(currentChoices);
+    currentBottleneckArray = initResult.bottleneckArray || [];
+  }
 
   // 坐标下降迭代
   let totalCalculations = 0;
@@ -403,6 +436,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
       const choices = itemChoices[i];
       let bestChoice = currentChoices[i];
       let bestCost = currentCost;
+      let bestBottleneckArray = currentBottleneckArray;
 
       // 尝试每种选择
       for (const choice of choices) {
@@ -414,9 +448,26 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         const cost = calculateCost(currentChoices);
         totalCalculations++;
 
-        if (cost < bestCost) {
+        let dominated = false;
+        if (strategy === 'min_raw_ore' && hasQuantities) {
+          const fullResult = calculateFullResult(currentChoices);
+          const cmp = compareBottlenecks(fullResult.bottleneckArray || [], bestBottleneckArray);
+          if (cmp < 0) {
+            dominated = true;
+          } else if (cmp === 0 && cost < bestCost) {
+            dominated = true;
+          }
+        } else if (cost < bestCost) {
+          dominated = true;
+        }
+
+        if (dominated) {
           bestCost = cost;
           bestChoice = choice;
+          if (strategy === 'min_raw_ore' && hasQuantities) {
+            const fullResult = calculateFullResult(currentChoices);
+            bestBottleneckArray = fullResult.bottleneckArray || [];
+          }
         }
 
         currentChoices[i] = oldChoice;
@@ -426,6 +477,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
       if (bestChoice !== currentChoices[i]) {
         currentChoices[i] = bestChoice;
         currentCost = bestCost;
+        currentBottleneckArray = bestBottleneckArray;
         improved = true;
       }
 
@@ -464,12 +516,16 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
     : strategy === 'min_raw_ore' ? calculateRawOre
     : calculatePower;
+  const oreQuantities = settings.ore_quantities || {};
+  const hasQuantities = Object.keys(oreQuantities).length > 0;
 
   const initialCalcResult = calculateResult(gameData, currentScheme, settings, needs);
   let currentObjective = getObjectiveValue(initialCalcResult, strategy);
   let currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
   // 瓶颈矿物名（用于格式化日志，会随优化过程更新）
   let bottleneckOre = initialCalcResult.bottleneckOre || '';
+  // 当前瓶颈数组（用于字典序比较）
+  let currentBottleneckArray = initialCalcResult.bottleneckArray || [];
   const changes = [];
 
   for (let sccIdx = 0; sccIdx < sccs.length; sccIdx++) {
@@ -503,6 +559,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       // 遍历所有增产选择，找到最优
       let bestChoice = null;
       let bestCost = Infinity;
+      let bestBottleneckArray = currentBottleneckArray;
 
       for (const choice of choices) {
         const tempScheme = structuredClone(currentScheme);
@@ -512,9 +569,20 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         const result = calculateResult(gameData, tempScheme, settings, needs);
         const cost = getObjectiveValue(result, strategy);
 
-        if (cost < bestCost) {
-          bestCost = cost;
-          bestChoice = choice;
+        if (strategy === 'min_raw_ore' && hasQuantities) {
+          // 瓶颈数组字典序比较
+          const cmp = compareBottlenecks(result.bottleneckArray || [], bestBottleneckArray);
+          if (cmp < 0) {
+            bestCost = cost;
+            bestChoice = choice;
+            bestBottleneckArray = result.bottleneckArray || [];
+          }
+        } else {
+          // 其他策略：简单数值比较
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestChoice = choice;
+          }
         }
       }
 
@@ -528,6 +596,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
       if (strategy === 'min_raw_ore') {
         bottleneckOre = afterApplyResult.bottleneckOre || '';
+        currentBottleneckArray = afterApplyResult.bottleneckArray || [];
       }
 
       resolved.set(itemId, { strategy: bestChoice, cost: bestCost });
@@ -578,6 +647,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
       if (strategy === 'min_raw_ore') {
         bottleneckOre = afterCycleResult.bottleneckOre || '';
+        currentBottleneckArray = afterCycleResult.bottleneckArray || [];
       }
 
       changes.push({
