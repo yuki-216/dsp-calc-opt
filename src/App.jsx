@@ -93,7 +93,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings}) {
                         <OreInput item={item} value={oreQuantities[item]} onChange={handleChange} />
                     </div>
                 ))}
-                <small className="text-muted align-self-center">留空 = 无限（不参与瓶颈计算）</small>
+                <small className="text-muted align-self-center">留空 = 无限（不参与瓶颈计算），若全部填空等效于无权重加和</small>
             </div>
         </div>
     );

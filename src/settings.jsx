@@ -510,7 +510,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
             {optimStrategy === 'min_raw_ore' && (
-                <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 在上方填写可获得的原矿数量效果更加。若不更改，则计算原矿总量，无加权</small>
+                <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡 填写矿物可用量效果更佳</small>
             )}
         </div>
         {optimLogs.length > 0 && (
