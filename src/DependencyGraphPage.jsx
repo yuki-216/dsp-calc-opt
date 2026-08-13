@@ -646,12 +646,23 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 .filter(item => ideal_positions.get(item) !== null)
                 .sort((a, b) => ideal_positions.get(a) - ideal_positions.get(b));
 
-            // 使用通用布局算法
+            // 计算该层 SCC 循环组的包围盒，作为避让障碍物
+            const layer_scc_bboxes = [];
+            layer_scc_ids.forEach(scc_id => {
+                const scc_items = [...scc_groups[scc_id]].filter(item => positions.has(item));
+                if (scc_items.length === 0) return;
+                const xs = scc_items.map(item => positions.get(item).x);
+                const left = Math.min(...xs) - MIN_GAP / 2;
+                const right = Math.max(...xs) + MIN_GAP / 2;
+                layer_scc_bboxes.push({ scc_id, left, right });
+            });
+
+            // 使用通用布局算法（传入 SCC 包围盒作为障碍物）
             const items_to_layout = sorted_items.map(item => ({
                 item,
                 ideal_x: ideal_positions.get(item)
             }));
-            const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP);
+            const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP, layer_scc_bboxes);
 
             sorted_items.forEach(item => {
                 const x = layout_result.get(item) ?? ideal_positions.get(item);
@@ -705,6 +716,17 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     }
                 });
 
+                // 计算该层 SCC 循环组的包围盒，作为避让障碍物
+                const layer_scc_bboxes = [];
+                layer_scc_ids.forEach(scc_id => {
+                    const scc_items = [...scc_groups[scc_id]].filter(item => positions.has(item));
+                    if (scc_items.length === 0) return;
+                    const xs = scc_items.map(item => positions.get(item).x);
+                    const left = Math.min(...xs) - MIN_GAP / 2;
+                    const right = Math.max(...xs) + MIN_GAP / 2;
+                    layer_scc_bboxes.push({ scc_id, left, right });
+                });
+
                 // 该层所有节点一起进入重叠处理：非延迟节点用当前 x，延迟节点用重心位置
                 const all_items_for_layout = layer_all_items
                     .filter(item => !layer_scc_ids.has(node_to_scc.get(item)))
@@ -712,7 +734,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                         item,
                         ideal_x: deferred_set.has(item) ? (ideal_positions.get(item) ?? final_canvas_width / 2) : positions.get(item).x
                     }));
-                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP);
+                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP, layer_scc_bboxes);
 
                 all_items_for_layout.forEach(({item}) => {
                     const x = layout_result.get(item) ?? positions.get(item)?.x ?? final_canvas_width / 2;
