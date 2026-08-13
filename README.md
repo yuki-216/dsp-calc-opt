@@ -39,7 +39,6 @@ npm run preview
 
 ## 本地部署（无需开发环境）
 
-**方式一：使用 Node.js（推荐）**
 1. 访问 [GitHub Actions](https://github.com/yuki-216/dsp-calc-opt/actions) 页面
 2. 点击最新的 workflow run
 3. 在 "Artifacts" 区域下载 `github-pages` 压缩包
@@ -50,15 +49,7 @@ npm run preview
    ```
 6. 浏览器访问终端显示的地址（通常是 `http://localhost:3000`）
 
-**方式二：使用 Python**
-```bash
-# 在 artifact 文件夹内运行
-python -m http.server 8080
-# 然后访问 http://localhost:8080
-```
-
-**方式三：使用 VS Code**
-安装 [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) 扩展，右键 `index.html` 选择 "Open with Live Server"
+> `npx` 是 Node.js 自带的工具，安装 [Node.js](https://nodejs.org/) 后即可使用。
 
 ## 文档
 
