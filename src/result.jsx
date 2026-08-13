@@ -560,7 +560,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <div>原矿</div>
                         </button>
                     }
-                    <button className="btn btn-sm btn-outline-secondary ssmall"
+                    <button className="btn btn-sm btn-outline-secondary ssmall mobile-hide"
                             onClick={() => openInNewTab(i, get_gross_output(result_dict[i], i))}
                             title="在新窗口计算（视为原矿）">
                         <FaExternalLinkAlt/>

@@ -497,6 +497,11 @@ body > .p-3 {
    移动端：< 768px
    ============================================================ */
 @media (max-width: 767px) {
+    /* 移动端隐藏元素 */
+    .mobile-hide {
+        display: none !important;
+    }
+
     /* 重置外层 padding */
     body > .p-3 {
         padding: 0.5rem !important;

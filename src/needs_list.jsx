@@ -75,7 +75,7 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
                     <span className="compact-hide-text">清空</span>
                 </button>
             </div>
-            <small className="text-muted ms-2">负数需求表示外部供给</small>
+            <small className="text-muted ms-2 mobile-hide">负数需求表示外部供给</small>
 
             {Object.keys(needs_list).length == 0 ||
                 <div className="d-inline-flex flex-wrap gap-4 row-gap-0 align-items-center flex-grow-1">
