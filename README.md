@@ -21,24 +21,25 @@
 - **Bootstrap 5** - UI组件库
 - **Tarjan SCC + 矩阵求逆** - 核心计算引擎
 
-## 本地开发
+## 本地开发（修改代码）
 
 ```bash
+# 克隆仓库
+git clone https://github.com/yuki-216/dsp-calc-opt.git
+cd dsp-calc-opt
+
 # 安装依赖
 npm install
 
-# 启动开发服务器
+# 启动开发服务器（支持热更新）
 npm run dev
-
-# 构建生产版本
-npm run build
-
-# 预览生产版本
-npm run preview
 ```
 
-## 本地部署（无需开发环境）
+访问 `http://localhost:5173`，修改代码后页面会自动刷新。
 
+## 本地使用（仅运行，不修改代码）
+
+**方式一：下载预构建版本**
 1. 访问 [GitHub Actions](https://github.com/yuki-216/dsp-calc-opt/actions) 页面
 2. 点击最新的 workflow run
 3. 在 "Artifacts" 区域下载 `github-pages` 压缩包
@@ -48,6 +49,15 @@ npm run preview
    npx serve .
    ```
 6. 浏览器访问终端显示的地址（通常是 `http://localhost:3000`）
+
+**方式二：克隆仓库后构建**
+```bash
+git clone https://github.com/yuki-216/dsp-calc-opt.git
+cd dsp-calc-opt
+npm install
+npm run build
+npx serve dist
+```
 
 > `npx` 是 Node.js 自带的工具，安装 [Node.js](https://nodejs.org/) 后即可使用。
 
