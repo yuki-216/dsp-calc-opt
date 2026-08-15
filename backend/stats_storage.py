@@ -7,7 +7,7 @@ import json
 import os
 from typing import Optional, Dict, Any
 
-from stats_calculator import RunningAverageCalculator, StarNumStats
+from stats_calculator import RunningAverageCalculator, StarNumStats, StarStats
 
 
 class StatsStorage:
@@ -88,6 +88,27 @@ class StatsStorage:
         """加载统计结果"""
         stats_file = os.path.join(self.data_dir, f"stats_{star_num}.json")
         return self._load_json(stats_file)
+
+    def load_all_stats(self) -> RunningAverageCalculator:
+        """从存储加载所有统计结果，恢复一个完整的 RunningAverageCalculator"""
+        calculator = RunningAverageCalculator()
+        for star_num in range(32, 65):
+            data = self.load_stats(star_num)
+            if data is not None:
+                stats = calculator.stats[star_num]
+                stats.seed_count = data.get("seed_count", 0)
+                loaded_stars = data.get("stars_stats", [])
+                for i, star_data in enumerate(loaded_stars):
+                    if i < len(stats.stars_stats):
+                        s = stats.stars_stats[i]
+                        s.avg_distance = star_data.get("avg_distance", 0.0)
+                        s.avg_dyson_radius = star_data.get("avg_dyson_radius", 0.0)
+                        s.avg_dyson_lumino = star_data.get("avg_dyson_lumino", 0.0)
+                        s.avg_veins_point = star_data.get("avg_veins_point", [0.0] * 14)
+                        s.avg_veins_amount = star_data.get("avg_veins_amount", [0.0] * 14)
+                        s.avg_gas_veins = star_data.get("avg_gas_veins", [0.0] * 3)
+                        s.avg_liquid = star_data.get("avg_liquid", [0.0, 0.0])
+        return calculator
 
     def save_verification_data(self, simple_avg: Dict, running_avg: Dict,
                               comparison: Dict):

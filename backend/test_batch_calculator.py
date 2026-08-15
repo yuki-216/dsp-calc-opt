@@ -159,7 +159,7 @@ def test_batch_calculator_completes_and_saves():
         assert progress["completed_seed_id"] == 2
 
 
-def test_batch_calculator_calls_c_api():
+def test_batch_calculator_calls_c_api(mock_c_api):
     """测试BatchCalculator正确调用C API"""
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = StatsStorage(data_dir=tmpdir)
@@ -173,3 +173,95 @@ def test_batch_calculator_calls_c_api():
         # 1个种子 x 33种恒星数量 = 33次调用
         calc.stop()
         time.sleep(0.3)
+
+        # 验证 Seed 构造函数被调用了33次 (32-64 共33种恒星数)
+        assert mock_c_api["Seed"].call_count == 33
+
+        # 验证 get_galaxy_data_c 被调用了33次
+        assert mock_c_api["get_galaxy_data_c"].call_count == 33
+
+
+def test_resume_restores_stats():
+    """测试resume从存储恢复统计到calculator (修复关键问题1)"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = StatsStorage(data_dir=tmpdir)
+
+        # 模拟之前已完成的计算：创建一个calculator并保存统计
+        from stats_calculator import RunningAverageCalculator
+
+        class MockStar:
+            def __init__(self, distance):
+                self.distance = distance
+                self.dyson_radius = 1000.0
+                self.dyson_lumino = 1.0
+                self.veins_point = [10] * 14
+                self.veins_amount = [100] * 14
+                self.gas_veins = [1.0, 2.0, 3.0]
+                self.liquid = [1, 2]
+
+        class MockGalaxy:
+            def __init__(self, star_num):
+                self.star_num = star_num
+                self.stars = [MockStar(float(i)) for i in range(star_num)]
+
+        prev_calc = RunningAverageCalculator()
+        prev_calc.process_galaxy(MockGalaxy(32))
+        prev_calc.process_galaxy(MockGalaxy(32))
+        storage.save_stats(prev_calc)
+
+        # 保存进度
+        storage.save_progress(
+            completed_seed_id=100,
+            seed_count=100,
+            batch_size=10,
+            start_seed_id=1,
+            end_seed_id=200
+        )
+
+        # resume 应恢复之前的统计
+        calc = BatchCalculator(storage=storage)
+        calc.resume()
+
+        # 立即停止，等线程结束
+        calc.stop()
+        time.sleep(1.0)
+
+        # 验证calculator已从存储恢复了之前的统计数据
+        # 线程可能又处理了一些种子，所以 seed_count >= 2
+        assert calc.calculator.stats[32].seed_count >= 2, \
+            f"seed_count应>=2（已恢复），实际为{calc.calculator.stats[32].seed_count}"
+
+        # 验证统计均值不是全零（说明确实从存储恢复了）
+        assert calc.calculator.stats[32].stars_stats[0].avg_dyson_radius == 1000.0
+
+
+def test_resume_progress_percent_is_correct():
+    """测试resume时progress_percent计算正确 (修复关键问题2)"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = StatsStorage(data_dir=tmpdir)
+
+        # 模拟从 seed 50,000,000 恢复到 60,000,000 的场景
+        storage.save_progress(
+            completed_seed_id=50000000,
+            seed_count=50000000,
+            batch_size=100,
+            start_seed_id=1,
+            end_seed_id=60000000
+        )
+
+        calc = BatchCalculator(storage=storage)
+        calc.resume()
+
+        # resume后，start_seed_id 应为 50,000,001
+        # total_seeds = 60,000,000 - 50,000,001 + 1 = 10,000,000
+        # 刚resume时 current_seed_id = 50,000,001
+        # processed = 50,000,001 - 50,000,001 = 0
+        # progress_percent 应约为 0%，而不是 100%
+        time.sleep(0.2)
+        status = calc.get_status()
+        assert status["progress_percent"] < 10.0, \
+            f"resume后progress_percent应<10%，实际为{status['progress_percent']:.1f}%"
+        assert status["total_seeds"] == 10000000
+
+        calc.stop()
+        time.sleep(0.5)

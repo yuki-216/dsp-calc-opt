@@ -36,6 +36,7 @@ class BatchCalculator:
         self.current_seed_id = 0
         self.total_seeds = 0
         self.start_time = 0
+        self._start_seed_id = 0
         self._thread: Optional[threading.Thread] = None
 
         # 初始化C库
@@ -49,6 +50,7 @@ class BatchCalculator:
 
         self.batch_size = batch_size
         self.current_seed_id = start_seed_id
+        self._start_seed_id = start_seed_id
         self.total_seeds = end_seed_id - start_seed_id + 1
         self.start_time = time.time()
         self.should_stop = False
@@ -70,6 +72,9 @@ class BatchCalculator:
         start_seed_id = progress["completed_seed_id"] + 1
         end_seed_id = progress["end_seed_id"]
         batch_size = progress["batch_size"]
+
+        # 从存储恢复之前的统计数据
+        self.calculator = self.storage.load_all_stats()
 
         self.start(start_seed_id, end_seed_id, batch_size)
 
@@ -132,9 +137,10 @@ class BatchCalculator:
 
         # 计算预计剩余时间
         estimated_remaining = 0
-        if self.current_seed_id > 0 and elapsed_time > 0:
-            seeds_per_second = self.current_seed_id / elapsed_time
-            remaining_seeds = self.total_seeds - self.current_seed_id
+        processed = self.current_seed_id - self._start_seed_id
+        if processed > 0 and elapsed_time > 0:
+            seeds_per_second = processed / elapsed_time
+            remaining_seeds = self.total_seeds - processed
             if seeds_per_second > 0:
                 estimated_remaining = remaining_seeds / seeds_per_second
 
@@ -142,7 +148,7 @@ class BatchCalculator:
             "is_running": self.is_running,
             "current_seed_id": self.current_seed_id,
             "total_seeds": self.total_seeds,
-            "progress_percent": (self.current_seed_id / self.total_seeds * 100) if self.total_seeds > 0 else 0,
+            "progress_percent": (processed / self.total_seeds * 100) if self.total_seeds > 0 else 0,
             "elapsed_time": self._format_time(elapsed_time),
             "estimated_remaining": self._format_time(estimated_remaining)
         }
