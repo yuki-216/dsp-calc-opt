@@ -16,7 +16,7 @@ class StarStats:
     avg_veins_point: List[float] = field(default_factory=lambda: [0.0] * 14)
     avg_veins_amount: List[float] = field(default_factory=lambda: [0.0] * 14)
     avg_gas_veins: List[float] = field(default_factory=lambda: [0.0] * 3)
-    avg_liquid: List[int] = field(default_factory=lambda: [0, 0])
+    avg_liquid: List[float] = field(default_factory=lambda: [0.0, 0.0])
 
     def update(self, star, count: int):
         """更新运行均值"""
@@ -46,7 +46,7 @@ class StarStats:
 
         # 更新液体
         for i in range(2):
-            self.avg_liquid[i] += (star.liquid[i] - self.avg_liquid[i]) // count
+            self.avg_liquid[i] += (star.liquid[i] - self.avg_liquid[i]) / count
 
 
 @dataclass

@@ -168,3 +168,82 @@ def test_running_average_calculator_multiple_galaxies():
     assert calc.stats[32].seed_count == 2
     # 第一个恒星的平均距离: (0 + 10) / 2 = 5.0
     assert calc.stats[32].stars_stats[0].avg_distance == 5.0
+
+
+def test_avg_liquid_float_precision():
+    """测试avg_liquid使用浮点数除法以确保精度"""
+    stats = StarStats()
+
+    class MockStar1:
+        distance = 1.0
+        dyson_radius = 1000.0
+        dyson_lumino = 1.0
+        veins_point = [10] * 14
+        veins_amount = [100] * 14
+        gas_veins = [1.0, 2.0, 3.0]
+        liquid = [1, 2]
+
+    class MockStar2:
+        distance = 2.0
+        dyson_radius = 2000.0
+        dyson_lumino = 2.0
+        veins_point = [20] * 14
+        veins_amount = [200] * 14
+        gas_veins = [2.0, 4.0, 6.0]
+        liquid = [2, 4]
+
+    class MockStar3:
+        distance = 3.0
+        dyson_radius = 3000.0
+        dyson_lumino = 3.0
+        veins_point = [30] * 14
+        veins_amount = [300] * 14
+        gas_veins = [3.0, 6.0, 9.0]
+        liquid = [3, 6]
+
+    # 测试液体平均值计算
+    stats.update(MockStar1(), count=1)
+    assert stats.avg_liquid[0] == 1.0
+    assert stats.avg_liquid[1] == 2.0
+
+    stats.update(MockStar2(), count=2)
+    # 期望值: 1 + (2 - 1) / 2 = 1.5, 2 + (4 - 2) / 2 = 3.0
+    assert abs(stats.avg_liquid[0] - 1.5) < 1e-10
+    assert abs(stats.avg_liquid[1] - 3.0) < 1e-10
+
+    stats.update(MockStar3(), count=3)
+    # 期望值: 1.5 + (3 - 1.5) / 3 = 2.0, 3.0 + (6 - 3.0) / 3 = 4.0
+    assert abs(stats.avg_liquid[0] - 2.0) < 1e-10
+    assert abs(stats.avg_liquid[1] - 4.0) < 1e-10
+
+    # 测试交替值的情况，验证不会停留在整数
+    stats2 = StarStats()
+
+    class MockStarA:
+        distance = 1.0
+        dyson_radius = 1000.0
+        dyson_lumino = 1.0
+        veins_point = [10] * 14
+        veins_amount = [100] * 14
+        gas_veins = [1.0, 2.0, 3.0]
+        liquid = [1, 2]
+
+    class MockStarB:
+        distance = 1.0
+        dyson_radius = 1000.0
+        dyson_lumino = 1.0
+        veins_point = [10] * 14
+        veins_amount = [100] * 14
+        gas_veins = [1.0, 2.0, 3.0]
+        liquid = [2, 4]
+
+    # 交替更新
+    stats2.update(MockStarA(), count=1)  # avg_liquid[0] = 1.0
+    stats2.update(MockStarB(), count=2)  # avg_liquid[0] = 1.5
+    stats2.update(MockStarA(), count=3)  # avg_liquid[0] = 1.3333...
+    stats2.update(MockStarB(), count=4)  # avg_liquid[0] = 1.5
+
+    # 真值应为 (1 + 2 + 1 + 2) / 4 = 1.5
+    assert abs(stats2.avg_liquid[0] - 1.5) < 1e-10
+    # 验证不是整数
+    assert stats2.avg_liquid[0] != int(stats2.avg_liquid[0])
