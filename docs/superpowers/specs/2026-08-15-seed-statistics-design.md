@@ -340,29 +340,30 @@ useEffect(() => {
 
 ### 验证方法
 ```python
+# 已实现于 backend/verify_stats.py（python verify_stats.py --start 1 --end 100）
 def verify_running_average():
-    """验证运行均值算法正确性"""
-    
+    """验证运行均值算法正确性（两条独立路径，原理等价原设计）"""
     # 对每种恒星数量分别验证
     for star_num in range(32, 65):
-        # 1. 方法A：简单平均（保留所有数据）
-        all_galaxies = []
+        # 1. 方法A：简单平均（累加全部原始数据，最后除以N）
+        acc = SimpleAverageAccumulator(star_num)   # 每恒星位置累加字段
         for seed_id in range(1, 101):
-            galaxy = get_galaxy_data_c(Seed(seed_id, star_num, 0), False)
-            all_galaxies.append(galaxy)
-        
-        # 简单平均：sum / count
-        simple_avg = calculate_simple_average(all_galaxies)
-        
-        # 2. 方法B：运行均值（只保留均值）
+            galaxy = get_galaxy_data_c(Seed(seed_id, star_num, RESOURCE_INDEX), False)
+            acc.add(galaxy)
+        simple_avg = acc.finalize()   # sum / N
+
+        # 2. 方法B：运行均值（系统实际使用的增量式 avg += (x-avg)/count）
         running_avg = None
         for seed_id in range(1, 101):
-            galaxy = get_galaxy_data_c(Seed(seed_id, star_num, 0), False)
-            running_avg = update_running_average(running_avg, galaxy, seed_id)
-        
-        # 3. 对比两种方法的结果
+            galaxy = ...
+            running_avg = update_running_average(...)
+
+        # 3. 对比两种方法：所有字段相对误差 < 0.01%
         compare_results(simple_avg, running_avg, star_num)
 ```
+
+> 实现说明：`verify_stats.py` 实际走 **GetDataManager 并发**（与生产批处理同一条计算路径），
+> 运行时逐条既喂运行均值器、又喂简单平均累加器，最终逐字段比较。
 
 ### 验证数据存储
 ```
