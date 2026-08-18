@@ -110,6 +110,22 @@ class StatsStorage:
                         s.avg_liquid = star_data.get("avg_liquid", [0.0, 0.0])
         return calculator
 
+    def save_runtime(self, runtime: Dict[str, Any]):
+        """保存运行时标记（子进程PID、起止范围等）"""
+        runtime_file = os.path.join(self.data_dir, "runtime.json")
+        self._save_json(runtime_file, runtime)
+
+    def load_runtime(self) -> Optional[Dict[str, Any]]:
+        """加载运行时标记"""
+        runtime_file = os.path.join(self.data_dir, "runtime.json")
+        return self._load_json(runtime_file)
+
+    def clear_runtime(self):
+        """清除运行时标记"""
+        runtime_file = os.path.join(self.data_dir, "runtime.json")
+        if os.path.exists(runtime_file):
+            os.remove(runtime_file)
+
     def save_verification_data(self, simple_avg: Dict, running_avg: Dict,
                               comparison: Dict):
         """保存验证数据"""
