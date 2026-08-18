@@ -247,10 +247,11 @@ def test_batch_calculator_calls_c_api(mock_c_api):
         # 验证 GetDataManager.add_task 被调用了33次（1种子×33恒星数）
         assert FakeManager.total_added == 33
 
-        # 验证每个 Seed 携带正确的 star_num 与 resource_index=0
+        # 验证每个 Seed 携带正确的 star_num 与 resource_index=4（1倍资源）
         star_nums = sorted(s.star_num for s in FakeSeed._instances)
         assert star_nums == list(range(32, 65))
-        assert all(s.resource_index == 0 for s in FakeSeed._instances)
+        assert all(s.resource_index == 4 for s in FakeSeed._instances), \
+            "统计必须固定使用1倍资源（源项目 resource_rates 索引4），而非索引0的0.1倍"
 
         # 验证 manager 已 shutdown（线程资源被回收）
         assert all(getattr(m, "shutdown_called", False) for m in FakeManager.instances)

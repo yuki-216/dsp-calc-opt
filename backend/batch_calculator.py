@@ -30,6 +30,10 @@ from dsp_search_seed.CApi.search_seed import (
 from stats_calculator import RunningAverageCalculator
 from stats_storage import StatsStorage
 
+# 统计固定资源倍率：源项目 defines.hpp 中 resource_rates[4] == 1.0f
+# 索引0是0.1倍(极少)，索引4才是1倍——统计期望必须以1倍资源计算
+RESOURCE_INDEX = 4
+
 
 class BatchCalculator:
     """批量计算器"""
@@ -158,7 +162,7 @@ class BatchCalculator:
             tasks: List[Tuple[int, int]] = []
             for seed_id in range(batch_start, batch_end + 1):
                 for star_num in range(32, 65):  # 32-64，共33种
-                    manager.add_task(Seed(seed_id, star_num, 0))
+                    manager.add_task(Seed(seed_id, star_num, RESOURCE_INDEX))
                     tasks.append((seed_id, star_num))
 
             total = len(tasks)
