@@ -1,6 +1,6 @@
 import {createContext, useContext, useState, useEffect} from 'react';
 import {Nav, Navbar, OverlayTrigger, Tooltip} from 'react-bootstrap';
-import {FaMoon, FaProjectDiagram, FaQq, FaReact, FaSun} from 'react-icons/fa';
+import {FaMoon, FaProjectDiagram, FaQq, FaReact, FaSearch, FaSun} from 'react-icons/fa';
 import {useRegisterSW} from 'virtual:pwa-register/react';
 import {default_game_data, vanilla_game_version} from './game_data';
 
@@ -141,6 +141,13 @@ export function Header({onNavigate, currentPage}) {
         }
     }
 
+    function handle_seed_viewer(e) {
+        e.preventDefault();
+        if (onNavigate) {
+            onNavigate(currentPage === 'seed-viewer' ? 'calculator' : 'seed-viewer');
+        }
+    }
+
     return (
         <Navbar className="px-3 text-nowrap" bg="body-tertiary" expand="lg">
             <Navbar.Brand href="#" className="d-inline-flex align-items-baseline"
@@ -160,6 +167,15 @@ export function Header({onNavigate, currentPage}) {
                     >
                         <FaProjectDiagram/>
                         <span>依赖图</span>
+                    </Nav.Link>
+                    <Nav.Link
+                        href="#"
+                        className={`d-inline-flex align-items-center gap-1 ${currentPage === 'seed-viewer' ? 'active' : ''}`}
+                        onClick={handle_seed_viewer}
+                        title="查看种子资源分布"
+                    >
+                        <FaSearch/>
+                        <span>种子查看</span>
                     </Nav.Link>
                     <Nav.Link href="https://github.com/yuki-216/dsp-calc-opt" target="_blank">开源仓库</Nav.Link>
                     {/* <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link> */}

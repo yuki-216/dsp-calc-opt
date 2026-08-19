@@ -4,6 +4,7 @@
 测试 mock subprocess.Popen，避免真正启动计算子进程。
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -45,12 +46,19 @@ def client(tmp_path, monkeypatch):
 
 
 def _save_stat(storage, star_num, seed_count=10):
-    """向临时存储写入一个统计数据文件"""
-    storage._save_json(str(Path(storage.data_dir) / f"stats_{star_num}.json"), {
+    """向临时存储写入一个统计数据（新版：合并到 stats.json）"""
+    stats_file = Path(storage.data_dir) / "stats.json"
+    existing = {}
+    if stats_file.exists():
+        with open(stats_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    existing[str(star_num)] = {
         "star_num": star_num,
         "seed_count": seed_count,
         "stars_stats": []
-    })
+    }
+    with open(stats_file, "w", encoding="utf-8") as f:
+        json.dump(existing, f)
 
 
 def test_start_stats_calculation(client):
@@ -116,7 +124,6 @@ def test_get_stats_status(client):
     assert "total_seeds" in data
     assert "progress_percent" in data
     assert "elapsed_time" in data
-    assert "estimated_remaining" in data
     assert data["is_running"] is False
 
 
@@ -188,3 +195,114 @@ def test_get_stats_star_num_too_high(client):
     response = c.get("/api/seed-stats/100")
     assert response.status_code == 400
     assert "detail" in response.json()
+
+
+# --- /convergence 端点测试 ---
+
+def _save_stats_with_m2(storage, star_num, seed_count=10):
+    """写入含 m2 字段的 stats.json（模拟 Welford 运行结果）"""
+    import json
+    stats_file = Path(storage.data_dir) / "stats.json"
+    existing = {}
+    if stats_file.exists():
+        with open(stats_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    stars_stats = []
+    for i in range(star_num):
+        stars_stats.append({
+            "avg_distance": 1.0 + i * 0.1,
+            "m2_distance": 0.5 + i * 0.01,
+            "avg_veins_point": [10] * 14,
+            "m2_veins_point": [5] * 14,
+            "avg_veins_amount": [100] * 14,
+            "m2_veins_amount": [50] * 14,
+            "avg_gas_veins": [1.0, 2.0, 3.0],
+            "m2_gas_veins": [0.5, 0.5, 0.5],
+        })
+    existing[str(star_num)] = {
+        "star_num": star_num,
+        "seed_count": seed_count,
+        "stars_stats": stars_stats,
+    }
+    with open(stats_file, "w", encoding="utf-8") as f:
+        json.dump(existing, f)
+
+
+def test_convergence_with_m2_returns_ci(client):
+    """含 m2 字段的数据：返回完整 convergence 结构"""
+    c, _, _ = client
+    _save_stats_with_m2(stats_api.storage, 64, seed_count=10)
+    response = c.get("/api/seed-stats/64/convergence")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stale"] is False
+    assert data["seed_count"] == 10
+    assert data["confidence"] == 0.95
+    assert len(data["fields"]) == 64
+    pos0 = data["fields"][0]
+    assert "distance" in pos0
+    assert {"mean", "std", "se", "ci_half", "relative_error"} <= set(pos0["distance"].keys())
+    # 相对误差 < 1（任何正均值）
+    assert pos0["distance"]["relative_error"] >= 0
+
+
+def test_convergence_invalid_star_num(client):
+    """无效恒星数：400"""
+    c, _, _ = client
+    response = c.get("/api/seed-stats/10/convergence")
+    assert response.status_code == 400
+
+
+def test_convergence_not_found(client):
+    """无数据：404"""
+    c, _, _ = client
+    response = c.get("/api/seed-stats/64/convergence")
+    assert response.status_code == 404
+
+
+def test_convergence_stale_data(client):
+    """无 m2 字段的旧数据：返回 stale=true"""
+    c, _, _ = client
+    # 用 _save_stat 写旧格式（无 m2）
+    _save_stat(stats_api.storage, 64)
+    response = c.get("/api/seed-stats/64/convergence")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stale"] is True
+    assert "message" in data  # 前端可展示提示
+
+
+def test_start_clears_stats_for_fresh_recompute(client):
+    """开始按钮语义：从头开始必须清空 stats.json。
+    否则老样本会永久绑定，新数据只是微扰，无法真正从头评估。"""
+    import json
+    c, mock_popen, _ = client
+    # 模拟历史已有统计
+    stats_file = Path(stats_api.storage.data_dir) / "stats.json"
+    with open(stats_file, "w", encoding="utf-8") as f:
+        json.dump({"32": {"star_num": 32, "seed_count": 100, "stars_stats": []}}, f)
+
+    response = c.post("/api/seed-stats/start", json={
+        "start_seed_id": 1, "end_seed_id": 100, "batch_size": 1,
+    })
+    assert response.status_code == 200
+
+    # stats.json 已被清空
+    assert not stats_file.exists(), (
+        "开始按钮必须清空 stats.json，否则老样本会永久绑定在新均值上"
+    )
+    # 子进程被启动
+    assert mock_popen.call_count == 1
+
+
+def test_convergence_insufficient_samples(client):
+    """seed_count < 2：返回提示"""
+    c, _, _ = client
+    _save_stats_with_m2(stats_api.storage, 64, seed_count=1)
+    response = c.get("/api/seed-stats/64/convergence")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stale"] is False
+    assert data["seed_count"] == 1
+    assert data["fields"] == []
+    assert "样本数不足" in data["message"]

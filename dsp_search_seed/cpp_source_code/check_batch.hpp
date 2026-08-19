@@ -1,0 +1,473 @@
+#pragma once
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <condition_variable>
+#include <iostream>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <windows.h>
+
+#include "defines.hpp"
+#include "data_struct.hpp"
+#include "check_seed.hpp"
+#include "python_api.hpp"
+#include "seed_manager.hpp"
+#include "condition_to_struct.hpp"
+
+using namespace std;
+namespace py = pybind11;
+
+class GetDataQueue {
+protected:
+	struct Task {
+		SeedStruct seed;
+		int thread_num;
+	};
+
+	int max_cache;
+	thread worker_thread;
+	mutex task_mtx;
+	queue<Task> tasks;
+	condition_variable on_task_generated;
+	atomic<bool> stop = false;
+
+	mutex result_mtx;
+	condition_variable on_result_clear;
+	vector<GalaxyData> result;
+
+	void worker_func() {
+		while(true) {
+			Task task;
+			{
+				unique_lock<mutex> lck(task_mtx);
+				on_task_generated.wait(lck,[this]() { return !tasks.empty() || stop.load(); });
+				if(stop.load())
+					break;
+				task = tasks.front();
+				tasks.pop();
+			}
+
+			GalaxyData galaxy_data = get_galaxy_data_para(task.seed,task.thread_num);
+			unique_lock<mutex> lck(result_mtx);
+			on_result_clear.wait(lck,[this]() { return result.size() < max_cache || stop.load(); });
+			result.push_back(move(galaxy_data));
+		}
+	}
+public:
+	GetDataQueue(int max_cache=1024) {
+		this->max_cache = max(max_cache,1);
+		worker_thread = thread(&GetDataQueue::worker_func,this);
+	}
+
+	~GetDataQueue() {
+		shutdown();
+	}
+
+	void add_task(const SeedStruct& seed,int thread_num) {
+		{
+			lock_guard<mutex> lck(task_mtx);
+			if(stop.load())
+				return;
+			tasks.push({seed,thread_num});
+		}
+		on_task_generated.notify_one();
+	}
+
+	void shutdown() {
+		stop.store(true);
+		on_task_generated.notify_all();
+		on_result_clear.notify_all();
+		if(worker_thread.joinable())
+			worker_thread.join();
+	}
+
+	vector<GalaxyData> get_results() {
+		vector<GalaxyData> return_result;
+		{
+			lock_guard<mutex> lck(result_mtx);
+			return_result = move(result);
+			result.clear();
+		}
+		on_result_clear.notify_one();
+		return return_result;
+	}
+};
+
+class GetDataManager {
+protected:
+	vector<thread> search_threads{};
+	mutex task_mtx;
+	queue<SeedStruct> tasks{};
+	condition_variable on_task_generated;
+	atomic<bool> stop = false;
+
+	int max_thread;
+	bool quick;
+	int max_cache;
+
+	mutex result_mtx;
+	condition_variable on_result_clear;
+	vector<GalaxyData> result{};
+
+	void search_func() {
+		while(true) {
+			unique_lock<mutex> task_lck(task_mtx);
+			on_task_generated.wait(task_lck,[this]() { return !tasks.empty() || stop.load(); });
+			if(stop.load()) {
+				task_lck.unlock();
+				break;
+			}
+			SeedStruct current_task = tasks.front();
+			tasks.pop();
+			task_lck.unlock();
+
+			GalaxyData galaxy_data = get_galaxy_data(current_task,quick);
+			unique_lock<mutex> lck(result_mtx);
+			on_result_clear.wait(lck,[this]() { return result.size() < max_cache || stop.load(); });
+			result.push_back(galaxy_data);
+		}
+	}
+public:
+	GetDataManager(int max_thread,bool quick,int max_cache=1024) {
+		this->max_thread = clamp(max_thread,1,128);
+		this->quick = quick;
+		this->max_cache = max(max_cache,1);
+		for(int i=0;i<max_thread;i++) {
+			search_threads.push_back(thread(&GetDataManager::search_func,this));
+		}
+	}
+
+	~GetDataManager() {
+		shutdown();
+	}
+
+	void add_task(const SeedStruct& seed) {
+		{
+			lock_guard<mutex> lck(task_mtx);
+			tasks.push(seed);
+		}
+		on_task_generated.notify_one();
+	}
+
+	void shutdown() {
+		stop.store(true);
+		on_task_generated.notify_all();
+		on_result_clear.notify_all();
+		for(int i=0;i<max_thread;i++) {
+			thread& search_thread = search_threads[i];
+			if(search_thread.joinable())
+				search_thread.join();
+		}
+		//search_threads.clear();
+	}
+
+	vector<GalaxyData> get_results() {
+		vector<GalaxyData> return_result;
+		{
+			lock_guard<mutex> lck(result_mtx);
+			return_result = move(result);
+			result.clear();
+		}
+		on_result_clear.notify_all();
+		return return_result;
+	}
+};
+
+class CheckPreciseManager {
+protected:
+	vector<thread> search_threads;
+	thread task_thread;
+	mutex task_mtx;
+	queue<SeedStruct> tasks;
+	condition_variable cv_generator;
+	condition_variable cv_consumer;
+
+	atomic<int> working_num = 0;
+	enum class State: uint8_t {Running,Paused,Stopped};
+	atomic<State> state{State::Running};
+	atomic<bool> finish = false;
+
+	uint8_t resource_index;
+	SeedManager* seed_manager = nullptr;
+	GalaxyCondition galaxy_condition;
+	int max_thread;
+	int check_level;
+
+	atomic<size_t> finish_task_num = 0;
+	mutex result_mtx;
+	vector<SeedStruct> result;
+
+	void task_generator() {
+		SetThreadPriorityBoost(GetCurrentThread(),TRUE);
+		seed_manager->reset_index();
+		while(true) {
+			state.wait(State::Paused);
+			{
+				unique_lock<mutex> lck(task_mtx);
+				cv_generator.wait(lck,[this]() {return tasks.size() <= 1024 || state.load()==State::Stopped;});
+			}
+			if(state.load()==State::Stopped)
+				break;
+			vector<SeedStruct> batch_seeds = seed_manager->get_seeds(1024,resource_index);
+			if(batch_seeds.empty())
+				break;
+			{
+				lock_guard<mutex> lck(task_mtx);
+				for(const SeedStruct& seed: batch_seeds)
+					tasks.push(seed);
+			}
+			cv_consumer.notify_all();
+		}
+		finish.store(true);
+		cv_consumer.notify_all();
+	}
+
+	void search_func() {
+		SetThreadPriorityBoost(GetCurrentThread(),TRUE);
+		SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_BELOW_NORMAL);
+		while(true) {
+			state.wait(State::Paused);
+			SeedStruct current_task;
+			{
+				unique_lock<mutex> lck(task_mtx);
+				cv_consumer.wait(lck,[this]() { return !tasks.empty() || finish.load() || state.load()==State::Stopped; });
+				if(state.load()==State::Stopped)
+					break;
+				if(tasks.empty() && finish.load())
+					break;
+				current_task = tasks.front();
+				tasks.pop();
+			}
+			cv_generator.notify_one();
+			if(check_seed(current_task,galaxy_condition,check_level)) {
+				lock_guard<mutex> lck(result_mtx);
+				result.push_back(current_task);
+			}
+			finish_task_num.fetch_add(1);
+		}
+		working_num.fetch_sub(1);
+	}
+public:
+	CheckPreciseManager(SeedManager& seed_manager,uint8_t resource_index,
+		const py::dict& galaxy_condition_dict,bool quick,int max_thread)
+	{
+		this->galaxy_condition = galaxy_condition_to_struct(galaxy_condition_dict);
+		this->check_level = get_condition_level(galaxy_condition,quick);
+		this->resource_index = resource_index;
+		this->max_thread = max_thread;
+		this->seed_manager = &seed_manager;
+	}
+
+	~CheckPreciseManager() {
+		shutdown();
+	}
+
+	void start_wait() {
+		State expected = State::Running;
+		state.compare_exchange_strong(expected,State::Paused);
+	}
+
+	void end_wait() {
+		State expected = State::Paused;
+		state.compare_exchange_strong(expected,State::Running);
+		state.notify_all();
+	}
+
+	void run() {
+		task_thread = thread(&CheckPreciseManager::task_generator,this);
+		for(int i=0;i<max_thread;i++) {
+			working_num.fetch_add(1);
+			search_threads.push_back(thread(&CheckPreciseManager::search_func,this));
+		}
+	}
+
+	bool is_running() {
+		return working_num.load() > 0;
+	}
+
+	void shutdown() {
+		state.store(State::Stopped);
+		state.notify_all();
+		cv_generator.notify_all();
+		cv_consumer.notify_all();
+		if(task_thread.joinable())
+			task_thread.join();
+		for(thread& search_thread: search_threads) {
+			if(search_thread.joinable())
+				search_thread.join();
+		}
+		//search_threads.clear();
+	}
+
+	size_t get_task_num() {
+		return seed_manager->get_seeds_count();
+	}
+
+	size_t get_task_progress() {
+		return finish_task_num.load();
+	}
+
+	size_t get_result_num() {
+		lock_guard<mutex> lck(result_mtx);
+		return result.size();
+	}
+
+	SeedStruct get_last_result() {
+		lock_guard<mutex> lck(result_mtx);
+		if(result.empty())
+			return SeedStruct(-1,-1,0.0f);
+		return result.back();
+	}
+
+	vector<SeedStruct> get_results() {
+		lock_guard<mutex> lck(result_mtx);
+		return result;
+	}
+};
+
+class CheckBatchManager {
+protected:
+	vector<thread> search_threads;
+	atomic<int> working_num = 0;
+	atomic<size_t> task_id = 0;
+	atomic<size_t> finish_task_num = 0;
+	enum class State: uint8_t {Running,Paused,Stopped};
+	atomic<State> state{State::Running};
+
+	GalaxyCondition galaxy_condition;
+	int check_level;
+	int start_seed;
+	int end_seed;
+	int start_star_num;
+	int end_star_num;
+	uint8_t resource_index;
+	size_t task_num;
+	int max_thread;
+
+	mutex mtx;
+	vector<SeedStruct> result;
+
+	void search_func() {
+		SetThreadPriorityBoost(GetCurrentThread(),TRUE);
+		SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_BELOW_NORMAL);
+		while(true) {
+			state.wait(State::Paused);
+			if(state.load()==State::Stopped)
+				break;
+
+			size_t current_task_id = task_id.fetch_add(1);
+			if(current_task_id >= task_num) {
+				break;
+			}
+
+			int seed_id = start_seed + current_task_id / (end_star_num - start_star_num);
+			int star_num = start_star_num + current_task_id % (end_star_num - start_star_num);
+			SeedStruct task = SeedStruct(seed_id,star_num,resource_index);
+
+			if(check_seed(task,galaxy_condition,check_level)) {
+				lock_guard<mutex> lck(mtx);
+				result.push_back(task);
+			}
+			finish_task_num.fetch_add(1);
+		}
+		working_num.fetch_sub(1);
+	}
+public:
+	CheckBatchManager(int start_seed,int end_seed,int start_star_num,int end_star_num,uint8_t resource_index,
+		const py::dict& galaxy_condition_dict,bool quick,int max_thread)
+	{
+		this->galaxy_condition = galaxy_condition_to_struct(galaxy_condition_dict);
+		this->check_level = get_condition_level(galaxy_condition,quick);
+		this->start_seed = start_seed;
+		this->end_seed = end_seed;
+		this->start_star_num = start_star_num;
+		this->end_star_num = end_star_num;
+		this->resource_index = resource_index;
+		this->max_thread = max_thread;
+		size_t seed_count = end_seed > start_seed ? end_seed - start_seed : 0;
+		size_t star_num_count = end_star_num > start_star_num ? end_star_num - start_star_num : 0;
+		this->task_num = seed_count * star_num_count;
+	}
+
+	CheckBatchManager(int start_seed,int end_seed,int start_star_num,int end_star_num,uint8_t resource_index,
+		const GalaxyCondition& galaxy_condition,bool quick,int max_thread)
+	{
+		this->galaxy_condition = galaxy_condition;
+		this->check_level = get_condition_level(galaxy_condition,quick);
+		this->start_seed = start_seed;
+		this->end_seed = end_seed;
+		this->start_star_num = start_star_num;
+		this->end_star_num = end_star_num;
+		this->resource_index = resource_index;
+		this->max_thread = max_thread;
+		size_t seed_count = end_seed > start_seed ? end_seed - start_seed : 0;
+		size_t star_num_count = end_star_num > start_star_num ? end_star_num - start_star_num : 0;
+		this->task_num = seed_count * star_num_count;
+	}
+
+	~CheckBatchManager() {
+		shutdown();
+	}
+
+	void start_wait() {
+		State expected = State::Running;
+		state.compare_exchange_strong(expected,State::Paused);
+	}
+
+	void end_wait() {
+		State expected = State::Paused;
+		state.compare_exchange_strong(expected,State::Running);
+		state.notify_all();
+	}
+
+	void run() {
+		for(int i=0;i<max_thread;i++) {
+			working_num.fetch_add(1);
+			search_threads.push_back(thread(&CheckBatchManager::search_func,this));
+		}
+	}
+
+	bool is_running() {
+		return working_num.load() > 0;
+	}
+
+	void shutdown() {
+		state.store(State::Stopped);
+		state.notify_all();
+		for(thread& search_thread: search_threads) {
+			if(search_thread.joinable())
+				search_thread.join();
+		}
+		search_threads.clear();
+	}
+
+	size_t get_task_num() const {
+		return task_num;
+	}
+
+	size_t get_task_progress() {
+		return finish_task_num.load();
+	}
+
+	size_t get_result_num() {
+		lock_guard<mutex> lck(mtx);
+		return result.size();
+	}
+
+	SeedStruct get_last_result() {
+		lock_guard<mutex> lck(mtx);
+		if(result.empty())
+			return SeedStruct(-1,0,0);
+		return result.back();
+	}
+
+	vector<SeedStruct> get_results() {
+		lock_guard<mutex> lck(mtx);
+		return result;
+	}
+};

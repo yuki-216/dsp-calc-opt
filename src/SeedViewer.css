@@ -1,0 +1,860 @@
+/* 种子查看器页面样式 */
+
+/* 页面布局 */
+.seed-viewer-page {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    height: calc(100vh - 60px);
+    background: var(--bs-body-bg);
+    overflow: hidden;
+}
+
+/* 输入面板 */
+.input-panel {
+    width: 300px;
+    min-width: 300px;
+    background: var(--bs-card-bg);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.input-panel h2 {
+    margin: 0;
+    color: var(--bs-body-color);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.input-panel .description {
+    margin: 0;
+    color: var(--bs-secondary-color);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* 表单样式 */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+    padding: 10px 12px;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.form-group input:disabled,
+.form-group select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 查询按钮 */
+.query-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bs-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.query-button:hover:not(:disabled) {
+    background: var(--bs-primary-hover, var(--bs-primary));
+    transform: translateY(-1px);
+}
+
+.query-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.query-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 加载动画 */
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 错误消息 */
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    border: 1px solid var(--bs-danger-border-subtle);
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.ore-selection-status {
+    margin-top: 4px;
+}
+
+.ore-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ore-action-row .pro-mode-toggle {
+    flex: 0 0 auto;
+}
+
+.ore-action-row .action-button {
+    flex: 1 1 0;
+}
+
+.action-button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.action-button:hover {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+}
+
+/* 结果占位符 */
+.result-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bs-card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.placeholder-content {
+    text-align: center;
+    color: var(--bs-secondary-color);
+}
+
+.placeholder-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.placeholder-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.placeholder-content p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* 加载状态 */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 16px;
+    color: var(--bs-secondary-color);
+}
+
+.loading-container .spinner {
+    font-size: 2rem;
+    color: var(--bs-primary);
+}
+
+.loading-hint {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+/* 结果面板 */
+.result-panel {
+    flex: 1;
+    min-height: 0;            /* 让内部 flex 子项能正常滚动 */
+    display: flex;
+    gap: 20px;
+    overflow: hidden;
+}
+
+/* 左侧树面板 */
+.tree-panel {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    background: var(--bs-card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 12px;
+}
+
+/* 右侧详情面板 */
+.detail-panel {
+    width: 400px;
+    min-width: 400px;
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    background: var(--bs-card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 树节点样式 */
+.tree-item {
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 2px;
+}
+
+.tree-item:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+.tree-item.selected {
+    background: var(--bs-primary-bg-subtle);
+}
+
+.tree-item-header {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.tree-toggle {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--bs-secondary-color);
+    transition: transform 0.2s;
+}
+
+.tree-selection-checkbox {
+    flex: 0 0 auto;
+    margin: 0 2px 0 0;
+    cursor: pointer;
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.tree-icon.galaxy {
+    background: var(--bs-primary);
+}
+
+.tree-icon.star {
+    background: var(--bs-warning);
+}
+
+.tree-icon.planet {
+    background: var(--bs-success);
+}
+
+.tree-icon.planet.gas {
+    background: var(--bs-secondary);
+}
+
+.tree-label {
+    flex: 1;
+    font-size: 13px;
+}
+
+.star-type-tag {
+    font-size: 11px;
+    color: var(--bs-secondary-color);
+    margin-left: 4px;
+}
+
+.tree-info {
+    font-size: 12px;
+    color: var(--bs-secondary-color);
+}
+
+.tree-info .tag {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--bs-secondary-bg);
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+.tree-info .tag.rare {
+    background: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text-emphasis);
+}
+
+.tree-info .tag.special {
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+}
+
+.tree-children {
+    padding-left: 24px;
+}
+
+/* 矿脉网格 */
+.vein-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.vein-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--bs-body-bg);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.vein-name {
+    color: var(--bs-secondary-color);
+}
+
+.vein-value {
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+.vein-value.rare {
+    color: var(--bs-warning);
+}
+
+/* 恒星类型统计 */
+.star-types {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.star-types h4 {
+    margin-bottom: 8px;
+    color: var(--bs-secondary-color);
+    font-size: 13px;
+}
+
+.star-type-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+}
+
+.star-type-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.star-type-name {
+    color: var(--bs-secondary-color);
+}
+
+.star-type-count {
+    color: var(--bs-body-color);
+}
+
+/* 详情面板样式 */
+.detail-veins {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.detail-vein-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--bs-body-bg);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.detail-vein-item.rare {
+    background: var(--bs-warning-bg-subtle);
+}
+
+.detail-vein-name {
+    color: var(--bs-secondary-color);
+}
+
+.detail-vein-value {
+    font-weight: 500;
+}
+
+/* 详情面板 */
+.detail-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--bs-secondary-color);
+    font-size: 14px;
+}
+
+.detail-content {
+    padding: 16px;
+}
+
+.detail-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.detail-subtitle {
+    font-size: 14px;
+    color: var(--bs-secondary-color);
+    margin-bottom: 16px;
+}
+
+.detail-subtitle .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--bs-secondary-bg);
+    border-radius: 4px;
+    margin-right: 4px;
+    font-size: 12px;
+}
+
+.detail-subtitle .tag.special {
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+}
+
+.detail-subtitle .tag.rare {
+    background: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text-emphasis);
+}
+
+.detail-section {
+    margin-bottom: 16px;
+}
+
+.detail-section h4 {
+    font-size: 13px;
+    color: var(--bs-secondary-color);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.detail-info {
+    font-size: 13px;
+    color: var(--bs-secondary-color);
+    line-height: 1.8;
+}
+
+
+
+/* 滚动条样式 */
+.result-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.result-panel::-webkit-scrollbar-track {
+    background: var(--bs-body-bg);
+    border-radius: 4px;
+}
+
+.result-panel::-webkit-scrollbar-thumb {
+    background: var(--bs-border-color);
+    border-radius: 4px;
+}
+
+.result-panel::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-secondary-color);
+}
+
+/* 统计分析面板 */
+.stats-panel {
+    border-top: 1px solid var(--bs-border-color);
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stats-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+.stats-panel-icon {
+    color: var(--bs-primary);
+}
+
+.stats-panel-desc {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+    line-height: 1.4;
+}
+
+.stats-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.stats-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+
+.stats-btn:hover:not(:disabled) {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+}
+
+.stats-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.stats-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.stats-btn.primary {
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+
+.stats-btn.primary:hover:not(:disabled) {
+    background: var(--bs-primary-hover, var(--bs-primary));
+}
+
+.stats-btn.danger {
+    background: var(--bs-danger);
+    border-color: var(--bs-danger);
+    color: #fff;
+}
+
+.stats-btn.danger:hover:not(:disabled) {
+    background: var(--bs-danger-text-emphasis);
+}
+
+.stats-progress {
+    height: 8px;
+    background: var(--bs-secondary-bg);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stats-progress-bar {
+    height: 100%;
+    background: var(--bs-primary);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.stats-progress-label {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    text-align: right;
+    margin-top: -6px;
+}
+
+.stats-status {
+    font-size: 0.8rem;
+}
+
+.stats-status-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    color: var(--bs-body-color);
+    min-height: 18px;
+}
+
+.stats-status-main .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--bs-secondary-color);
+    flex-shrink: 0;
+}
+
+.stats-status-main .dot.running {
+    background: var(--bs-success);
+    animation: stats-pulse 1s infinite;
+}
+
+@keyframes stats-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+.stats-status-detail {
+    color: var(--bs-secondary-color);
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+.stats-refresh {
+    margin-left: auto;
+    cursor: pointer;
+    color: var(--bs-secondary-color);
+}
+
+.stats-refresh.spin {
+    animation: spin 1s linear infinite;
+}
+
+.stats-view-row {
+    display: flex;
+    gap: 6px;
+}
+
+.stats-view-row select {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: 0.85rem;
+}
+
+.stats-view-row select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.stats-view-row .stats-btn {
+    flex: 1;
+}
+
+.stats-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    border: 1px solid var(--bs-danger-border-subtle);
+}
+
+/* 源项目信息 */
+.source-info {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--bs-border-color);
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+}
+
+.source-info h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+    color: var(--bs-body-color);
+}
+
+.source-info p {
+    margin: 0 0 8px 0;
+    line-height: 1.5;
+}
+
+.source-info a {
+    color: var(--bs-primary);
+    text-decoration: none;
+}
+
+.source-info a:hover {
+    text-decoration: underline;
+}
+
+.source-features {
+    font-size: 0.8rem;
+    color: var(--bs-tertiary-color);
+}
+
+.source-recommend {
+    font-weight: 500;
+    color: var(--bs-warning-text-emphasis);
+}
+
+.source-license {
+    font-size: 0.75rem;
+    color: var(--bs-tertiary-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+    .vein-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .overview-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .seed-viewer-page {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 60px);
+    }
+
+    .input-panel {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .vein-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .overview-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .star-list-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .star-list-actions {
+        width: 100%;
+    }
+
+    .star-list-actions button {
+        flex: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .seed-viewer-page {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .input-panel {
+        padding: 16px;
+    }
+
+    .vein-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .star-header {
+        flex-wrap: wrap;
+    }
+
+    .star-planets {
+        margin-left: 0;
+        width: 100%;
+        text-align: right;
+    }
+}

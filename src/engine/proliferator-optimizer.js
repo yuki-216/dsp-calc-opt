@@ -119,8 +119,9 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
       totalRawOre += amount; // 始终计算（用于退化模式）
 
       let available = oreQuantities[item];
-      // 原油：用户输入的是面板产量，需要转换为实际可用量
-      if (item === '原油' && available > 0) {
+      // 原油在矿量模式下输入的是面板产量，需要还原为原始量；
+      // 矿点模式输入的是油井数量，不进行产率换算。
+      if (item === '原油' && available > 0 && settings.ore_quantity_mode !== 'point') {
         available = available / OIL_DECAY_FACTOR;
       }
       if (available > 0) {
@@ -499,7 +500,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
  * @param {number} initialMaxBottleneck - 初始最大瓶颈值（用于百分比基准）
  * @returns {Object} { currentScheme, currentObjective, currentPower, changes }
  */
-async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme, itemToRecipe, resolved, onLog, strategy, initialMaxBottleneck = 1) {
+async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme, itemToRecipe, resolved, onLog, strategy, initialMaxBottleneck = 1, onProgress = null) {
   const recipeData = gameData.recipe_data || [];
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
     : strategy === 'min_raw_ore' ? calculateRawOre
@@ -515,9 +516,11 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
   // 当前瓶颈数组（用于字典序比较）
   let currentBottleneckArray = initialCalcResult.bottleneckArray || [];
   const changes = [];
+  const totalSteps = Math.max(1, sccs.length);
 
   for (let sccIdx = 0; sccIdx < sccs.length; sccIdx++) {
     const scc = sccs[sccIdx];
+    onProgress?.(sccIdx, totalSteps, `正在优化第${sccIdx + 1}/${totalSteps}组`);
 
     // 跳过 solution 节点
     if (scc.has('__solution__')) continue;
@@ -664,6 +667,9 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         if (onLog) onLog(`  ${item} → ${choice.name}`);
       }
     }
+
+    onProgress?.(sccIdx + 1, totalSteps, `已完成第${sccIdx + 1}/${totalSteps}组`);
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
   return { currentScheme, currentObjective, currentPower, changes };
@@ -705,6 +711,8 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
     onLog('正在计算初始值...');
   }
+  onProgress?.(0, 1, '正在计算初始值...');
+  await new Promise(resolve => setTimeout(resolve, 0));
 
   // 2. 执行初始计算
   const initialResult = calculateResult(gameData, schemeData, settings, needs);
@@ -780,8 +788,9 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   let currentPower = initialPower;
   let currentObjective = initialObjective;
 
+  onProgress?.(0, Math.max(1, sccsForward.length), '正在开始优化...');
   const result = await optimizePhaseBySCC(
-    sccsForward, gameData, settings, needs, currentScheme, itemToRecipe, resolved, onLog, strategy, initialMaxBottleneck
+    sccsForward, gameData, settings, needs, currentScheme, itemToRecipe, resolved, onLog, strategy, initialMaxBottleneck, onProgress
   );
 
   currentScheme = result.currentScheme;

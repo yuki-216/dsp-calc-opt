@@ -4,6 +4,7 @@ import App from './App.jsx';
 import {Header, IconStyles, ThemeProvider} from './ui_components.jsx';
 import {ContextProvider} from './contexts.jsx';
 import {DependencyGraphPage} from './DependencyGraphPage.jsx';
+import SeedViewerPage from './SeedViewerPage.jsx';
 
 // Not using 'bootstrap/dist/js/bootstrap.min.js' here, because it breaks dropdown-list
 import 'bootstrap';
@@ -27,7 +28,7 @@ document.getElementById('header').style.display = 'none';
 const STORAGE_KEY_NEEDS = 'dsp-calc-needs-list';
 
 function RootApp() {
-    const [page, setPage] = useState('calculator'); // 'calculator' | 'dependency-graph'
+    const [page, setPage] = useState('calculator'); // 'calculator' | 'dependency-graph' | 'seed-viewer'
     const [newTabData, setNewTabData] = useState(null);
     const [needs_list, set_needs_list] = useState(() => {
         try {
@@ -60,10 +61,13 @@ function RootApp() {
         <ContextProvider>
             <Header onNavigate={setPage} currentPage={page}/>
             <div style={{display: page === 'calculator' ? 'contents' : 'none'}}>
-                <App needs_list={needs_list} set_needs_list={set_needs_list} newTabData={newTabData}/>
+                <App needs_list={needs_list} set_needs_list={set_needs_list} newTabData={newTabData} onNavigate={setPage}/>
             </div>
             <div style={{display: page === 'dependency-graph' ? 'contents' : 'none'}}>
                 <DependencyGraphPage onBack={() => setPage('calculator')} needs_list={needs_list} isActive={page === 'dependency-graph'}/>
+            </div>
+            <div style={{display: page === 'seed-viewer' ? 'contents' : 'none'}}>
+                <SeedViewerPage onNavigate={setPage} isActive={page === 'seed-viewer'}/>
             </div>
         </ContextProvider>
     </ThemeProvider>;

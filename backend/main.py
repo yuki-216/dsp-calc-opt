@@ -9,9 +9,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# 添加原项目的CApi路径
-SEED_VIEWER_PATH = Path("D:/编程/种子查看器")
-sys.path.insert(0, str(SEED_VIEWER_PATH))
+# 添加项目内置的种子生成依赖路径
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # 导入原项目的C API
 from dsp_search_seed.CApi.search_seed import (

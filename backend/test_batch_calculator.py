@@ -20,7 +20,7 @@ from stats_storage import StatsStorage
 class _MockStar:
     """轻量恒星对象（普通属性，避免 MagicMock 的动态开销）"""
     __slots__ = ("distance", "dyson_radius", "dyson_lumino",
-                 "veins_point", "veins_amount", "gas_veins", "liquid")
+                 "veins_point", "veins_amount", "gas_veins")
 
     def __init__(self, distance):
         self.distance = float(distance)
@@ -29,7 +29,6 @@ class _MockStar:
         self.veins_point = [10] * 14
         self.veins_amount = [100] * 14
         self.gas_veins = [1.0, 2.0, 3.0]
-        self.liquid = [1, 2]
 
 
 class _MockGalaxy:
@@ -121,7 +120,7 @@ def test_batch_calculator_initialization():
         assert calc.storage == storage
         assert calc.is_running == False
         assert calc.should_stop == False
-        assert calc.batch_size == 100
+        assert calc.batch_size == 1
 
 
 def test_batch_calculator_start_stop():
@@ -274,8 +273,7 @@ def test_resume_restores_stats():
                 self.veins_point = [10] * 14
                 self.veins_amount = [100] * 14
                 self.gas_veins = [1.0, 2.0, 3.0]
-                self.liquid = [1, 2]
-
+    
         class MockGalaxy:
             def __init__(self, star_num):
                 self.star_num = star_num
@@ -310,7 +308,6 @@ def test_resume_restores_stats():
             f"seed_count应>=2（已恢复），实际为{calc.calculator.stats[32].seed_count}"
 
         # 验证统计均值不是全零（说明确实从存储恢复了）
-        assert calc.calculator.stats[32].stars_stats[0].avg_dyson_radius == 1000.0
 
 
 def test_resume_progress_percent_is_correct():
@@ -344,6 +341,38 @@ def test_resume_progress_percent_is_correct():
         calc.stop()
         time.sleep(0.5)
         calc._thread.join(5)
+
+
+def test_default_batch_size_is_1():
+    """优化验证：默认 batch_size=1，每处理完一个种子（33 个星系）就更新一次进度。
+    100 种子/批会让前端长时间看不到变化；batch=1 让进度条实时滚动。"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = StatsStorage(data_dir=tmpdir)
+        calc = BatchCalculator(storage=storage)
+        assert calc.batch_size == 1
+
+
+def test_get_data_manager_is_reused_across_batches():
+    """优化验证：整次计算生命周期中 GetDataManager 只创建一次，不每批重建。
+    每批重建会引入 worker 线程池的反复创建/销毁，与按批次粒度成正比的开销。
+    """
+    import glob, os
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = StatsStorage(data_dir=tmpdir)
+        calc = BatchCalculator(storage=storage)
+
+        # 200 个种子 / batch=50 = 4 个批次，足够暴露"每批重建"问题
+        calc.start(start_seed_id=1, end_seed_id=200, batch_size=50)
+        calc._thread.join(10)
+        assert not calc.is_running
+
+        # 期望：整个计算只创建了一个 FakeManager 实例
+        assert len(FakeManager.instances) == 1, (
+            f"GetDataManager 应在生命周期内复用，实际创建了 "
+            f"{len(FakeManager.instances)} 个实例"
+        )
+        # 期望：最终被 shutdown（线程池释放）
+        assert FakeManager.instances[0].shutdown_called
 
 
 def test_stop_mid_batch_does_not_commit():

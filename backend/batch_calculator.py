@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
-# 添加原项目的CApi路径
-SEED_VIEWER_PATH = Path("D:/编程/种子查看器")
-sys.path.insert(0, str(SEED_VIEWER_PATH))
+# 添加项目内置的种子生成依赖路径
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # 导入原项目的C API
 from dsp_search_seed.CApi.search_seed import (
@@ -43,7 +43,9 @@ class BatchCalculator:
         self.calculator = RunningAverageCalculator()
         self.is_running = False
         self.should_stop = False
-        self.batch_size = 100
+        # batch_size=1：每处理完一个种子（33 个星系）就更新一次进度，
+        # 让前端能看到进度在动（而非以 100/批为单位长时间"卡住"）。
+        self.batch_size = 1
         self.current_seed_id = 0
         self.total_seeds = 0
         self.start_time = 0
@@ -55,6 +57,23 @@ class BatchCalculator:
 
         # 初始化C库
         do_init_c()
+
+        # GetDataManager 复用：worker 线程池在整个计算生命周期只创建一次，
+        # 避免每批重复创建/销毁带来的线程切换与资源映射开销。
+        # 懒加载：首次 start()/resume() 时再创建，便于测试时替换。
+        self._manager: Optional[GetDataManager] = None
+
+    def _ensure_manager(self) -> GetDataManager:
+        """懒加载 GetDataManager；已存在则复用，不存在则创建。"""
+        if self._manager is None:
+            self._manager = GetDataManager(self.max_thread, False, 128)
+        return self._manager
+
+    def _shutdown_manager(self):
+        """关闭并销毁 GetDataManager（线程池释放）。幂等。"""
+        if self._manager is not None:
+            self._manager.shutdown()
+            self._manager = None
 
     def set_stop_flag(self, path: Optional[Path]):
         """设置停止信号文件路径（供外部子进程方式停止）"""
@@ -110,6 +129,8 @@ class BatchCalculator:
 
     def _calculate_loop(self, start_seed_id: int, end_seed_id: int):
         """计算主循环：按批次推进，批次全量完成才落盘"""
+        # 整个计算生命周期共享一个 GetDataManager（worker 线程池只构建一次）
+        manager = self._ensure_manager()
         try:
             for batch_start in range(start_seed_id, end_seed_id + 1, self.batch_size):
                 # 检查是否需要停止
@@ -118,8 +139,8 @@ class BatchCalculator:
 
                 batch_end = min(batch_start + self.batch_size - 1, end_seed_id)
 
-                # 用 GetDataManager 并发处理这一批；仅整批完成后才提交进度
-                completed = self._process_batch(batch_start, batch_end)
+                # 用共享的 GetDataManager 并发处理这一批；仅整批完成后才提交进度
+                completed = self._process_batch(manager, batch_start, batch_end)
                 if not completed:
                     # 中途停止或出错：不提交本批（部分数据丢弃，resume 时重算）
                     break
@@ -135,7 +156,16 @@ class BatchCalculator:
                 )
                 self.storage.save_stats(self.calculator)
 
-                # 检查是否需要停止
+                # 自动停止检查：所有 star_num 的星区汇总都已收敛（真实测得的 Σ CI）
+                # 用户范围未跑完 + 摘要已收敛 → 提前结束，避免无谓计算
+                if batch_end < end_seed_id:
+                    if self.calculator.is_all_galaxy_summaries_converged(
+                        relative_error_threshold=0.03,
+                    ):
+                        print(f"[BatchCalculator] 星区汇总全部收敛，于 seed_id={batch_end} 提前停止")
+                        break
+
+                # 检查用户手动停止（优先级最高）
                 if self._should_stop():
                     break
 
@@ -146,18 +176,22 @@ class BatchCalculator:
             self.is_running = False
             print(f"计算异常: {str(e)}")
 
-    def _process_batch(self, batch_start: int, batch_end: int) -> bool:
+        finally:
+            # 关闭 worker 线程池；不论异常/停止/正常完成都释放资源
+            self._shutdown_manager()
+
+    def _process_batch(self, manager: GetDataManager, batch_start: int, batch_end: int) -> bool:
         """
-        使用 GetDataManager 并发处理一批种子。
+        使用共享的 GetDataManager 并发处理一批种子。
 
         任务枚举：batch内每个种子 ×33种恒星数量(32-64) 全部 add_task，
         然后轮询 get_results() 排空结果缓冲（max_cache 背压机制要求定期drain）。
 
         返回：整批是否完成。中途停止（stop标志/停止文件）或异常返回 False，
         此时调用方不应提交该批进度——部分结果丢弃，resume 时整批重算。
+
+        注意：manager 由调用方注入并在整次计算生命周期复用，本方法不 shutdown。
         """
-        # 注意：pybind11 绑定只接受位置参数 (max_thread, quick, max_cache)
-        manager = GetDataManager(self.max_thread, False, 128)
         try:
             tasks: List[Tuple[int, int]] = []
             for seed_id in range(batch_start, batch_end + 1):
@@ -182,9 +216,9 @@ class BatchCalculator:
 
             return True
 
-        finally:
-            # 必须 shutdown：置stop标志并join所有线程
-            manager.shutdown()
+        except Exception:
+            # 单批异常直接向上抛，外层 _calculate_loop 会在 finally 中 shutdown manager
+            raise
 
     def get_status(self) -> Dict[str, Any]:
         """获取计算状态"""
@@ -192,22 +226,14 @@ class BatchCalculator:
         if self.start_time > 0:
             elapsed_time = time.time() - self.start_time
 
-        # 计算预计剩余时间
-        estimated_remaining = 0
         processed = self.current_seed_id - self._start_seed_id
-        if processed > 0 and elapsed_time > 0:
-            seeds_per_second = processed / elapsed_time
-            remaining_seeds = self.total_seeds - processed
-            if seeds_per_second > 0:
-                estimated_remaining = remaining_seeds / seeds_per_second
 
         return {
             "is_running": self.is_running,
             "current_seed_id": self.current_seed_id,
             "total_seeds": self.total_seeds,
             "progress_percent": (processed / self.total_seeds * 100) if self.total_seeds > 0 else 0,
-            "elapsed_time": self._format_time(elapsed_time),
-            "estimated_remaining": self._format_time(estimated_remaining)
+            "elapsed_time": self._format_time(elapsed_time)
         }
 
     def _format_time(self, seconds: float) -> str:

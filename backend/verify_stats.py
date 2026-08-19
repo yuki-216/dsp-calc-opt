@@ -10,7 +10,7 @@
     python verify_stats.py [--start 1] [--end 100] [--batch 20] [--data-dir ...]
 输出报告写入 <data-dir>/verification/ 目录。
 
-注意：走真实源项目 GetDataManager 精确计算，1-100 种子 × 33 恒星数 ≈ 3300 次 galaxy
+注意：走项目内置 GetDataManager 精确计算，1-100 种子 × 33 恒星数 ≈ 3300 次 galaxy
 生成，约需 15-25 分钟。
 """
 
@@ -26,9 +26,9 @@ BACKEND_DIR = Path(__file__).resolve().parent
 os.chdir(BACKEND_DIR)
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-SEED_VIEWER_PATH = r"D:\编程\种子查看器"
-if SEED_VIEWER_PATH not in sys.path:
-    sys.path.insert(0, SEED_VIEWER_PATH)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from batch_calculator import RESOURCE_INDEX  # 1倍资源
 from stats_calculator import RunningAverageCalculator
@@ -36,16 +36,12 @@ from dsp_search_seed.CApi.search_seed import do_init_c, GetDataManager, Seed
 
 STAR_NUMS = list(range(32, 65))
 VEIN_COUNT = 14
-GAS_COUNT = 3
-LIQUID_COUNT = 2
 
 # 参与对比的字段清单
-SCALAR_FIELDS = ["avg_distance", "avg_dyson_radius", "avg_dyson_lumino"]
+SCALAR_FIELDS = ["avg_distance"]
 ARRAY_FIELDS = [
     ("avg_veins_point", VEIN_COUNT),
     ("avg_veins_amount", VEIN_COUNT),
-    ("avg_gas_veins", GAS_COUNT),
-    ("avg_liquid", LIQUID_COUNT),
 ]
 
 
@@ -59,12 +55,8 @@ class SimpleAverageAccumulator:
         for _ in range(star_num):
             self.stars.append({
                 "avg_distance": 0.0,
-                "avg_dyson_radius": 0.0,
-                "avg_dyson_lumino": 0.0,
                 "avg_veins_point": [0.0] * VEIN_COUNT,
                 "avg_veins_amount": [0.0] * VEIN_COUNT,
-                "avg_gas_veins": [0.0] * GAS_COUNT,
-                "avg_liquid": [0.0] * LIQUID_COUNT,
             })
 
     def add(self, galaxy) -> None:
@@ -74,15 +66,9 @@ class SimpleAverageAccumulator:
                 break
             slot = self.stars[i]
             slot["avg_distance"] += st.distance
-            slot["avg_dyson_radius"] += st.dyson_radius
-            slot["avg_dyson_lumino"] += st.dyson_lumino
             for k in range(VEIN_COUNT):
                 slot["avg_veins_point"][k] += st.veins_point[k]
                 slot["avg_veins_amount"][k] += st.veins_amount[k]
-            for k in range(GAS_COUNT):
-                slot["avg_gas_veins"][k] += st.gas_veins[k]
-            for k in range(LIQUID_COUNT):
-                slot["avg_liquid"][k] += st.liquid[k]
         self.count += 1
 
     def finalize(self) -> List[Dict]:
@@ -93,12 +79,8 @@ class SimpleAverageAccumulator:
         for slot in self.stars:
             result.append({
                 "avg_distance": slot["avg_distance"] / self.count,
-                "avg_dyson_radius": slot["avg_dyson_radius"] / self.count,
-                "avg_dyson_lumino": slot["avg_dyson_lumino"] / self.count,
                 "avg_veins_point": [v / self.count for v in slot["avg_veins_point"]],
                 "avg_veins_amount": [v / self.count for v in slot["avg_veins_amount"]],
-                "avg_gas_veins": [v / self.count for v in slot["avg_gas_veins"]],
-                "avg_liquid": [v / self.count for v in slot["avg_liquid"]],
             })
         return result
 

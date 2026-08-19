@@ -7,6 +7,35 @@ import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
 import {getFuelData} from './game_data.jsx';
 
+function formatProliferatorChoice(level, mode) {
+    if (!level) return '不使用';
+    const levelText = level > 0 ? `Mk.${level}` : '无';
+    const modeText = mode === 2 ? '增产' : mode === 1 ? '加速' : '无';
+    return `${levelText} ${modeText}`;
+}
+
+function collectProliferatorChanges(beforeScheme, afterScheme, recipes) {
+    const before = beforeScheme?.scheme_for_recipe || [];
+    const after = afterScheme?.scheme_for_recipe || [];
+    return recipes.reduce((changes, recipe, index) => {
+        const oldChoice = before[index] || {};
+        const newChoice = after[index] || {};
+        const oldLevel = Number(oldChoice['增产剂等级'] || 0);
+        const oldMode = oldLevel > 0 ? Number(oldChoice['增产模式'] || 0) : 0;
+        const newLevel = Number(newChoice['增产剂等级'] || 0);
+        const newMode = newLevel > 0 ? Number(newChoice['增产模式'] || 0) : 0;
+        if (oldLevel === newLevel && oldMode === newMode) return changes;
+
+        const items = Object.keys(recipe?.['产物'] || {});
+        changes.push({
+            item: items.length > 0 ? items.join(' / ') : `配方${index + 1}`,
+            before: formatProliferatorChoice(oldLevel, oldMode),
+            after: formatProliferatorChoice(newLevel, newMode),
+        });
+        return changes;
+    }, []);
+}
+
 export function Settings() {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
@@ -284,7 +313,6 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     // 优化器状态
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [optimProgress, setOptimProgress] = useState({ current: 0, total: 0, message: '' });
-    const [optimResult, setOptimResult] = useState(null);
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
     const [optimStrategy, setOptimStrategy] = useState(() => {
@@ -327,7 +355,6 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
         }
 
         setIsOptimizing(true);
-        setOptimResult(null);
         setOptimLogs([]);
         setOptimProgress({ current: 0, total: 0, message: '正在初始化...' });
 
@@ -350,8 +377,14 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                     optimStrategy
                 );
 
-                setOptimResult(result);
-                setOptimLogs([...logs]);
+                const changes = collectProliferatorChanges(scheme_data, result.optimalScheme, game_data.recipe_data || []);
+                const changeLogs = changes.length > 0
+                    ? [
+                        '\n========== 增产选择改动（对比优化前） ==========',
+                        ...changes.map(change => `${change.item}: ${change.before} → ${change.after}`),
+                    ]
+                    : ['\n========== 增产选择改动（对比优化前） ==========', '没有物品的增产选择发生改动'];
+                setOptimLogs([...logs, ...changeLogs]);
 
                 // 应用优化结果
                 set_scheme_data(result.optimalScheme);
@@ -510,7 +543,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
             {optimStrategy === 'min_raw_ore' && (
-                <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡 填写矿物可用量效果更佳</small>
+                <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡已自动应用统计均值</small>
             )}
         </div>
         {optimLogs.length > 0 && (

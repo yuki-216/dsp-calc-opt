@@ -4,7 +4,7 @@
 由后端API通过 subprocess 启动，负责执行批量统计计算。
 与主服务通过文件通信：
   - progress.json  : 进度（整批提交）
-  - stats_*.json   : 各组运行均值结果
+  - stats.json     : 运行均值、方差与置信度结果
   - runtime.json   : 运行标记（PID/起止范围），结束或停止时清除
   - stop.flag      : 停止信号（主服务写入，本进程在批次间隙检查）
 
@@ -49,7 +49,7 @@ def main() -> int:
     parser.add_argument("--start", type=int, default=None,
                         help="起始种子ID；不传则从 progress.json 恢复")
     parser.add_argument("--end", type=int, default=99999999)
-    parser.add_argument("--batch", type=int, default=100)
+    parser.add_argument("--batch", type=int, default=1)
     args = parser.parse_args()
 
     data_dir = args.data_dir

@@ -14,6 +14,10 @@ import {Settings, BatchSetting, FuelSelect} from './settings.jsx';
 import {default_game_data} from "./game_data.jsx";
 import {ItemIcon} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
+import {formatAmount} from './seed_viewer_binding';
+import {getStats} from './seed_stats_api';
+import {buildOreQuantities, getStatsOreIndex, STATS_ORE_ITEMS} from './ore_stats_binding';
+import OreQuantityModeToggle from './OreQuantityModeToggle.jsx';
 
 function UserSettings({show}) {
     let class_show = show ? "" : "d-none";
@@ -25,7 +29,16 @@ function UserSettings({show}) {
     </div>;
 }
 
-function OreInput({item, value, onChange}) {
+function formatAvailableValue(item, value, mode = 'amount') {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    if (item === '原油' && mode === 'amount') return `${numeric.toFixed(2)}/s`;
+    if (item === '原油') return numeric.toFixed(2);
+    if (Math.abs(numeric) >= 1000) return formatAmount(numeric);
+    return numeric.toFixed(2).replace(/\.00$/, '');
+}
+
+function OreInput({item, value, mode, onChange}) {
     const [editing, setEditing] = useState(null);
 
     const handleChange = (e) => {
@@ -49,19 +62,20 @@ function OreInput({item, value, onChange}) {
             className="form-control form-control-sm"
             style={{width: '90px', fontSize: '11px'}}
             placeholder="∞"
-            value={editing !== null ? editing : (value || '')}
+            value={editing !== null ? editing : (value ? formatAvailableValue(item, value, mode) : '')}
+            onFocus={() => setEditing(value > 0 ? String(value) : '')}
             onChange={handleChange}
             onBlur={handleBlur}
         />
     );
 }
 
-function OreQuantitiesPanel({game_info, settings, set_settings}) {
+function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
     const oreQuantities = settings.ore_quantities || {};
     const recipeData = game_info?.game_data?.recipe_data || [];
     const mineralizeList = settings.mineralize_list || {};
     // 真正无限的物品（抽水站/轨道采集器等可无限获取）
-    const infiniteItems = new Set(['水', '硫酸', '临界光子', '氢', '重氢']);
+    const infiniteItems = new Set(['水', '硫酸', '临界光子', '氢', '重氢', '可燃冰']);
     const oreItems = [];
     const seen = new Set();
     // 收集可由非行星基地设施采集的无原料物品作为原矿
@@ -84,13 +98,79 @@ function OreQuantitiesPanel({game_info, settings, set_settings}) {
         set_settings({ ore_quantities: newQ });
     };
 
+    const statsStarNum = Number(settings.ore_quantity_star_num) || 64;
+    const statsMode = settings.ore_quantity_mode || 'amount';
+    const [statsLoading, setStatsLoading] = useState(false);
+    const [statsError, setStatsError] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const applyStatsSummary = async () => {
+            setStatsLoading(true);
+            setStatsError(null);
+            try {
+                const data = await getStats(statsStarNum);
+                const summary = data?.summary_avg;
+                if (!summary?.veins_point || !summary?.veins_amount) {
+                    throw new Error('该恒星数量暂无星区汇总统计数据');
+                }
+
+                const statsQuantities = buildOreQuantities(summary.veins_point, summary.veins_amount, statsMode);
+                const nextQuantities = {};
+                for (const item of oreItems) {
+                    const index = getStatsOreIndex(item);
+                    if (index < 0) continue;
+                    const canonicalItem = STATS_ORE_ITEMS[index];
+                    if (statsQuantities[canonicalItem] > 0) nextQuantities[item] = statsQuantities[canonicalItem];
+                }
+                if (!cancelled) {
+                    set_settings({
+                        ore_quantities: nextQuantities,
+                        ore_quantity_star_num: statsStarNum,
+                        ore_quantity_mode: statsMode,
+                    });
+                }
+            } catch (err) {
+                if (!cancelled) setStatsError(err.message);
+            } finally {
+                if (!cancelled) setStatsLoading(false);
+            }
+        };
+        applyStatsSummary();
+        return () => { cancelled = true; };
+    }, [statsStarNum, statsMode, oreItems.join('|')]);
+
     return (
         <div className="border rounded p-2 mt-1">
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <OreQuantityModeToggle mode={statsMode} onChange={(mode) => set_settings({ ore_quantity_mode: mode })} />
+                <label className="small text-muted" htmlFor="oreStatsStarNum">恒星数</label>
+                <select
+                    id="oreStatsStarNum"
+                    className="form-select form-select-sm"
+                    style={{ width: '88px' }}
+                    value={statsStarNum}
+                    onChange={(e) => set_settings({ ore_quantity_star_num: Number(e.target.value) })}
+                    disabled={statsLoading}
+                >
+                    {Array.from({ length: 33 }, (_, i) => i + 32).map(n => (
+                        <option key={n} value={n}>{n}星</option>
+                    ))}
+                </select>
+                <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0"
+                    onClick={() => onNavigate?.('seed-viewer')}
+                >
+                    前往种子查看器应用具体种子及恒星范围
+                </button>
+            </div>
+            {statsError && <small className="text-danger d-block mb-2">统计数据应用失败：{statsError}</small>}
             <div className="d-flex flex-wrap gap-2">
                 {oreItems.map(item => (
                     <div key={item} className="d-flex align-items-center gap-1" title={item}>
                         <ItemIcon item={item} size={24} />
-                        <OreInput item={item} value={oreQuantities[item]} onChange={handleChange} />
+                        <OreInput item={item} value={oreQuantities[item]} mode={statsMode} onChange={handleChange} />
                     </div>
                 ))}
                 <small className="text-muted align-self-center">留空 = 无限（不参与瓶颈计算），若全部填空，则无权重加和</small>
@@ -99,7 +179,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings}) {
     );
 }
 
-export default function App({needs_list, set_needs_list, newTabData}) {
+export default function App({needs_list, set_needs_list, newTabData, onNavigate}) {
     const game_info = useContext(GameInfoContext);
     const set_game_data = useContext(GameInfoSetterContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
@@ -173,7 +253,7 @@ export default function App({needs_list, set_needs_list, newTabData}) {
             {/*采矿参数&其他设置*/}
             <UserSettings show={misc_show}/>
             {/*矿物可用量设置*/}
-            {show_ore_quantities && <OreQuantitiesPanel game_info={game_info} settings={settings} set_settings={set_settings}/>}
+            {show_ore_quantities && <OreQuantitiesPanel game_info={game_info} settings={settings} set_settings={set_settings} onNavigate={onNavigate}/>}
             {/*添加需求、批量预设*/}
             <NeedsList needs_list={needs_list} set_needs_list={set_needs_list}
                        set_show_ore_popup={set_show_ore_popup}

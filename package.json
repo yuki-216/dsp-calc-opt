@@ -1,11 +1,15 @@
 {
   "name": "dsp_calculator",
   "private": true,
-  "version": "0.9.5",
+  "version": "0.9.6",
+  "license": "GPL-3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "start-dev.bat",
+    "dev:backend": "cd backend && python main.py",
     "build": "node --no-deprecation node_modules/vite/bin/vite.js build",
+    "build:wasm": "node scripts/build_seed_wasm.cjs",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "generate:recipes": "node scripts/generate_allowed_recipes.cjs"

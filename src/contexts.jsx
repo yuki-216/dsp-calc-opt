@@ -41,7 +41,9 @@ const DEFAULT_SETTINGS = {
     proliferate_allowed_levels: [1, 2, 3],  // 允许的增产剂等级，1=MK1, 2=MK2, 3=MK3
 
     mineralize_list: [],
-    ore_quantities: {} // {矿名: 可用量}，用于最大瓶颈法优化
+    ore_quantities: {}, // {矿名: 可用量}，用于最大瓶颈法优化
+    ore_quantity_star_num: 64,
+    ore_quantity_mode: 'amount', // 'amount' | 'point'
 };
 export const DefaultSettingsContext = createContext(DEFAULT_SETTINGS);
 

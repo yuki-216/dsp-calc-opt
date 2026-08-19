@@ -155,6 +155,14 @@ function get_sprite_plugins(mode) {
 // https://vitejs.dev/config/
 export default defineConfig(({mode}) => ({
     base: "./",
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:8000',
+                changeOrigin: true,
+            }
+        }
+    },
     define: {
         'import.meta.env.VITE_APP_VERSION': JSON.stringify(require('./package.json').version),
     },

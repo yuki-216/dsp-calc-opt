@@ -41,8 +41,8 @@ restart.ps1
 # 参考项目（备份，不需要提交）
 reference/
 
-# 个人部署笔记
-docs/deploy.md
+# 本地编译工具链（不属于项目依赖）
+.tools/
 
 # 生成的文件
 graph_data.json

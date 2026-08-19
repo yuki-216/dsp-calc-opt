@@ -1,4 +1,4 @@
-# 戴森球计划量化计算器 v0.9.5
+# 戴森球计划量化计算器 v0.9.6
 
 基于 [dsp-calc](https://github.com/DSPCalculator/dsp-calc) 开源项目进行功能修剪和新增。
 
@@ -13,6 +13,7 @@
 - **核心计算引擎** — BFS 构建依赖图 + Tarjan SCC 检测 + 矩阵求逆
 - **在新窗口计算** — 输出表物品旁点击按钮，原页面视为原矿，新标签页独立计算该物品生产链
 - **负数需求（外部供给）** — 输入负数表示外部供给，减少实际生产量
+- **种子查看与统计** — 内置种子生成 CApi，支持 32-64 恒星查询、统计均值、置信区间和矿物可用量应用
 
 ## 技术栈
 
@@ -20,6 +21,7 @@
 - **Vite 8** - 构建工具
 - **Bootstrap 5** - UI组件库
 - **Tarjan SCC + 矩阵求逆** - 核心计算引擎
+- **浏览器 WASM + Python/FastAPI** - 公开版在浏览器查询种子，Python 后端保留为本地调试和统计计算
 
 ## 本地开发（修改代码）
 
@@ -33,6 +35,51 @@ npm install
 
 # 启动开发服务器（支持热更新）
 npm run dev
+```
+
+公开部署不需要 Python 后端：种子查看器默认使用项目内置的 WASM，统计结果从公开的 `public/stats.json` 读取。
+
+本地调试后端时再启动 Python 服务：
+
+```bash
+cd backend
+pip install -r requirements.txt
+python main.py
+```
+
+后端使用项目内置的 `dsp_search_seed/CApi/`，不依赖外部种子查看器目录。
+
+种子查看器默认是浏览器模式；个人调试时可在浏览器控制台切换：
+
+```js
+setSeedQueryMode('backend') // 使用本地 FastAPI
+setSeedQueryMode('browser') // 使用浏览器 WASM
+setSeedQueryMode('auto')    // 优先后端，失败后回退 WASM
+resetSeedQueryMode()        // 恢复默认 browser
+```
+
+本地后端的统计计算控制区默认隐藏。启动后端并切换到 backend 后，进入“种子查看器”页面，
+在浏览器控制台执行下面的代码显示“开始 / 停止 / 恢复”等统计控制 UI：
+
+```js
+setSeedQueryMode('backend')
+showStatsControls()
+```
+
+隐藏统计控制 UI（不停止后端计算）：
+
+```js
+hideStatsControls()
+```
+
+`showStatsControls` 和 `hideStatsControls` 只有在种子查看器页面已经加载后才会出现；
+如果刚切换查询模式，刷新页面或重新进入种子查看器即可。公开版保持默认隐藏，避免暴露个人统计计算控制。
+
+重新编译 WASM 查询引擎需要 Emscripten 和 GLM，并通过环境变量提供路径，项目代码不依赖固定的外部绝对路径：
+
+```bash
+set GLM_ROOT=<path-to-glm>
+npm run build:wasm
 ```
 
 访问 `http://localhost:5173`，修改代码后页面会自动刷新。
@@ -81,4 +128,4 @@ npx serve dist
 
 ## 许可证
 
-[木兰宽松许可证, 第2版](LICENSE)
+[GNU General Public License v3.0](LICENSE)

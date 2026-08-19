@@ -2,11 +2,11 @@
 统计API接口
 提供统计计算的控制和查询接口
 
-新架构：计算引擎以独立子进程（run_stats_calc.py）运行，对接源项目
-dsp_search_seed 的 GetDataManager 并发API（GPU加速+多线程）。
+新架构：计算引擎以独立子进程（run_stats_calc.py）运行，对接项目内置
+dsp_search_seed.CApi 的 GetDataManager 并发API（GPU加速+多线程）。
 本接口负责：
   - 启动/停止/恢复子进程（stop 通过写入 stop.flag 优雅停止）
-  - 基于文件（progress.json / runtime.json / stats_*.json）提供状态与结果
+  - 基于文件（progress.json / runtime.json / stats.json）提供状态与结果
 """
 
 import os
@@ -43,7 +43,8 @@ STOP_WAIT_SECONDS = 15
 class StartRequest(BaseModel):
     start_seed_id: int = 1
     end_seed_id: int = 99999999
-    batch_size: int = 100
+    # batch_size=1：每处理完一个种子（33 个星系）就更新一次进度
+    batch_size: int = 1
 
 
 def _python_executable() -> str:
@@ -107,11 +108,16 @@ def _spawn(args: list):
 
 @router.post("/start")
 async def start_calculation(request: StartRequest):
-    """启动统计计算（新计算，覆盖式推进）"""
+    """启动统计计算（从头开始：清空进度 + 清空已有均值）
+
+    "开始"按钮语义：从零重新计算，旧样本不能保留——否则 Welford 运行均值会被
+    老的几个种子永久绑定（高权重），新数据无法"真正从头"评估。
+    若要保留均值继续累加，请用"恢复"按钮。
+    """
     if is_running():
         return {"task_id": "existing", "message": "计算已在运行中"}
 
-    # 校验范围并清理旧进度，避免与历史数据混淆
+    # 校验范围
     if request.start_seed_id < 0 or request.end_seed_id > 99999999:
         raise HTTPException(status_code=400, detail="种子范围必须在0-99999999")
     if request.end_seed_id < request.start_seed_id:
@@ -123,12 +129,27 @@ async def start_calculation(request: StartRequest):
     if STOP_FLAG.exists():
         STOP_FLAG.unlink()
 
+    # 清空 stats.json（连同已计算的运行均值一起丢弃）
+    # 不清空的话，老样本会永久绑定在新均值上，新数据只能微扰
+    stats_file = Path(DATA_DIR) / "stats.json"
+    if stats_file.exists():
+        stats_file.unlink()
+
+    # 重置 progress.json
+    storage.save_progress(
+        completed_seed_id=0,
+        seed_count=0,
+        batch_size=request.batch_size,
+        start_seed_id=request.start_seed_id,
+        end_seed_id=request.end_seed_id,
+    )
+
     _spawn([
         "--start", str(request.start_seed_id),
         "--end", str(request.end_seed_id),
         "--batch", str(request.batch_size),
     ])
-    return {"task_id": "new", "message": "计算已启动"}
+    return {"task_id": "new", "message": "计算已从头开始"}
 
 
 @router.post("/stop")
@@ -193,13 +214,6 @@ async def get_status():
     if runtime and running:
         elapsed_time = time.time() - runtime.get("start_time", 0)
 
-    estimated_remaining = 0
-    if running and processed > 0 and elapsed_time > 0:
-        seeds_per_second = processed / elapsed_time
-        remaining_seeds = total_seeds - processed
-        if seeds_per_second > 0:
-            estimated_remaining = remaining_seeds / seeds_per_second
-
     return {
         "is_running": running,
         "current_seed_id": completed_seed_id,
@@ -209,9 +223,53 @@ async def get_status():
         "start_seed_id": start_seed_id,
         "end_seed_id": end_seed_id,
         "progress_percent": (processed / total_seeds * 100) if total_seeds > 0 else 0,
-        "elapsed_time": _format_time(elapsed_time),
-        "estimated_remaining": _format_time(estimated_remaining)
+        "elapsed_time": _format_time(elapsed_time)
     }
+
+
+@router.get("/{star_num}/convergence")
+async def get_convergence(star_num: int):
+    """获取指定恒星数量的收敛信息（基于 Welford M2 计算的 CI）。
+
+    返回结构：get_convergence() 的标准输出 + stale 标记。
+    - stale=true 表示该数据来自旧版（无 m2 字段），无法计算置信区间
+    - seed_count<2 时 fields 为空
+    """
+    if star_num < 32 or star_num > 64:
+        raise HTTPException(status_code=400, detail="恒星数量必须在32-64之间")
+
+    stats_data = storage.load_stats(star_num)
+    if stats_data is None:
+        raise HTTPException(status_code=404, detail=f"没有{star_num}恒星的统计数据")
+
+    # 检测旧版数据（无 m2 字段）：明确告知前端需重跑
+    stars_stats = stats_data.get("stars_stats", [])
+    has_m2 = bool(stars_stats) and all(
+        "m2_distance" in s for s in stars_stats
+    )
+
+    if not has_m2:
+        return {
+            "stale": True,
+            "seed_count": stats_data.get("seed_count", 0),
+            "fields": [],
+            "message": "数据无 m2 字段（来自旧版本），无法计算置信区间，请重新运行统计",
+        }
+
+    # 复用 load_all_stats 的字段映射构造 RunningAverageCalculator，
+    # 然后调用 get_convergence() 计算 CI
+    calc = storage.load_all_stats()
+    conv = calc.get_convergence(star_num, confidence=0.95)
+    if conv is None:
+        # seed_count < 2 时 get_convergence 返回 None
+        return {
+            "stale": False,
+            "seed_count": stats_data.get("seed_count", 0),
+            "fields": [],
+            "message": "样本数不足（<2），无法估计方差",
+        }
+    conv["stale"] = False
+    return conv
 
 
 @router.get("/overview")
