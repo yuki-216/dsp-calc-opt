@@ -1,4 +1,4 @@
-import {getThresholdMetric, relativeObjectiveImprovement, shouldAcceptProliferator} from './proliferator-threshold.js';
+import {getThresholdMetric, relativeThresholdImprovement, shouldAcceptProliferator} from './proliferator-threshold.js';
 
 function getObjectiveValue(result, strategy) {
     if (strategy === 'min_raw_ore') return result.totalRawOre ?? 0;
@@ -65,7 +65,7 @@ export async function validateFinalProliferatorChoices({
                     candidate: candidateMetric,
                     threshold,
                 });
-                const improvement = relativeObjectiveImprovement(noProMetric, candidateMetric) * 100;
+                const improvement = relativeThresholdImprovement(noProMetric, candidateMetric) * 100;
                 const improvementText = Number.isFinite(improvement) ? improvement.toFixed(2) : '∞';
                 onLog?.(`${itemId}：改善 ${improvementText}%，${accepted ? '保留' : '撤销'}`);
 

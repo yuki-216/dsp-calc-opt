@@ -2,7 +2,7 @@ const EPSILON = 1e-12;
 
 export function getThresholdMetric(result, strategy) {
     if (strategy === 'min_raw_ore' && result?.bottleneckArray?.length > 0) {
-        return result.bottleneckArray[0].bottleneck;
+        return result.bottleneckArray;
     }
     return result?.objectiveValue ?? result?.totalRawOre ?? 0;
 }
@@ -19,9 +19,30 @@ export function relativeObjectiveImprovement(baseline, candidate) {
 }
 
 /**
+ * 计算按瓶颈度降序排列的向量的字典序相对改善。
+ * 最高瓶颈相同时，继续比较下一个瓶颈；只在第一处有效变化处计算改善比例。
+ */
+export function relativeBottleneckImprovement(baselineArray, candidateArray) {
+    const length = Math.max(baselineArray?.length || 0, candidateArray?.length || 0);
+    for (let index = 0; index < length; index++) {
+        const baseline = baselineArray?.[index]?.bottleneck ?? 0;
+        const candidate = candidateArray?.[index]?.bottleneck ?? 0;
+        if (Math.abs(baseline - candidate) <= EPSILON) continue;
+        return relativeObjectiveImprovement(baseline, candidate);
+    }
+    return 0;
+}
+
+export function relativeThresholdImprovement(baseline, candidate) {
+    if (Array.isArray(baseline) || Array.isArray(candidate)) {
+        return relativeBottleneckImprovement(baseline, candidate);
+    }
+    return relativeObjectiveImprovement(baseline, candidate);
+}
+
+/**
  * 判断增产剂候选是否达到“无增产剂加权”阈值。
  */
 export function shouldAcceptProliferator({baseline, candidate, threshold = 0.005}) {
-    if (candidate >= baseline) return false;
-    return relativeObjectiveImprovement(baseline, candidate) >= Math.max(0, threshold);
+    return relativeThresholdImprovement(baseline, candidate) >= Math.max(0, threshold);
 }

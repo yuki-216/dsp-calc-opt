@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
     getThresholdMetric,
+    relativeBottleneckImprovement,
     relativeObjectiveImprovement,
     shouldAcceptProliferator,
 } from './proliferator-threshold.js';
 
-test('uses the first sorted relative bottleneck for raw-ore threshold comparisons', () => {
+test('returns the sorted bottleneck vector for raw-ore threshold comparisons', () => {
     const result = {
         totalRawOre: 123,
         bottleneckArray: [
@@ -16,7 +17,21 @@ test('uses the first sorted relative bottleneck for raw-ore threshold comparison
         ],
     };
 
-    assert.equal(getThresholdMetric(result, 'min_raw_ore'), 0.00000125);
+    assert.deepEqual(getThresholdMetric(result, 'min_raw_ore'), result.bottleneckArray);
+});
+
+test('uses the next bottleneck when the highest bottleneck is unchanged', () => {
+    const baseline = [
+        {item: '煤矿', bottleneck: 1},
+        {item: '原油', bottleneck: 0.8},
+    ];
+    const candidate = [
+        {item: '煤矿', bottleneck: 1},
+        {item: '原油', bottleneck: 0.795},
+    ];
+
+    assert.ok(Math.abs(relativeBottleneckImprovement(baseline, candidate) - 0.005 / 0.8) < 1e-12);
+    assert.equal(shouldAcceptProliferator({baseline, candidate, threshold: 0.005}), true);
 });
 
 test('uses the no-proliferator objective as the relative improvement baseline', () => {

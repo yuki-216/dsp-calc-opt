@@ -55,3 +55,24 @@ test('checks SCCs in forward order and returns the recalculated final result', a
     assert.equal(result.result.totalEnergyCost, 95);
     assert.ok(visited.length > 0);
 });
+
+test('keeps proliferator when the secondary bottleneck improves enough', async () => {
+    const logs = [];
+    const result = await validateFinalProliferatorChoices({
+        sccs: [new Set(['A'])],
+        scheme: makeScheme(1, 0),
+        itemToRecipe: new Map([['A', 0]]),
+        strategy: 'min_raw_ore',
+        threshold: 0.005,
+        onLog: message => logs.push(message),
+        calculateResult: (_gameData, scheme) => ({
+            bottleneckArray: scheme.scheme_for_recipe[0]['增产剂等级']
+                ? [{item: '煤矿', bottleneck: 1}, {item: '原油', bottleneck: 0.795}]
+                : [{item: '煤矿', bottleneck: 1}, {item: '原油', bottleneck: 0.8}],
+        }),
+    });
+
+    assert.equal(result.scheme.scheme_for_recipe[0]['增产剂等级'], 1);
+    assert.equal(result.revertedItems.length, 0);
+    assert.equal(logs[1], 'A：改善 0.63%，保留');
+});
