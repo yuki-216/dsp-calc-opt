@@ -318,11 +318,17 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     const [optimStrategy, setOptimStrategy] = useState(() => {
         return localStorage.getItem('dsp-optim-strategy') || 'min_net_heat';
     });
+    const [noProliferatorPercent, setNoProliferatorPercent] = useState(() => {
+        return localStorage.getItem('dsp-no-proliferator-weight-percent') || '0.5';
+    });
 
     // 持久化优化策略选择
     useEffect(() => {
         localStorage.setItem('dsp-optim-strategy', optimStrategy);
     }, [optimStrategy]);
+    useEffect(() => {
+        localStorage.setItem('dsp-no-proliferator-weight-percent', noProliferatorPercent);
+    }, [noProliferatorPercent]);
     const logContainerRef = useRef(null);
 
     // 切换优化目标时自动调整
@@ -337,7 +343,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
         } else {
             set_settings({proliferate_no_accelerate: true});
         }
-    }, [optimStrategy]);
+    }, [optimStrategy, set_settings, set_show_ore_quantities]);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -374,7 +380,8 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                         logs.push(message);
                         setOptimLogs([...logs]);
                     },
-                    optimStrategy
+                    optimStrategy,
+                    {no_proliferator_weight: Number(noProliferatorPercent) / 100}
                 );
 
                 const changes = collectProliferatorChanges(scheme_data, result.optimalScheme, game_data.recipe_data || []);
@@ -396,7 +403,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 setIsOptimizing(false);
             }
         }, 50);
-    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy]);
+    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent]);
 
     // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
     let pro_num = 0;
@@ -433,7 +440,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
 
     // 增产剂等级多选
     const settings = useContext(SettingsContext);
-    const allowed_levels = settings.proliferate_allowed_levels || [1, 2, 3];
+    const allowed_levels = settings.proliferate_allowed_levels || [3];
     const toggle_level = (level) => {
         const new_levels = allowed_levels.includes(level)
             ? allowed_levels.filter(l => l !== level)
@@ -528,6 +535,21 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 <option value="min_net_heat">最小净热值</option>
                 <option value="min_footprint">最小占地</option>
             </select>
+            <label className="d-inline-flex align-items-center gap-1 small text-nowrap" title="增产剂带来的目标改善低于此比例时，保留无增产剂方案">
+                <span>无增产剂加权</span>
+                <input
+                    className="form-control form-control-sm"
+                    style={{width: '64px'}}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={noProliferatorPercent}
+                    onChange={(e) => setNoProliferatorPercent(e.target.value)}
+                    disabled={isOptimizing}
+                    aria-label="无增产剂加权百分比"
+                />
+                <span>%</span>
+            </label>
             <button
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}

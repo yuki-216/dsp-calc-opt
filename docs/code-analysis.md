@@ -190,5 +190,5 @@ Python 统计相关测试位于 `backend/test_*.py`；浏览器查询模式测�
 
 ## 8. 版本与变更
 
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。每次发布应同步更新 README 标题和
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本为 0.9.7。每次发布应同步更新 README 标题和
 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到 GitHub Pages。

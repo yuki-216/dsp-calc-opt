@@ -9,6 +9,7 @@
 
 import { CoreEngine } from './index.js';
 import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
+import { validateFinalProliferatorChoices } from './proliferator-final-validation.js';
 
 /**
  * 计算给定方案下的总耗电
@@ -220,6 +221,11 @@ function getObjectiveValue(result, strategy) {
   return result.totalEnergyCost; // 默认 min_power
 }
 
+function getNoProliferatorThreshold(settings) {
+  const value = Number(settings?.no_proliferator_weight);
+  return Number.isFinite(value) ? Math.max(0, value) : 0.005;
+}
+
 /**
  * 格式化目标值
  * @param {number} value - 目标值
@@ -424,7 +430,6 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
     improved = false;
 
     for (let i = 0; i < cycleItems.length; i++) {
-      const item = cycleItems[i];
       const choices = itemChoices[i];
       let bestChoice = currentChoices[i];
       let bestCost = currentCost;
@@ -559,7 +564,6 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
 
         const result = calculateResult(gameData, tempScheme, settings, needs);
         const cost = getObjectiveValue(result, strategy);
-
         if (strategy === 'min_raw_ore' && hasQuantities) {
           // 瓶颈数组字典序比较
           const cmp = compareBottlenecks(result.bottleneckArray || [], bestBottleneckArray);
@@ -587,7 +591,6 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         currentPower = afterApplyResult.totalEnergyCost;
         if (strategy === 'min_raw_ore') {
           bottleneckOre = afterApplyResult.bottleneckOre || '';
-          currentBottleneckArray = afterApplyResult.bottleneckArray || [];
         }
       }
 
@@ -644,7 +647,6 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
       if (strategy === 'min_raw_ore') {
         bottleneckOre = afterCycleResult.bottleneckOre || '';
-        currentBottleneckArray = afterCycleResult.bottleneckArray || [];
       }
 
       changes.push({
@@ -687,14 +689,17 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
  * @param {Function} onProgress - 进度回调 (current, total, message)
  * @param {Function} onLog - 日志回调 (message)
  * @param {string} strategy - 优化策略 ('min_power' | 'min_raw_ore' | 'min_net_heat')
+ * @param {Object} optimizationOptions - 优化器专用选项
  * @returns {Object} { optimalScheme, initialPower, optimalPower, strategy, initialObjective, optimalObjective, changes }
  */
-export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null, strategy = 'min_power') {
+export async function optimizeProliferatorStrategy(gameData, schemeData, settings, needs, onProgress = null, onLog = null, strategy = 'min_power', optimizationOptions = {}) {
   // 优化全程关闭调试输出，避免控制台刷屏，结束后恢复
   const dbg = typeof window !== 'undefined' && window.__DEBUG;
   const wasDebugEnabled = dbg && dbg.enabled;
   if (wasDebugEnabled) dbg.off();
   try {
+
+  settings = {...settings, ...optimizationOptions};
 
   // 根据策略选择计算函数
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
@@ -764,7 +769,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   const maxLevel = getMaxAllowedLevel(settings);
   const maxScheme = structuredClone(schemeData);
 
-  for (const [itemId, recipeIndex] of itemToRecipe) {
+  for (const recipeIndex of itemToRecipe.values()) {
     if (recipeIndex !== undefined && maxScheme.scheme_for_recipe[recipeIndex]) {
       const recipe = recipeData[recipeIndex];
       const firstMode = getFirstAvailableMode(recipe, settings);
@@ -797,6 +802,22 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   currentObjective = result.currentObjective;
   currentPower = result.currentPower;
 
+  const finalValidation = await validateFinalProliferatorChoices({
+    gameData,
+    settings,
+    needs,
+    sccs: sccsForward,
+    scheme: currentScheme,
+    itemToRecipe,
+    strategy,
+    threshold: getNoProliferatorThreshold(settings),
+    calculateResult,
+    onLog,
+  });
+  currentScheme = finalValidation.scheme;
+  currentObjective = getObjectiveValue(finalValidation.result, strategy);
+  currentPower = finalValidation.result.totalEnergyCost;
+
   // 5. 输出最终结果
   const optimalObjective = currentObjective;
   const metricName = strategy === 'min_raw_ore' ? '原矿'
@@ -826,7 +847,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     }
     if (result.changes.length > 0) {
       const reduction = initialObjective - optimalObjective;
-      const percent = initialObjective > 0 ? (reduction / initialObjective * 100).toFixed(1) : '0.0';
+      const percent = initialObjective > 0 ? (reduction / initialObjective * 100).toFixed(2) : '0.00';
       onLog(`${metricName}减少: ${formatObjectiveValue(reduction, strategy, finalBottleneck, initialMaxBottleneck)} (${percent}%)`);
     } else {
       onLog('当前配置已是最优');
