@@ -6,35 +6,7 @@ import {optimizeProliferatorStrategy} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
 import {getFuelData} from './game_data.jsx';
-
-function formatProliferatorChoice(level, mode) {
-    if (!level) return '不使用';
-    const levelText = level > 0 ? `Mk.${level}` : '无';
-    const modeText = mode === 2 ? '增产' : mode === 1 ? '加速' : '无';
-    return `${levelText} ${modeText}`;
-}
-
-function collectProliferatorChanges(beforeScheme, afterScheme, recipes) {
-    const before = beforeScheme?.scheme_for_recipe || [];
-    const after = afterScheme?.scheme_for_recipe || [];
-    return recipes.reduce((changes, recipe, index) => {
-        const oldChoice = before[index] || {};
-        const newChoice = after[index] || {};
-        const oldLevel = Number(oldChoice['增产剂等级'] || 0);
-        const oldMode = oldLevel > 0 ? Number(oldChoice['增产模式'] || 0) : 0;
-        const newLevel = Number(newChoice['增产剂等级'] || 0);
-        const newMode = newLevel > 0 ? Number(newChoice['增产模式'] || 0) : 0;
-        if (oldLevel === newLevel && oldMode === newMode) return changes;
-
-        const items = Object.keys(recipe?.['产物'] || {});
-        changes.push({
-            item: items.length > 0 ? items.join(' / ') : `配方${index + 1}`,
-            before: formatProliferatorChoice(oldLevel, oldMode),
-            after: formatProliferatorChoice(newLevel, newMode),
-        });
-        return changes;
-    }, []);
-}
+import {collectProliferatorChanges, collectProliferatorModeChanges} from './engine/proliferator-changes.js';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -329,12 +301,18 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     useEffect(() => {
         localStorage.setItem('dsp-no-proliferator-weight-percent', noProliferatorPercent);
     }, [noProliferatorPercent]);
+    const [rarePracticality, setRarePracticality] = useState(() => {
+        return (localStorage.getItem('dsp-rare-practicality') ?? '1') === '1';
+    });
+    useEffect(() => {
+        localStorage.setItem('dsp-rare-practicality', rarePracticality ? '1' : '0');
+    }, [rarePracticality]);
     const logContainerRef = useRef(null);
 
     // 切换优化目标时自动调整
     useEffect(() => {
-        // 最小原矿瓶颈→展开矿物可用量
-        if (optimStrategy === 'min_raw_ore') {
+        // 最小原矿瓶颈/珍稀权重法→展开矿物可用量
+        if (optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight') {
             set_show_ore_quantities?.(true);
         }
         // 最小占地→全部模式；其他→仅增产
@@ -368,6 +346,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
         setTimeout(async () => {
             try {
                 const logs = [];
+                const allowed_levels_length = (global_state.settings.proliferate_allowed_levels || [3]).length;
                 const result = await optimizeProliferatorStrategy(
                     game_data,
                     scheme_data,
@@ -381,16 +360,36 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                         setOptimLogs([...logs]);
                     },
                     optimStrategy,
-                    {no_proliferator_weight: Number(noProliferatorPercent) / 100}
+                    {
+                        no_proliferator_weight: Number(noProliferatorPercent) / 100,
+                        rare_ore_practicality: rarePracticality,
+                    }
                 );
 
-                const changes = collectProliferatorChanges(scheme_data, result.optimalScheme, game_data.recipe_data || []);
-                const changeLogs = changes.length > 0
-                    ? [
-                        '\n========== 增产选择改动（对比优化前） ==========',
-                        ...changes.map(change => `${change.item}: ${change.before} → ${change.after}`),
-                    ]
-                    : ['\n========== 增产选择改动（对比优化前） ==========', '没有物品的增产选择发生改动'];
+                const changes = collectProliferatorChanges(
+                    scheme_data,
+                    result.optimalScheme,
+                    game_data.recipe_data || [],
+                    result.activeRecipeIndices,
+                );
+                const modeChanges = collectProliferatorModeChanges(
+                    scheme_data,
+                    result.optimalScheme,
+                    game_data.recipe_data || [],
+                    result.activeRecipeIndices,
+                );
+                const changeLogs = [
+                    ...(allowed_levels_length > 1 ? [
+                        '\n========== 增产选择纯改动（对比优化前） ==========',
+                        ...(changes.length > 0
+                            ? changes.map(change => `${change.item}: ${change.before} → ${change.after}`)
+                            : ['没有物品的增产选择发生改动']),
+                    ] : []),
+                    '\n========== 增产选择改动（对比优化前） ==========',
+                    ...(modeChanges.length > 0
+                        ? modeChanges.map(change => `${change.item}: ${change.before} → ${change.after}`)
+                        : ['没有物品的增产模式发生改动']),
+                ];
                 setOptimLogs([...logs, ...changeLogs]);
 
                 // 应用优化结果
@@ -403,7 +402,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 setIsOptimizing(false);
             }
         }, 50);
-    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent]);
+    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent, rarePracticality]);
 
     // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
     let pro_num = 0;
@@ -532,9 +531,20 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             >
                 <option value="min_power">最小电力</option>
                 <option value="min_raw_ore">最小原矿瓶颈</option>
+                <option value="min_rare_weight">珍稀权重</option>
                 <option value="min_net_heat">最小净热值</option>
                 <option value="min_footprint">最小占地</option>
             </select>
+            {(optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight') && (
+                <button
+                    className={`btn btn-sm ${rarePracticality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                    onClick={() => setRarePracticality(v => !v)}
+                    disabled={isOptimizing}
+                    title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）"
+                >
+                    珍稀实用性修正:{rarePracticality ? '开' : '关'}
+                </button>
+            )}
             <label className="d-inline-flex align-items-center gap-1 small text-nowrap" title="增产剂带来的目标改善低于此比例时，保留无增产剂方案">
                 <span>无增产剂加权</span>
                 <input
@@ -554,7 +564,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}
                 disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
-                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿瓶颈' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
+                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿瓶颈' : optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
             >
                 <FaMagic/>
                 <span className="compact-hide-text">
@@ -564,9 +574,9 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             {optimStrategy === 'min_power' && (
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
-            {optimStrategy === 'min_raw_ore' && (
+            {optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight' ? (
                 <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡已自动应用统计均值</small>
-            )}
+            ) : null}
         </div>
         {optimLogs.length > 0 && (
             <div className="mt-2 border rounded p-2">
