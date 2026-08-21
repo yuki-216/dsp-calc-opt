@@ -856,6 +856,36 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     if (initBottleneck) onLog(`瓶颈矿物: ${initBottleneck}`);
   }
 
+  // 2.1 珍稀实用性修正信息（仅稀缺策略且开启时）
+  if ((strategy === 'min_rare_weight' || strategy === 'min_raw_ore')
+      && settings.rare_ore_practicality && onLog) {
+    const effectiveAvailMap = buildEffectiveAvailMap(settings.ore_quantities || {}, settings);
+    const correctedLines = [];
+    const skippedLines = [];
+    for (const [rare, rule] of Object.entries(RARE_ORE_EQUIVALENCE)) {
+      const amount = initialResult.resourceUsage?.[rare];
+      if (!amount || amount <= 0) continue; // 方案中未消耗该珍稀矿
+      const correction = getRareOreCorrection(rare, effectiveAvailMap);
+      if (!correction) {
+        skippedLines.push(`${rare} → ${rule.commonOre}: 普通矿 ${rule.commonOre} 未设置可用量，本次不修正`);
+        continue;
+      }
+      const { converted, retained } = convertedRareOreAmount(correction, amount);
+      const fmt = (n) => Number(n.toFixed(2)).toString();
+      correctedLines.push(
+        `${rare} → ${rule.commonOre} (等价 ${rule.rareAmount}↔${rule.commonAmount}): `
+        + `消耗 ${fmt(amount)} → 折算 ${fmt(converted)} ${rule.commonOre} + 保留 ${fmt(retained)}`
+      );
+    }
+    onLog(`珍稀实用性修正: 已启用 (替代比例 ${RARE_ORE_PRACTICALITY_RATIO * 100}%)`);
+    if (correctedLines.length === 0 && skippedLines.length === 0) {
+      onLog('  方案中未涉及三种珍稀矿');
+    } else {
+      correctedLines.forEach((line) => onLog('  ' + line));
+      skippedLines.forEach((line) => onLog('  ' + line));
+    }
+  }
+
   if (!initialResult.sccs || initialResult.sccs.length === 0) {
     if (onLog) onLog('无 SCC 结构，跳过优化');
     return {
