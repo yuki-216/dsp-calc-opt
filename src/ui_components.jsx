@@ -70,6 +70,7 @@ export function IconStyles() {
 }
 
 function Icon({icon, size}) {
+    let style = null;
     try {
         const {x, y, height, total_width, total_height} = image_indices["Vanilla"][icon];
         const scale = size / height;
@@ -77,26 +78,27 @@ function Icon({icon, size}) {
         const tw = total_width * scale, th = total_height * scale;
         const bgx = -x * scale, bgy = -y * scale;
 
-        return <>
-            <div className={`icon-Vanilla`}
-                 style={{
-                     width: size, height: size,
-                     backgroundPosition: `${bgx}px ${bgy}px`,
-                     backgroundSize: `${tw}px ${th}px`,
-                 }}
-            />
-        </>;
+        style = {
+            width: size, height: size,
+            backgroundPosition: `${bgx}px ${bgy}px`,
+            backgroundSize: `${tw}px ${th}px`,
+        };
     } catch {
-        return <><span
-            style={{
-                width: size, height: size,
-                display: "inline-block",
-                fontSize: 10,
-                textWrap: "pretty",
-                overflow: "hidden",
-            }}
-        >? {icon}</span></>
+        style = null;
     }
+
+    if (style) {
+        return <div className="icon-Vanilla" style={style}/>;
+    }
+    return <span
+        style={{
+            width: size, height: size,
+            display: "inline-block",
+            fontSize: 10,
+            textWrap: "pretty",
+            overflow: "hidden",
+        }}
+    >? {icon}</span>;
 }
 
 function get_icon_by_item(item) {
