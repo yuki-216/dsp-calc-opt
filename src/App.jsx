@@ -258,7 +258,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                     <FaCog/>
                     <span className="compact-hide-text">采矿参数 & 其他设置</span>
                 </button>
-                <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
+                <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_ore_quantities ? 'btn-primary' : 'btn-outline-secondary'}`}
                         onClick={() => set_show_ore_quantities(s => !s)} title="矿物可用量设置">
                     <FaMountain/>
                     <span className="compact-hide-text">矿物可用量</span>

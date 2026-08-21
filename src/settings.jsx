@@ -289,11 +289,11 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
     const [showLogs, setShowLogs] = useState(false);
     const [optimStrategy, setOptimStrategy] = useState(() => {
         const saved = localStorage.getItem('dsp-optim-strategy');
-        // min_raw_ore（最大瓶颈法）已移除，映射到上位替代珍稀权重
-        return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_net_heat');
+        // min_raw_ore（最大瓶颈法）已移除，映射到上位替代珍稀权重；默认珍稀权重
+        return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_rare_weight');
     });
     const [noProliferatorPercent, setNoProliferatorPercent] = useState(() => {
-        return localStorage.getItem('dsp-no-proliferator-weight-percent') || '0.5';
+        return localStorage.getItem('dsp-no-proliferator-weight-percent') || '0.1';
     });
 
     // 持久化优化策略选择
@@ -314,9 +314,11 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
 
     // 切换优化目标时自动调整
     useEffect(() => {
-        // 珍稀权重法→展开矿物可用量
+        // 珍稀权重法→展开矿物可用量；切到其他策略→自动收回
         if (optimStrategy === 'min_rare_weight') {
             set_show_ore_quantities?.(true);
+        } else {
+            set_show_ore_quantities?.(false);
         }
         // 最小占地→全部模式；其他→仅增产
         if (optimStrategy === 'min_footprint') {
@@ -326,11 +328,11 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
         }
     }, [optimStrategy, set_settings, set_show_ore_quantities]);
 
-    // 统计均值应用提示：仅应用后显示，3 秒后消失
+    // 统计均值应用提示：仅应用后显示，5 秒后消失
     useEffect(() => {
         if (!statsApplySignal) return;
         setShowStatsApplied(true);
-        const timer = setTimeout(() => setShowStatsApplied(false), 3000);
+        const timer = setTimeout(() => setShowStatsApplied(false), 5000);
         return () => clearTimeout(timer);
     }, [statsApplySignal]);
 
@@ -432,6 +434,30 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
 
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
+            <select
+                className="form-select form-select-sm"
+                style={{width: 'auto', minWidth: '100px'}}
+                value={optimStrategy}
+                onChange={(e) => setOptimStrategy(e.target.value)}
+                disabled={isOptimizing}
+                title="选择优化策略"
+            >
+                <option value="min_power">最小电力</option>
+                <option value="min_rare_weight">珍稀权重</option>
+                <option value="min_net_heat">最小净热值</option>
+                <option value="min_footprint">最小占地</option>
+            </select>
+            <button
+                className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                onClick={runOptimization}
+                disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
+                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
+            >
+                <FaMagic/>
+                <span className="compact-hide-text">
+                    {isOptimizing ? `优化中 ${optimProgress.current}/${optimProgress.total}` : '自动优化'}
+                </span>
+            </button>
             <small className="fw-bold">可选增产剂</small>
             <div className="d-flex" style={{gap: '2px'}}>
                 {[1, 2, 3].map(level => {
@@ -447,19 +473,6 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                     </div>;
                 })}
             </div>
-            <select
-                className="form-select form-select-sm"
-                style={{width: 'auto', minWidth: '100px'}}
-                value={optimStrategy}
-                onChange={(e) => setOptimStrategy(e.target.value)}
-                disabled={isOptimizing}
-                title="选择优化策略"
-            >
-                <option value="min_power">最小电力</option>
-                <option value="min_rare_weight">珍稀权重</option>
-                <option value="min_net_heat">最小净热值</option>
-                <option value="min_footprint">最小占地</option>
-            </select>
             {optimStrategy === 'min_rare_weight' && (
                 <button
                     className={`btn btn-sm ${rarePracticality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
@@ -485,17 +498,6 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                 />
                 <span>%</span>
             </label>
-            <button
-                className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
-                onClick={runOptimization}
-                disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
-                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
-            >
-                <FaMagic/>
-                <span className="compact-hide-text">
-                    {isOptimizing ? `优化中 ${optimProgress.current}/${optimProgress.total}` : '自动优化'}
-                </span>
-            </button>
             {optimStrategy === 'min_power' && (
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
