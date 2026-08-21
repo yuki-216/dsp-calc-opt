@@ -2,6 +2,7 @@ import {useContext, useEffect, useState} from 'react';
 import {GameInfoContext, GlobalStateContext, SchemeDataSetterContext} from './contexts.jsx';
 import {FaRegSave, FaRegFolderOpen, FaTrash} from 'react-icons/fa';
 import {build_item_data} from './game_data.jsx';
+import allowed_recipes from '../data/allowed_recipes.json';
 
 const DEFAULT_SCHEME_DATA = {
     "item_recipe_choices": {"氢": 1},
@@ -46,7 +47,14 @@ export function init_scheme_data(game_data) {
         };
     }
     for (let item in item_data) {
-        scheme_data.item_recipe_choices[item] = 1;
+        // 默认选择 allowed_recipes 中排第一的配方（顺序即偏好顺序，如硅石默认直接获取而非石矿配方）
+        const allowed = allowed_recipes[item];
+        let default_pos = 1;
+        if (allowed && allowed.length > 0) {
+            const pos = item_data[item].indexOf(allowed[0]);
+            if (pos >= 1) default_pos = pos; // 位置 0 是物品 ID 占位，配方从 1 开始
+        }
+        scheme_data.item_recipe_choices[item] = default_pos;
     }
     for (var i = 0; i < game_data.recipe_data.length; i++) {
         scheme_data.scheme_for_recipe.push({"建筑": 0, "增产剂等级": 0, "增产模式": 0});
