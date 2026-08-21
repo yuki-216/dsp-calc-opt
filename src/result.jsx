@@ -741,6 +741,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             totalEnergyCost: energy_cost + miner_energy_cost,
             buildingCounts: { ...building_list },
             rawMaterials: {},
+            surplusByproducts: Object.fromEntries(
+                Object.entries(surplusByproducts).map(([item, amount]) => [item, -amount])
+            ),
             totalFootprint: total_footprint,
             rareWeightObjective: rareWeightInfo?.objective ?? null,
             netHeat,
@@ -872,6 +875,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                                 <ItemIcon item={item} tooltip={false} size={mob_icon}/>
                                                 <div className="d-flex flex-column ms-1">
                                                     <span>{'×'}{formatValue(-amount, fixed_num)}</span>
+                                                    {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs((-amount) - historyValues[1].surplusByproducts[item]) > 1e-6 && (
+                                                        <span style={{fontSize: '0.85em', color: (-amount) > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
+                                                            {(-amount) > historyValues[1].surplusByproducts[item] ? '+' : ''}{formatValue((-amount) - historyValues[1].surplusByproducts[item], fixed_num)}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1021,7 +1029,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                                         <span className="ms-1">{item}</span>
                                                     </td>
                                                     <td className="ps-2 text-nowrap">
-                                                        {(-amount).toFixed(fixed_num)}/{time_tick === 60 ? 'min' : 'sec'}
+                                                        <div className="d-flex flex-column">
+                                                            <span>{(-amount).toFixed(fixed_num)}/{time_tick === 60 ? 'min' : 'sec'}</span>
+                                                            {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs((-amount) - historyValues[1].surplusByproducts[item]) > 1e-6 && (
+                                                                <span style={{fontSize: '0.85em', color: (-amount) > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
+                                                                    {(-amount) > historyValues[1].surplusByproducts[item] ? '+' : ''}{(-amount - historyValues[1].surplusByproducts[item]).toFixed(fixed_num)}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
