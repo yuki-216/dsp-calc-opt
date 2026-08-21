@@ -2,7 +2,7 @@ import {useCallback, useContext, useMemo, useState, useEffect, useRef} from 'rea
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
 import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
-import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION} from './game_data.jsx';
+import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION, FUEL_DATA_BASE} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components.jsx';
@@ -16,11 +16,22 @@ import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-p
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
 
-// 瓶颈值格式化：保留两位有效数字，过小的小数用科学计数法（如 0.0000025 → "2.5e-6"）
+// 瓶颈值格式化：<1 时缩放到两位有效数字的尾数（如 4.3e-5 → "4.3"）；≥1 直接显示
 function formatBottleneck(v) {
+    if (v === 0) return '0';
     if (v >= 1) return v.toFixed(2);
-    if (v >= 0.01) return v.toPrecision(2);
-    return v.toExponential(1);
+    const exp = Math.floor(Math.log10(v));
+    return (v / Math.pow(10, exp)).toFixed(1);
+}
+
+// 珍稀权重目标值：纯数字（自适应精度，不带单位后缀）
+function formatRareWeightValue(value) {
+    if (!Number.isFinite(value) || value === 0) return '0';
+    const a = Math.abs(value);
+    if (a >= 100) return value.toFixed(2);
+    if (a >= 1) return value.toFixed(3);
+    if (a >= 0.01) return value.toFixed(4);
+    return Number(value.toPrecision(4)).toString();
 }
 
 /**
@@ -718,6 +729,25 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         return { objective, maxBottleneck };
     }, [result_dict, settings.ore_quantities, settings.ore_quantity_mode, settings.rare_ore_practicality, isRawMaterial]);
 
+    // 当前净热值（原矿热值 - 副产品热值，与最小净热值策略一致）
+    const netHeat = useMemo(() => {
+        let oreHeat = 0;
+        for (const [item, amount] of Object.entries(result_dict)) {
+            if (amount <= 0) continue;
+            if (isRawMaterial(item)) {
+                const fuel = FUEL_DATA_BASE.find(f => f.name === item);
+                if (fuel && fuel.heatValue > 0) oreHeat += amount * fuel.heatValue;
+            }
+        }
+        let byproductHeat = 0;
+        for (const [item, amount] of Object.entries(surplusByproducts || {})) {
+            if (amount >= 0) continue;
+            const fuel = FUEL_DATA_BASE.find(f => f.name === item);
+            if (fuel && fuel.heatValue > 0) byproductHeat += Math.abs(amount) * fuel.heatValue;
+        }
+        return oreHeat - byproductHeat;
+    }, [result_dict, surplusByproducts, isRawMaterial]);
+
     // 计算数值变化的差值
     // 更新历史值
     useEffect(() => {
@@ -944,11 +974,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <fieldset className="w-fit">
                             <legend><small>目标值</small></legend>
                             <div className="d-flex flex-column">
-                                <span>珍稀权重:{formatObjectiveValue(rareWeightInfo.objective, 'min_rare_weight')}</span>
-                                <span>
-                                    最大瓶颈:{rareWeightInfo.maxBottleneck.item}
-                                    ({formatBottleneck(rareWeightInfo.maxBottleneck.bottleneck)})
-                                </span>
+                                <span>珍稀权重</span>
+                                <span>{formatRareWeightValue(rareWeightInfo.objective)}</span>
+                                <span>净热值</span>
+                                <span>{formatObjectiveValue(netHeat, 'min_net_heat')}</span>
+                                <span>最大瓶颈</span>
+                                <span>{rareWeightInfo.maxBottleneck.item}{formatBottleneck(rareWeightInfo.maxBottleneck.bottleneck)}</span>
                             </div>
                         </fieldset>
                     )}
