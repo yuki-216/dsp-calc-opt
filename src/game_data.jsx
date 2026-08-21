@@ -42,7 +42,6 @@ export const FUEL_DATA_BASE = [
   { name: "无", heatValue: 0, device: "", restrict: "" },
   { name: "煤矿", heatValue: 2.16, device: "火力发电厂", restrict: "只能增产" },
   { name: "高能石墨", heatValue: 5.4, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂 Mk.I", heatValue: 2.592, device: "火力发电厂", restrict: "只能增产" },
   { name: "原油", heatValue: 3.24, device: "火力发电厂", restrict: "只能增产" },
   { name: "氢", heatValue: 7.2, device: "火力发电厂", restrict: "只能增产" },
   { name: "液氢燃料棒", heatValue: 43.2, device: "火力发电厂", restrict: "只能增产" },
@@ -50,8 +49,6 @@ export const FUEL_DATA_BASE = [
   { name: "反物质燃料棒", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
   { name: "奇异湮灭燃料棒", heatValue: 720000, device: "人造恒星", restrict: "只能加速" },
   { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂 Mk.II", heatValue: 7.08, device: "火力发电厂", restrict: "只能增产" },
-  { name: "增产剂 Mk.III", heatValue: 16.96, device: "火力发电厂", restrict: "只能增产" },
   { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" }
 ];
 
@@ -196,7 +193,8 @@ export function get_game_data() {
             let factory = {};
             let item = get_item_by_id(FactoriesArr[i][j]);
             factory["名称"] = item["Name"];
-            factory["耗能"] = item["WorkEnergyPerTick"] * 0.00006;
+            // 轨道采集器为轨道设施，不接入电网，耗电恒为 0
+            factory["耗能"] = item["Name"] === "轨道采集器" ? 0 : item["WorkEnergyPerTick"] * 0.00006;
             factory["倍率"] = item["Speed"];
             factory["占地"] = item["Space"];
             factories.push(factory);
@@ -204,6 +202,8 @@ export function get_game_data() {
         data.factory_data.push(factories);
     }
     // 手动添加发电设备到 factory_data（这些设备不在配方的 Factories 数组中，但燃料配方需要引用它们）
+    // 发电建筑自身不耗电（耗能=0），额定发电功率单独存于"发电功率"，仅供引擎计算发电设备数量
+    // （总电力 ÷ 发电功率）。原数据 WorkEnergyPerTick 缺失，故直接使用 DEVICE_POWER_CONSUMPTION。
     const powerBuildingNames = ["火力发电厂", "微型聚变发电站", "人造恒星"];
     for (const name of powerBuildingNames) {
         const exists = data.factory_data.some(group => group.some(f => f["名称"] === name));
@@ -211,9 +211,10 @@ export function get_game_data() {
             const item = json_data.items.find(i => i.Name === name);
             data.factory_data.push([{
                 "名称": name,
-                "耗能": (item?.WorkEnergyPerTick || 0) * 0.00006,
+                "耗能": 0,
                 "倍率": item?.Speed || 1,
-                "占地": item?.Space || 0
+                "占地": item?.Space || 0,
+                "发电功率": DEVICE_POWER_CONSUMPTION[name] || 0
             }]);
         }
     }

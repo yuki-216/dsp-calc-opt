@@ -274,7 +274,7 @@ export function FuelSelect() {
     );
 }
 
-export function BatchSetting({needs_list, set_show_ore_quantities}) {
+export function OptimizerControls({needs_list, set_show_ore_quantities, statsApplySignal}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
@@ -309,6 +309,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     useEffect(() => {
         localStorage.setItem('dsp-rare-practicality', rarePracticality ? '1' : '0');
     }, [rarePracticality]);
+    const [showStatsApplied, setShowStatsApplied] = useState(false);
     const logContainerRef = useRef(null);
 
     // 切换优化目标时自动调整
@@ -324,6 +325,14 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             set_settings({proliferate_no_accelerate: true});
         }
     }, [optimStrategy, set_settings, set_show_ore_quantities]);
+
+    // 统计均值应用提示：仅应用后显示，3 秒后消失
+    useEffect(() => {
+        if (!statsApplySignal) return;
+        setShowStatsApplied(true);
+        const timer = setTimeout(() => setShowStatsApplied(false), 3000);
+        return () => clearTimeout(timer);
+    }, [statsApplySignal]);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -406,38 +415,8 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
         }, 50);
     }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent, rarePracticality]);
 
-    // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
-    let pro_num = 0;
-    let pro_mode = 0;
-    if (scheme_data.scheme_for_recipe.length > 0) {
-        pro_num = scheme_data.scheme_for_recipe[0]["增产剂等级"];
-        pro_mode = scheme_data.scheme_for_recipe[0]["增产模式"];
-    }
-
     const is_mobile = compact_mode === "mobile";
     const mob_icon = is_mobile ? 22 : undefined;
-
-    let factory_doms = [];
-    // TODO rename to [factory_kind]
-    Object.keys(game_data.factory_data).forEach(factory => {
-        let list = game_data.factory_data[factory];
-        let used_num = game_data.recipe_data.filter(data => data["设施"] == factory).length;
-        //只有可选工厂类型大于等于2，并且这种工厂类型至少被3个配方使用时，才允许批量预设
-        if (list.length >= 2 && used_num >= 3) {
-            factory_doms.push(<FactorySelect key={factory} factory={factory} list={list} icon_size={mob_icon}/>);
-        }
-    });
-
-    let proliferate_options = [{value: 0, label: "无"}];
-    game_data.proliferator_data.forEach((data, idx) => {
-        if (idx === 0) return;
-        if (data?.增产剂 != null) {
-            proliferate_options.push({
-                value: idx, label: null,
-                item_icon: data.增产剂
-            })
-        }
-    });
 
     // 增产剂等级多选
     const settings = useContext(SettingsContext);
@@ -451,63 +430,8 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
         set_settings({ proliferate_allowed_levels: new_levels });
     };
 
-    function change_pro_num(pro_num) {
-        set_scheme_data(old_scheme_data => {
-            let scheme_data = structuredClone(old_scheme_data);
-            const noAccelerate = settings.proliferate_no_accelerate || false;
-            for (var i = 0; i < game_data.recipe_data.length; i++) {
-                const recipe = game_data.recipe_data[i];
-                const proliferator = recipe["增产"] || 0;
-                const canAccelerate = proliferator & 1;  // 配方本身支持加速
-                const canExtraProduct = proliferator & 2;  // 配方本身支持增产
-
-                // 如果开启了限制加速模式，且物品只能加速（不能增产），则设置为无增产剂
-                if (noAccelerate && canAccelerate && !canExtraProduct) {
-                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = 0;
-                } else {
-                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = pro_num;
-                }
-            }
-            return scheme_data;
-        });
-    }
-
-    function change_pro_mode(pro_mode) {
-        set_scheme_data(old_scheme_data => {
-            let scheme_data = structuredClone(old_scheme_data);
-            for (var i = 0; i < game_data.recipe_data.length; i++) {
-                if (!(pro_mode & game_data.recipe_data[i]["增产"])) {
-                    continue;
-                }
-                scheme_data.scheme_for_recipe[i]["增产模式"] = Number(pro_mode);
-            }
-            return scheme_data;
-        });
-    }
-
-    const promode_options = [
-        {value: 2, label: "增产", className: pro_mode_class[2]},
-        {value: 1, label: "加速", className: pro_mode_class[1]},
-    ];
-
     return <>
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
-            <small className="fw-bold">批量预设</small>
-            <div className="d-flex pro-mode-toggle">
-                {promode_options.map(({value, label, className}) => (
-                    <div key={value}
-                         className={`pro-mode-option ${pro_mode == value ? 'pro-mode-active' : ''} ${className || ''}`}
-                         onClick={() => change_pro_mode(value)}>
-                        {label}
-                    </div>
-                ))}
-            </div>
-            <div className="d-flex" style={{gap: '2px'}}>
-                <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
-                                             onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
-                                             icon_size={mob_icon} rounded={true}/>
-            </div>
-            {factory_doms}
             <small className="fw-bold">可选增产剂</small>
             <div className="d-flex" style={{gap: '2px'}}>
                 {[1, 2, 3].map(level => {
@@ -575,9 +499,9 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             {optimStrategy === 'min_power' && (
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
-            {optimStrategy === 'min_rare_weight' ? (
+            {showStatsApplied && optimStrategy === 'min_rare_weight' && (
                 <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡已自动应用统计均值</small>
-            ) : null}
+            )}
         </div>
         {optimLogs.length > 0 && (
             <div className="mt-2 border rounded p-2">
@@ -610,4 +534,106 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             </div>
         )}
     </>;
+}
+
+export function BatchPresetControls() {
+    const global_state = useContext(GlobalStateContext);
+    const set_scheme_data = useContext(SchemeDataSetterContext);
+    const compact_mode = useContext(CompactModeContext);
+    const settings = useContext(SettingsContext);
+    let game_data = global_state.game_data;
+    let scheme_data = global_state.scheme_data;
+
+    // 从 scheme_data 推导当前增产剂等级和增产模式（取第一个配方的值）
+    let pro_num = 0;
+    let pro_mode = 0;
+    if (scheme_data.scheme_for_recipe.length > 0) {
+        pro_num = scheme_data.scheme_for_recipe[0]["增产剂等级"];
+        pro_mode = scheme_data.scheme_for_recipe[0]["增产模式"];
+    }
+
+    const is_mobile = compact_mode === "mobile";
+    const mob_icon = is_mobile ? 22 : undefined;
+
+    let factory_doms = [];
+    // TODO rename to [factory_kind]
+    Object.keys(game_data.factory_data).forEach(factory => {
+        let list = game_data.factory_data[factory];
+        let used_num = game_data.recipe_data.filter(data => data["设施"] == factory).length;
+        //只有可选工厂类型大于等于2，并且这种工厂类型至少被3个配方使用时，才允许批量预设
+        if (list.length >= 2 && used_num >= 3) {
+            factory_doms.push(<FactorySelect key={factory} factory={factory} list={list} icon_size={mob_icon}/>);
+        }
+    });
+
+    let proliferate_options = [{value: 0, label: "无"}];
+    game_data.proliferator_data.forEach((data, idx) => {
+        if (idx === 0) return;
+        if (data?.增产剂 != null) {
+            proliferate_options.push({
+                value: idx, label: null,
+                item_icon: data.增产剂
+            })
+        }
+    });
+
+    function change_pro_num(pro_num) {
+        set_scheme_data(old_scheme_data => {
+            let scheme_data = structuredClone(old_scheme_data);
+            const noAccelerate = settings.proliferate_no_accelerate || false;
+            for (var i = 0; i < game_data.recipe_data.length; i++) {
+                const recipe = game_data.recipe_data[i];
+                const proliferator = recipe["增产"] || 0;
+                const canAccelerate = proliferator & 1;  // 配方本身支持加速
+                const canExtraProduct = proliferator & 2;  // 配方本身支持增产
+
+                // 如果开启了限制加速模式，且物品只能加速（不能增产），则设置为无增产剂
+                if (noAccelerate && canAccelerate && !canExtraProduct) {
+                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = 0;
+                } else {
+                    scheme_data.scheme_for_recipe[i]["增产剂等级"] = pro_num;
+                }
+            }
+            return scheme_data;
+        });
+    }
+
+    function change_pro_mode(pro_mode) {
+        set_scheme_data(old_scheme_data => {
+            let scheme_data = structuredClone(old_scheme_data);
+            for (var i = 0; i < game_data.recipe_data.length; i++) {
+                if (!(pro_mode & game_data.recipe_data[i]["增产"])) {
+                    continue;
+                }
+                scheme_data.scheme_for_recipe[i]["增产模式"] = Number(pro_mode);
+            }
+            return scheme_data;
+        });
+    }
+
+    const promode_options = [
+        {value: 2, label: "增产", className: pro_mode_class[2]},
+        {value: 1, label: "加速", className: pro_mode_class[1]},
+    ];
+
+    return (
+        <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
+            <small className="fw-bold">批量预设</small>
+            <div className="d-flex pro-mode-toggle">
+                {promode_options.map(({value, label, className}) => (
+                    <div key={value}
+                         className={`pro-mode-option ${pro_mode == value ? 'pro-mode-active' : ''} ${className || ''}`}
+                         onClick={() => change_pro_mode(value)}>
+                        {label}
+                    </div>
+                ))}
+            </div>
+            <div className="d-flex" style={{gap: '2px'}}>
+                <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
+                                             onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
+                                             icon_size={mob_icon} rounded={true}/>
+            </div>
+            {factory_doms}
+        </div>
+    );
 }

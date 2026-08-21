@@ -1,4 +1,4 @@
-import {useContext, useEffect, useRef, useState} from 'react';
+import {useCallback, useContext, useEffect, useRef, useState} from 'react';
 import {
     GameInfoContext,
     GameInfoSetterContext,
@@ -10,7 +10,7 @@ import {
 import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {init_scheme_data} from './scheme_data.jsx';
-import {Settings, BatchSetting, FuelSelect} from './settings.jsx';
+import {Settings, BatchPresetControls, OptimizerControls, FuelSelect} from './settings.jsx';
 import {default_game_data} from "./game_data.jsx";
 import {ItemIcon} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
@@ -70,7 +70,7 @@ function OreInput({item, value, mode, onChange}) {
     );
 }
 
-function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
+function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onStatsApplied}) {
     const oreQuantities = settings.ore_quantities || {};
     const recipeData = game_info?.game_data?.recipe_data || [];
     const mineralizeList = settings.mineralize_list || {};
@@ -102,8 +102,16 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
     const statsMode = settings.ore_quantity_mode || 'amount';
     const [statsLoading, setStatsLoading] = useState(false);
     const [statsError, setStatsError] = useState(null);
+    // 仅当"矿物可用量为空"或"用户显式更改了恒星数量"时才自动应用统计均值，
+    // 避免刷新或切换矿量/矿点模式时覆盖掉已手写/已应用的值。
+    const userChangedStarRef = useRef(false);
 
     useEffect(() => {
+        const isEmpty = Object.keys(oreQuantities).length === 0;
+        const starNumChanged = userChangedStarRef.current;
+        userChangedStarRef.current = false; // 消费标记
+        if (!isEmpty && !starNumChanged) return; // 非空且非用户改恒星数：保留原值，不自动应用
+
         let cancelled = false;
         const applyStatsSummary = async () => {
             setStatsLoading(true);
@@ -129,6 +137,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
                         ore_quantity_star_num: statsStarNum,
                         ore_quantity_mode: statsMode,
                     });
+                    onStatsApplied?.();
                 }
             } catch (err) {
                 if (!cancelled) setStatsError(err.message);
@@ -138,7 +147,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
         };
         applyStatsSummary();
         return () => { cancelled = true; };
-    }, [statsStarNum, statsMode, oreItems.join('|')]);
+    }, [statsStarNum, statsMode, oreItems.join('|'), onStatsApplied]);
 
     return (
         <div className="border rounded p-2 mt-1">
@@ -150,7 +159,10 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate}) {
                     className="form-select form-select-sm"
                     style={{ width: '88px' }}
                     value={statsStarNum}
-                    onChange={(e) => set_settings({ ore_quantity_star_num: Number(e.target.value) })}
+                    onChange={(e) => {
+                        userChangedStarRef.current = true;
+                        set_settings({ ore_quantity_star_num: Number(e.target.value) });
+                    }}
                     disabled={statsLoading}
                 >
                     {Array.from({ length: 33 }, (_, i) => i + 32).map(n => (
@@ -189,6 +201,8 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const [show_ore_quantities, set_show_ore_quantities] = useState(false);
     const [show_ore_popup, set_show_ore_popup] = useState(false);
     const [show_building_popup, set_show_building_popup] = useState(false);
+    const [statsApplySignal, setStatsApplySignal] = useState(0);
+    const handleStatsApplied = useCallback(() => setStatsApplySignal(s => s + 1), []);
     const prev_game_name = useRef(game_info?.game_data?.game_name ?? '');
 
     useEffect(() => {
@@ -253,12 +267,15 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             {/*采矿参数&其他设置*/}
             <UserSettings show={misc_show}/>
             {/*矿物可用量设置*/}
-            {show_ore_quantities && <OreQuantitiesPanel game_info={game_info} settings={settings} set_settings={set_settings} onNavigate={onNavigate}/>}
-            {/*添加需求、批量预设*/}
+            {show_ore_quantities && <OreQuantitiesPanel game_info={game_info} settings={settings} set_settings={set_settings} onNavigate={onNavigate} onStatsApplied={handleStatsApplied}/>}
+            {/*可选增产剂、策略与自动优化（矿物可用量下、添加需求上）*/}
+            <OptimizerControls needs_list={needs_list} set_show_ore_quantities={set_show_ore_quantities} statsApplySignal={statsApplySignal}/>
+            {/*添加需求*/}
             <NeedsList needs_list={needs_list} set_needs_list={set_needs_list}
                        set_show_ore_popup={set_show_ore_popup}
                        set_show_building_popup={set_show_building_popup}/>
-            <BatchSetting needs_list={needs_list} set_show_ore_quantities={set_show_ore_quantities}/>
+            {/*批量预设*/}
+            <BatchPresetControls/>
         </div>
         {/* 结果区域：填充剩余高度，独立滚动 */}
         <div className="app-result-area">
