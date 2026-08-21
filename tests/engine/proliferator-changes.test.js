@@ -5,7 +5,7 @@ import {
     collectProliferatorChanges,
     collectProliferatorModeChanges,
     formatProliferatorChoice,
-} from './proliferator-changes.js';
+} from '../../src/engine/proliferator-changes.js';
 
 test('treats a proliferator level without a mode as no proliferator', () => {
     assert.equal(formatProliferatorChoice(1, 0), '不使用');

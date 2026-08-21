@@ -5,7 +5,7 @@ import {
     getThresholdMetric,
     relativeObjectiveImprovement,
     shouldAcceptProliferator,
-} from './proliferator-threshold.js';
+} from '../../src/engine/proliferator-threshold.js';
 
 test('returns the objective value for threshold comparisons', () => {
     assert.equal(getThresholdMetric({objectiveValue: 123}), 123);

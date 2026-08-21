@@ -5,7 +5,7 @@ import {
     getSeedQueryMode,
     resetSeedQueryMode,
     setSeedQueryMode,
-} from './seed_query_mode.js';
+} from '../src/seed_query_mode.js';
 
 test('browser is the default seed query mode', () => {
     const storage = new Map();

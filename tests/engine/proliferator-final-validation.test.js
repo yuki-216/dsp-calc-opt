@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {validateFinalProliferatorChoices} from './proliferator-final-validation.js';
+import {validateFinalProliferatorChoices} from '../../src/engine/proliferator-final-validation.js';
 
 function makeScheme(aLevel = 1, bLevel = 1) {
     return {

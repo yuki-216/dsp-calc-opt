@@ -6,7 +6,7 @@ import {
     RARE_ORE_PRACTICALITY_RATIO,
     getRareOreCorrection,
     correctedRareWeightUnit,
-} from './rare-ore-practicality.js';
+} from '../../src/engine/rare-ore-practicality.js';
 
 test('三条等价规则换算系数正确', () => {
     assert.ok(Math.abs(RARE_ORE_EQUIVALENCE['刺笋结晶'].factor - 1 / 3) < 1e-12);
