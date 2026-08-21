@@ -1,4 +1,4 @@
-import {createContext, useEffect, useState, useMemo, useRef, useCallback} from 'react';
+import {createContext, useEffect, useState, useMemo, useCallback} from 'react';
 import {GameInfo, GlobalState} from './game_data';
 import {init_scheme_data} from './scheme_data';
 import {default_game_data} from "./game_data.jsx";
@@ -138,7 +138,7 @@ export function ContextProvider({children}) {
     const engine = useMemo(() => {
         console.log("[+] new CoreEngine (primary)");
         return new CoreEngine(game_info.game_data, scheme_data, settings, global_state.sprayCosts);
-    }, [game_info, scheme_data, settings]);  // 移除 global_state.sprayCosts 依赖，避免数组引用变化导致重复创建
+    }, [game_info, scheme_data, settings, global_state.sprayCosts]);
 
     const [engineGraphData, setEngineGraphData] = useState(null);
     const [calculationError, setCalculationError] = useState(null);

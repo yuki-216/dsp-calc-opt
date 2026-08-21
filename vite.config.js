@@ -4,13 +4,11 @@ import fsp from 'fs/promises';
 import {createRequire} from 'module';
 import sharp from 'sharp';
 import path from 'path';
-import {fileURLToPath} from 'url';
 import {defineConfig} from 'vite';
 import legacy from '@vitejs/plugin-legacy';
 import {VitePWA} from 'vite-plugin-pwa';
 
 const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Generate a sprite sheet from an array of PNG files using sharp.
  *  Returns {image: Buffer, coordinates: {[file]: {x, y, width, height}}, properties: {width, height}} */

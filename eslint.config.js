@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
     {
-        ignores: ['dist/'],
+        ignores: ['dist/', 'public/search_seed.js'],
     },
 
     js.configs.recommended,
@@ -43,6 +43,16 @@ export default [
     // vite.config.js runs in Node.js, not the browser
     {
         files: ['vite.config.js'],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+            },
+        },
+    },
+
+    // 生成脚本（CJS）在 Node.js 中运行
+    {
+        files: ['scripts/**/*.cjs'],
         languageOptions: {
             globals: {
                 ...globals.node,

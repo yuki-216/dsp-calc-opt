@@ -1,10 +1,10 @@
-import {useContext, useEffect, useRef, useState} from 'react';
+import {useContext, useRef, useState} from 'react';
 import {FaTrash, FaPlusCircle, FaGem, FaIndustry} from 'react-icons/fa';
-import {GameInfoContext, GlobalStateContext} from './contexts';
+import {GlobalStateContext} from './contexts';
 import {ItemIcon} from './ui_components';
 import {ItemSelect} from './item_select';
 
-function NeedItem({item, count, needs_list, set_needs_list}) {
+function NeedItem({item, count, set_needs_list}) {
     const [editing, setEditing] = useState(null);
 
     function edit_count(e) {

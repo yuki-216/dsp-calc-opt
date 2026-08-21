@@ -6,6 +6,7 @@ import { DEBUG } from './debug.js';
 
 import { buildItemGraph, tarjanSCC } from './dag.js';
 import { expandInSCCOrder } from './unit-cost.js';
+import { getPowerDeviceCount } from '../power-device-count.js';
 
 /**
  * 核心计算引擎
@@ -72,7 +73,6 @@ export class CoreEngine {
     let iteration = 0;
     const maxIterations = 10; // 最大迭代次数
     let costs = new Map();
-    let byproductMap = new Map();
     const SOLUTION_ID = '__solution__';
 
     while (iteration < maxIterations) {
@@ -115,18 +115,16 @@ export class CoreEngine {
 
       // 3. 计算所有物品的直接成本（系数表）
       costs = new Map();
-      byproductMap = new Map(); // 独立的副产物映射
       for (const [itemId, node] of this.graph) {
         // 直接使用节点已有的 directCost（BFS阶段已计算）
         costs.set(itemId, node.directCost || { [`$${itemId}`]: 1 });
-        byproductMap.set(itemId, new Set(node.byproducts || []));
       }
       // 添加 solution 的成本
       costs.set(SOLUTION_ID, solutionNode.directCost);
 
 
       // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, byproductMap, this.recipeMap);
+      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, this.recipeMap);
 
       // 5. 检查是否需要迭代
       // 检查是否有新的负需求物品（不在过滤列表中的）
@@ -198,7 +196,7 @@ export class CoreEngine {
         continue;
       }
 
-      const { factoryName, singleExecBuildNumber } = node.buildingPower;
+      const { factoryName, singleExecBuildNumber, basePower = 0 } = node.buildingPower;
 
       // 根据执行次数计算实际设备数
       const buildNumber = execCount * singleExecBuildNumber;
@@ -208,13 +206,53 @@ export class CoreEngine {
         factoryName,
         设备数量: buildNumber,
         执行次数: execCount,
-        单次执行设备数: singleExecBuildNumber
+        单次执行设备数: singleExecBuildNumber,
+        额定功率: basePower,
       };
 
       // 汇总建筑数量
       const ceilBuildNumber = Math.ceil(buildNumber);
       if (ceilBuildNumber > 0) {
         buildingList[factoryName] = (buildingList[factoryName] || 0) + ceilBuildNumber;
+      }
+    }
+
+    // 发电设备数量按额定发电效率计算：基础功率乘以燃料配方的增产/加速倍率。
+    // 这与输出表的电力行使用同一公式，避免把燃料配方执行次数误当成发电设备效率。
+    // 直接依据"选定燃料 + 总耗电"计算，独立于"电力"节点是否存活（避免其在循环组迭代中被当作原矿过滤时丢失）。
+    const selectedFuel = this.schemeData?.selected_fuel;
+    if (selectedFuel && selectedFuel !== '无' && totalEnergyCost > 0) {
+      const fuelRecipe = this.gameData.recipe_data.find(r => r.isFuelRecipe && r.fuelName === selectedFuel);
+      if (fuelRecipe) {
+        const factoryKey = String(fuelRecipe.设施);
+        const genBuilding = this.gameData.factory_data?.[factoryKey]?.[0];
+        const devicePower = genBuilding?.["发电功率"] ?? genBuilding?.["耗能"] ?? 0;
+        const deviceName = genBuilding?.["名称"];
+        const recipeId = (fuelRecipe._id !== undefined) ? fuelRecipe._id : this.gameData.recipe_data.indexOf(fuelRecipe);
+        const schemeRecipe = this.schemeData?.scheme_for_recipe?.[recipeId];
+        const proMode = Number(schemeRecipe?.['增产模式']) || 0;
+        const proLevel = Number(schemeRecipe?.['增产剂等级'] || schemeRecipe?.['增产点数']) || 0;
+        const correctedCount = getPowerDeviceCount({
+          totalEnergy: totalEnergyCost,
+          devicePower,
+          proliferatorEffects: this.gameData.proliferator_effect,
+          proliferatorLevel: proLevel,
+          proliferatorMode: proMode,
+        });
+        // 确保 buildingDetails 记录电力节点（供占地计算使用），覆盖 step7 可能写入的错值
+        if (!buildingDetails['电力']) {
+          buildingDetails['电力'] = { factoryName: deviceName, 设备数量: 0, 执行次数: 0, 单次执行设备数: 0, 额定功率: devicePower };
+        }
+        buildingDetails['电力'].factoryName = deviceName;
+        buildingDetails['电力'].额定功率 = devicePower;
+        buildingDetails['电力'].设备数量 = correctedCount;
+        // 发电建筑只用于发电，buildingList 中同名项即发电设备数，直接覆盖（step7 写入的错值一并清除）
+        const ceilCount = Math.ceil(correctedCount);
+        if (ceilCount > 0) {
+          buildingList[deviceName] = ceilCount;
+        } else {
+          delete buildingList[deviceName];
+        }
       }
     }
 

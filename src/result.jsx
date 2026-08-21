@@ -1,4 +1,4 @@
-import {useContext, useMemo, useState, useEffect, useRef} from 'react';
+import {useCallback, useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
 import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
@@ -9,6 +9,10 @@ import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
 import {FaExternalLinkAlt} from 'react-icons/fa';
+import {getPowerDeviceCount} from './power-device-count.js';
+
+// 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
+const EMPTY_OBJ = {};
 
 /**
  * 创建 scheme_data 更新闭包
@@ -74,30 +78,33 @@ export function RecipeSelect({item, choice, onChange, compact}) {
     let game_data = global_state.game_data;
     let item_data = global_state.item_data;
 
-    // 构建 recipe_data索引 -> item_data位置 的映射
-    let recipe_index_to_position = {};
-    for (let i = 1; i < item_data[item].length; i++) {
-        recipe_index_to_position[item_data[item][i]] = i;
-    }
+    // 根据 allowed_recipes 决定可选配方及顺序（useMemo 稳定引用，避免 effect 依赖数组每次渲染变化）
+    const filtered_indices = useMemo(() => {
+        // 构建 recipe_data索引 -> item_data位置 的映射
+        let recipe_index_to_position = {};
+        for (let i = 1; i < item_data[item].length; i++) {
+            recipe_index_to_position[item_data[item][i]] = i;
+        }
 
-    // 根据 allowed_recipes 决定可选配方及顺序
-    let allowed = allowed_recipes[item];
-    let filtered_indices = [];
-    if (allowed) {
-        // 按 allowed_recipes 中的顺序遍历
-        for (let recipe_index of allowed) {
-            if (recipe_index_to_position[recipe_index] !== undefined) {
-                filtered_indices.push(recipe_index_to_position[recipe_index]);
+        let filtered_indices = [];
+        const allowed = allowed_recipes[item];
+        if (allowed) {
+            // 按 allowed_recipes 中的顺序遍历
+            for (let recipe_index of allowed) {
+                if (recipe_index_to_position[recipe_index] !== undefined) {
+                    filtered_indices.push(recipe_index_to_position[recipe_index]);
+                }
             }
         }
-    }
+        return filtered_indices;
+    }, [item_data, item]);
 
     // 校验：如果缓存的 choice 不在 allowed_recipes 允许范围内，自动重置
     useEffect(() => {
         if (filtered_indices.length > 0 && !filtered_indices.includes(choice)) {
             onChange(filtered_indices[0]);
         }
-    }, [choice, filtered_indices.length]);
+    }, [choice, filtered_indices, onChange]);
 
     // 如果过滤后只剩一个配方，直接显示
     if (filtered_indices.length <= 1) {
@@ -158,14 +165,13 @@ export function ProModeSelect({recipe_id, choice, onChange}) {
     if (recipe_prolif & 1) options.push({value: 1, label: "加速", className: pro_mode_class[1]});
     if (recipe_prolif & 4) options.push({value: 3, label: "透镜", className: pro_mode_class[3]});
 
-    if (options.length === 0) return null;
-
-    // 未选择时默认选中第一个选项（直接计算显示值，不依赖 useEffect）
-    const effectiveChoice = (choice === 0 || !options.some(o => o.value === choice)) ? options[0].value : choice;
+    // 未选择时默认选中第一个选项（直接计算显示值，不依赖 useEffect）；无可用选项时为 null，跳过持久化
+    const effectiveChoice = options.length === 0 ? null
+        : ((choice === 0 || !options.some(o => o.value === choice)) ? options[0].value : choice);
 
     // 使用 useEffect 异步更新 scheme_data 以持久化默认值
     useEffect(() => {
-        if (effectiveChoice !== choice) {
+        if (effectiveChoice !== null && effectiveChoice !== choice) {
             set_scheme_data(old => {
                 let scheme_data = structuredClone(old);
                 scheme_data.scheme_for_recipe[recipe_id]["增产模式"] = effectiveChoice;
@@ -173,6 +179,8 @@ export function ProModeSelect({recipe_id, choice, onChange}) {
             });
         }
     }, [effectiveChoice, choice, recipe_id, set_scheme_data]);
+
+    if (options.length === 0) return null;
 
     const isSingle = options.length === 1;
 
@@ -340,10 +348,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }, [engineCalculate, needs_list]);
 
     // 从新引擎结果中提取数据
-    const result_dict = engineResult?.recipeExecutions || {};
-    const surplusByproducts = engineResult?.surplusByproducts || {};
-    const selfConsumption = engineResult?.selfConsumption || {};
-    const byproductSources = engineResult?.byproductSources || {};
+    const result_dict = engineResult?.recipeExecutions || EMPTY_OBJ;
+    const surplusByproducts = engineResult?.surplusByproducts || EMPTY_OBJ;
+    const selfConsumption = engineResult?.selfConsumption || EMPTY_OBJ;
+    const byproductSources = engineResult?.byproductSources || EMPTY_OBJ;
 
     // 用于存储历史值的数组，最多保留两个版本
     const [historyValues, setHistoryValues] = useState([]);
@@ -369,7 +377,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     let building_list = engineResult?.buildingList || {};
     let building_details = engineResult?.buildingDetails || {};
     let total_footprint = engineResult?.totalFootprint || 0;
-    let footprint_details = engineResult?.footprintDetails || {};
 
     function get_factory_number(amount, item) {
         // 从引擎的 buildingDetails 中获取设备数量
@@ -464,9 +471,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             const fuelData = fuelDataList.find(f => f.name === selectedFuel);
             const deviceName = fuelData?.device;
             const devicePower = DEVICE_POWER_CONSUMPTION[deviceName];
-            const deviceCount = devicePower ? totalEnergy / devicePower : 0;
             const fuelRecipeIndex = game_data.recipe_data.findIndex(r => r.isFuelRecipe && r.fuelName === selectedFuel);
             const fuelScheme = fuelRecipeIndex >= 0 ? scheme_data.scheme_for_recipe[fuelRecipeIndex] : null;
+            const deviceCount = getPowerDeviceCount({
+                totalEnergy,
+                devicePower,
+                proliferatorEffects: game_data.proliferator_effect,
+                proliferatorLevel: fuelScheme?.['增产剂等级'] || 0,
+                proliferatorMode: fuelScheme?.['增产模式'] || 0,
+            });
 
             const changeFuelProMode = fuelRecipeIndex >= 0 ? makeSchemeUpdater(set_scheme_data, 'recipe_field', fuelRecipeIndex, "增产模式") : () => {};
             const changeFuelProNum = fuelRecipeIndex >= 0 ? makeSchemeUpdater(set_scheme_data, 'recipe_field', fuelRecipeIndex, "增产剂等级") : () => {};
@@ -488,7 +501,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         {fuelScheme && (
                             <div className="d-inline-flex align-items-center gap-1">
                                 <ItemIcon item={deviceName} size={is_mobile ? 18 : 30}/>
-                                <RatioAdjustInput value={deviceCount}/>
+                                <RatioAdjustInput value={deviceCount} ceil={true}/>
                             </div>
                         )}
                     </td>
@@ -649,14 +662,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         return items;
     }, [result_dict, mineralize_list, item_data, scheme_data, game_data]);
 
-    const isRawMaterial = (item) => rawMaterialItems.has(item);
+    const isRawMaterial = useCallback((item) => rawMaterialItems.has(item), [rawMaterialItems]);
 
     // 缓存原矿列表（用于主视图和Modal），按物品名称排序保持静态顺序
     const rawMaterials = useMemo(() => {
         return Object.entries(result_dict)
             .filter(([item]) => isRawMaterial(item))
             .sort(([a], [b]) => a.localeCompare(b));
-    }, [result_dict, rawMaterialItems]);
+    }, [result_dict, isRawMaterial]);
 
     // 计算数值变化的差值
     // 更新历史值

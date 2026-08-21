@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import {useState, useEffect} from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import {Header, IconStyles, ThemeProvider} from './ui_components.jsx';
@@ -42,17 +42,17 @@ function RootApp() {
                 // 返回包含新物品的需求表
                 return { [data.item]: data.count };
             }
-        } catch {}
+        } catch { /* 解析失败则忽略新标签页数据 */ }
         try {
             const saved = localStorage.getItem(STORAGE_KEY_NEEDS);
             if (saved) return JSON.parse(saved);
-        } catch {}
+        } catch { /* 解析失败则回退到默认空需求 */ }
         return {};
     });
 
     // 需求表变更时持久化
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEY_NEEDS, JSON.stringify(needs_list)); } catch {}
+        try { localStorage.setItem(STORAGE_KEY_NEEDS, JSON.stringify(needs_list)); } catch { /* 写入失败可忽略 */ }
     }, [needs_list]);
 
     // 使用 CSS display 切换而非条件渲染，避免切换页面时卸载/重挂组件导致 useMemo 重复计算

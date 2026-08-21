@@ -1,6 +1,6 @@
 import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'react';
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink, FaBolt} from 'react-icons/fa';
-import {GameInfoContext, GlobalStateContext, EngineGraphDataContext, FuelContext} from './contexts.jsx';
+import {GlobalStateContext, EngineGraphDataContext, FuelContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
 import {tarjanSCC, compressToDag, dagTopologicalSort} from './engine/graph-utils.js';
 import './DependencyGraph.css';
@@ -536,7 +536,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 });
             });
 
-            const get_half_width = (p) => min_gap / 2;
+            const get_half_width = () => min_gap / 2;
 
             for (const new_item of items_to_layout) {
                 let new_x = new_item.ideal_x;
@@ -969,11 +969,7 @@ function assign_edge_colors(edges) {
  * 持久化：删除列表、自定义位置、显示模式均保存在 localStorage
  */
 export function DependencyGraphPage({onBack, needs_list, isActive}) {
-    const game_info = useContext(GameInfoContext);
     const global_state = useContext(GlobalStateContext);
-    const engineGraphData = useContext(EngineGraphDataContext);
-    const selected_fuel = useContext(FuelContext);
-    const container_ref = useRef(null);
 
     if (!global_state) {
         return <div className="dependency-graph-page">
@@ -989,6 +985,17 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             </div>
         </div>;
     }
+
+    return <DependencyGraphInner onBack={onBack} needs_list={needs_list} isActive={isActive} global_state={global_state}/>;
+}
+
+/**
+ * 依赖图主体（global_state 保证非空，承载全部 hooks）
+ */
+function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
+    const engineGraphData = useContext(EngineGraphDataContext);
+    const selected_fuel = useContext(FuelContext);
+    const container_ref = useRef(null);
 
     const game_data = global_state.game_data;
     const item_data = global_state.item_data;
@@ -1008,7 +1015,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         try {
             const saved = localStorage.getItem(STORAGE_KEY_DELETED);
             if (saved) return new Set(JSON.parse(saved));
-        } catch {}
+        } catch { /* 解析失败则空删除表 */ }
         return new Set();
     });
 
@@ -1020,7 +1027,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const [show_debug_panel, setShowDebugPanel] = useState(false);
     const [hide_scc_external_edges, setHideSccExternalEdges] = useState(true);
     const [hide_power_edges, setHidePowerEdges] = useState(true);
-    const [first_layer_moved, setFirstLayerMoved] = useState(0);
+    const [, setFirstLayerMoved] = useState(0);
 
     // 清除旧的持久化数据
     useEffect(() => {
@@ -1041,7 +1048,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                 Object.entries(obj).forEach(([k, v]) => map.set(k, v));
                 return map;
             }
-        } catch {}
+        } catch { /* 解析失败则空位置表 */ }
         return new Map();
     });
 
@@ -1054,7 +1061,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                 Object.entries(obj).forEach(([k, v]) => map.set(k, v));
                 return map;
             }
-        } catch {}
+        } catch { /* 解析失败则空位置表 */ }
         return new Map();
     });
 
@@ -1183,14 +1190,10 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const {
         positions: base_positions,
         debug_layers,
-        canvas_width: dynamic_canvas_width,
-        canvas_height: dynamic_canvas_height,
         layers_map: layout_layers_map,
         sorted_layers: layout_sorted_layers,
         detect_y_array: layout_detect_y_array,
         scc_info: layout_scc_info,
-        node_to_scc: layout_node_to_scc,
-        scc_groups: layout_scc_groups,
         item_dag_layer: layout_item_dag_layer
     } = useMemo(() => {
         if (filtered_graph.items.size === 0) {
@@ -1210,7 +1213,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         }
 
         const first_layer_custom = new Map();
-        filtered_graph.edges.forEach(({from, to}) => {
+        filtered_graph.edges.forEach(({from}) => {
             // 收集所有有父节点的节点（from=产物, to=原料，产物有父节点）
             if (!first_layer_custom.has(from)) first_layer_custom.set(from, false);
         });
@@ -1224,7 +1227,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
         const result = layout_graph(filtered_graph.items, filtered_graph.edges, CANVAS_WIDTH, CANVAS_HEIGHT, first_layer_positions, container_width, filtered_graph.sccs || null, filtered_graph.proliferator_edges);
 
         return result;
-    }, [filtered_graph, first_layer_moved, active_custom_positions, container_width, show_needs_only]);
+    }, [filtered_graph, active_custom_positions, container_width]);
 
     // 合并自定义位置，只对首层物品生效，并做重叠处理
     const positions = useMemo(() => {
@@ -1275,7 +1278,6 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const is_layout_ready = base_positions.size > 0;
 
     // 布局变化时自动居中视角
-    const has_initialized_ref = useRef(false);
     const prev_layout_key_ref = useRef(null);
 
     // 页面激活时重置，确保切换到依赖图时能重新居中
@@ -1285,7 +1287,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             // 根据需求表重新判断默认模式
             setShowNeedsOnly(needs_list && Object.keys(needs_list).length > 0);
         }
-    }, [isActive]);
+    }, [isActive, needs_list]);
 
     useEffect(() => {
         if (base_positions.size === 0) return;
@@ -1360,7 +1362,7 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
                 y: e.clientY - pan_start.y
             });
         }
-    }, [is_panning, pan_start, dragging_node, node_drag_offset, screen_to_canvas, base_positions]);
+    }, [is_panning, pan_start, dragging_node, node_drag_offset, screen_to_canvas, base_positions, setActiveCustomPositions]);
 
     const handle_mouse_up = useCallback(() => {
         setIsPanning(false);
@@ -1722,7 +1724,6 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const render_nodes = () => {
         const node_doms = [];
         const is_highlighting = effective_highlighted_items.size > 0;
-        const NODE_R = 32;
 
         positions.forEach((pos, item) => {
             let border_color = '#4a9eff'; // 中间产物：蓝色
@@ -1733,10 +1734,6 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
             const opacity = is_highlighting ? (is_highlighted ? 1 : 0.3) : 1;
             const scale = is_highlighted && item !== tooltip ? 1.1 : 1;
             const shadow = is_highlighted ? '0 0 12px rgba(0, 0, 0, 0.3)' : 'none';
-
-            const scc_id = layout_node_to_scc?.get(item);
-            const is_in_cycle = scc_id !== undefined && layout_scc_groups?.[scc_id]?.size > 1;
-            const CYCLE_DOT_OFFSET = 15;
 
             node_doms.push(
                 <div

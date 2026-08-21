@@ -17,9 +17,8 @@ import { invertMatrix } from './matrix.js';
  * @param {Map} costs - 物品系数表映射 {itemId: costMap}（会被修改）
  * @param {Map} graph - 物品图
  * @param {Array<Set<string>>} sccs - SCC分组（逆拓扑序：顶层在前，底层在后）
- * @param {Map<string,Set>} byproductMap - 副产物映射
  */
-export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = new Map(), recipeMap = new Map()) {
+export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new Map()) {
 
   // 负需求物品集合（用于迭代过滤）
   const negativeDemandItems = new Set();
@@ -50,7 +49,6 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, byproductMap = 
     delete solution[key];
 
     const m = multiplier ?? coeff;  // 默认使用 coeff，逆生产时传入 -cancelAmount
-    const isReverse = multiplier !== null;
 
     for (const [k, v] of Object.entries(source)) {
       const A = solution[k] || 0;    // 加和前的值

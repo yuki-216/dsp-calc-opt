@@ -21,13 +21,13 @@ export let DEBUG = (() => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved !== null) return saved !== 'false';
-  } catch {}
+  } catch { /* localStorage 不可用则默认开启 */ }
   return true;
 })();
 
 function setEnabled(value) {
   DEBUG = !!value;
-  try { localStorage.setItem(STORAGE_KEY, String(DEBUG)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, String(DEBUG)); } catch { /* 持久化失败可忽略 */ }
   console.log(`[Debug] 调试日志: ${DEBUG ? '开启' : '关闭'}`);
 }
 

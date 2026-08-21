@@ -187,6 +187,7 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
         factoryName: null,
         singleExecBuildNumber: 0,
         unitPowerCost: 0,
+        basePower: 0,
         isMiner: false
       };
     } else if (factoryType !== undefined && factoryType !== null) {
@@ -256,7 +257,6 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
               const proEffect = gameData.proliferator_effect?.[proLevel];
               if (proEffect) {
                 const powerMultiplier = proEffect["耗电倍率"] || 1;
-                const oldPower = unitPowerCost;
                 unitPowerCost *= powerMultiplier;
               }
             }
@@ -266,6 +266,8 @@ export function buildItemGraph(needs, recipes, gameData, schemeData, settings = 
               factoryName,
               singleExecBuildNumber,
               unitPowerCost,
+              // 额定功率：发电建筑用"发电功率"字段（自身不耗电，耗能恒为0），其余建筑用"耗能"
+              basePower: factoryInfo["发电功率"] ?? factoryPower,
               isMiner: ["采矿机", "大型采矿机", "抽水机", "原油萃取站"].includes(factoryName)
             };
           }
