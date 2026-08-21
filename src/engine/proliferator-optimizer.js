@@ -15,7 +15,6 @@ import {
     RARE_ORE_PRACTICALITY_RATIO,
     getRareOreCorrection,
     correctedRareWeightUnit,
-    convertedRareOreAmount,
 } from './rare-ore-practicality.js';
 
 /**
@@ -713,12 +712,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
         skippedLines.push(`${rare} → ${rule.commonOre}: 普通矿 ${rule.commonOre} 未设置可用量，本次不修正`);
         continue;
       }
-      const { converted, retained } = convertedRareOreAmount(correction, amount);
-      const fmt = (n) => Number(n.toFixed(2)).toString();
-      correctedLines.push(
-        `${rare} → ${rule.commonOre} (等价 ${rule.rareAmount}↔${rule.commonAmount}): `
-        + `消耗 ${fmt(amount)} → 折算 ${fmt(converted)} ${rule.commonOre} + 保留 ${fmt(retained)}`
-      );
+      correctedLines.push(`${rare} → ${rule.commonOre} (等价 ${rule.rareAmount}↔${rule.commonAmount})`);
     }
     onLog(`珍稀实用性修正: 已启用 (替代比例 ${RARE_ORE_PRACTICALITY_RATIO * 100}%)`);
     if (correctedLines.length === 0 && skippedLines.length === 0) {

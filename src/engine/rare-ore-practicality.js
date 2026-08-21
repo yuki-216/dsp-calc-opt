@@ -46,15 +46,3 @@ export function correctedRareWeightUnit(correction, baseAvail, ratio = RARE_ORE_
     const {rule, rareAvail, commonAvail} = correction;
     return ratio * rule.factor * (baseAvail / commonAvail) + (1 - ratio) * (baseAvail / rareAvail);
 }
-
-/**
- * 修正后的折算明细（用于日志）：消耗量按替代比例拆成"折算到普通矿的量"与"保留的量"。
- * @returns {{converted: number, retained: number}}
- */
-export function convertedRareOreAmount(correction, amount, ratio = RARE_ORE_PRACTICALITY_RATIO) {
-    const {rule} = correction;
-    return {
-        converted: amount * ratio * rule.factor,
-        retained: amount * (1 - ratio),
-    };
-}

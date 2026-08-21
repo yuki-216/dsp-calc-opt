@@ -6,7 +6,6 @@ import {
     RARE_ORE_PRACTICALITY_RATIO,
     getRareOreCorrection,
     correctedRareWeightUnit,
-    convertedRareOreAmount,
 } from './rare-ore-practicality.js';
 
 test('三条等价规则换算系数正确', () => {
@@ -54,9 +53,3 @@ test('ratio=1 时等于纯折算, ratio=0 时等于原权重', () => {
     assert.ok(Math.abs(noCorrection - (baseAvail / 800)) < 1e-9);
 });
 
-test('convertedRareOreAmount: 折算明细(刺笋 180 → 57 钛石 + 保留 9)', () => {
-    const corr = getRareOreCorrection('刺笋结晶', {刺笋结晶: 500, 钛石: 10000});
-    const {converted, retained} = convertedRareOreAmount(corr, 180);
-    assert.ok(Math.abs(converted - 57) < 1e-9);
-    assert.ok(Math.abs(retained - 9) < 1e-9);
-});
