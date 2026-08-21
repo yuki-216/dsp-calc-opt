@@ -477,7 +477,7 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                 className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
                 onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
                 disabled={isOptimizing}
-                title="自动优化时可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
+                title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
             >
                 增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
             </button>

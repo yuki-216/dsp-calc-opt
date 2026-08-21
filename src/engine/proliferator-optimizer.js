@@ -283,17 +283,22 @@ function formatHeatValue(value) {
  * 获取配方的可用增产选择
  * @param {Object} recipe - 配方数据
  * @param {Object} settings - 设置参数（可选）
+ * @param {Object} gameData - 游戏数据（可选，用于识别生产增产剂的配方）
  * @returns {Array} 可用的增产选择列表
  */
-function getAvailableChoices(recipe, settings = {}) {
+function getAvailableChoices(recipe, settings = {}, gameData = null) {
   const proliferator = recipe['增产'] || 0;
   if (proliferator === 0) return [{ level: 0, mode: 0, name: '无' }];
 
   const choices = [{ level: 0, mode: 0, name: '无' }];
   const noAccelerate = settings.proliferate_no_accelerate || false;
   const allowedLevels = settings.proliferate_allowed_levels || [1, 2, 3];
-  // 自由等级开关：开启时可在 1..最高等级 间自由选择（不受可选增产剂限制；各级增产剂本就在产线上）
+  // 增产剂自由等级：仅对生产"增产剂 Mk.I/II/III"三个物品的配方生效（它们本就在产线上，无混用顾虑）
   const flexibleLevels = settings.proliferate_flexible_levels || false;
+  const proliferatorItemNames = new Set(
+    (gameData?.proliferator_data || []).map(d => d?.['增产剂']).filter(Boolean)
+  );
+  const producesProliferator = Object.keys(recipe['产物'] || {}).some(name => proliferatorItemNames.has(name));
   const maxLevel = allowedLevels.length > 0 ? Math.max(...allowedLevels) : 0;
 
   // 位掩码：bit0=可加速, bit1=可增产, bit2=特殊(透镜)
@@ -301,8 +306,8 @@ function getAvailableChoices(recipe, settings = {}) {
   const canExtraProduct = proliferator & 2;
 
   for (let level = 1; level <= maxLevel; level++) {
-    // 默认仅允许可选增产剂选中的等级；开启自由等级后允许 1..最高等级
-    if (!flexibleLevels && !allowedLevels.includes(level)) continue;
+    // 默认仅允许可选增产剂选中的等级；仅生产增产剂的配方在开启自由等级后允许 1..最高等级
+    if (!(flexibleLevels && producesProliferator) && !allowedLevels.includes(level)) continue;
 
     if (canAccelerate) {
       choices.push({ level, mode: 1, name: `MK${level}加速` });
@@ -407,7 +412,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
     const recipeIndex = itemToRecipe.get(item);
     if (recipeIndex === undefined) return [{ level: 0, mode: 0, name: '无' }];
     const recipe = recipeData[recipeIndex];
-    return getAvailableChoices(recipe, settings);
+    return getAvailableChoices(recipe, settings, gameData);
   });
 
   // 初始状态：所有物品选择"无"
@@ -531,7 +536,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       if (recipeIndex === undefined) continue;
 
       const recipe = recipeData[recipeIndex];
-      const choices = getAvailableChoices(recipe, settings);
+      const choices = getAvailableChoices(recipe, settings, gameData);
 
       // 只有一个选择时，直接应用（无需遍历）
       if (choices.length <= 1) {
