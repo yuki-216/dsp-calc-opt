@@ -1,4 +1,4 @@
-import {useCallback, useContext, useEffect, useRef, useState} from 'react';
+import {useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {
     GameInfoContext,
     GameInfoSetterContext,
@@ -70,27 +70,34 @@ function OreInput({item, value, mode, onChange}) {
     );
 }
 
+// 真正无限的物品（抽水站/轨道采集器等可无限获取）
+const INFINITE_ITEMS = new Set(['水', '硫酸', '临界光子', '氢', '重氢', '可燃冰']);
+// 稳定空引用，避免 `|| {}` / `|| []` 每次渲染新建对象导致依赖数组不稳定
+const EMPTY_OBJ = {};
+const EMPTY_ARR = [];
+
 function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onStatsApplied}) {
-    const oreQuantities = settings.ore_quantities || {};
-    const recipeData = game_info?.game_data?.recipe_data || [];
-    const mineralizeList = settings.mineralize_list || {};
-    // 真正无限的物品（抽水站/轨道采集器等可无限获取）
-    const infiniteItems = new Set(['水', '硫酸', '临界光子', '氢', '重氢', '可燃冰']);
-    const oreItems = [];
-    const seen = new Set();
-    // 收集可由非行星基地设施采集的无原料物品作为原矿
-    for (const recipe of recipeData) {
-        const outputs = recipe['产物'] || {};
-        const inputs = recipe['原料'] || {};
-        const outputKeys = Object.keys(outputs);
-        if (Object.keys(inputs).length === 0 && outputKeys.length === 1 && recipe['可采集']) {
-            const item = outputKeys[0];
-            if (!infiniteItems.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
+    const oreQuantities = settings.ore_quantities || EMPTY_OBJ;
+    const recipeData = game_info?.game_data?.recipe_data || EMPTY_ARR;
+    const mineralizeList = settings.mineralize_list || EMPTY_OBJ;
+    // 收集可由非行星基地设施采集的无原料物品作为原矿（useMemo 稳定引用，避免每次渲染重建导致 effect 重复触发）
+    const oreItems = useMemo(() => {
+        const oreItems = [];
+        const seen = new Set();
+        for (const recipe of recipeData) {
+            const outputs = recipe['产物'] || {};
+            const inputs = recipe['原料'] || {};
+            const outputKeys = Object.keys(outputs);
+            if (Object.keys(inputs).length === 0 && outputKeys.length === 1 && recipe['可采集']) {
+                const item = outputKeys[0];
+                if (!INFINITE_ITEMS.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
+            }
         }
-    }
-    for (const item of Object.keys(mineralizeList)) {
-        if (!infiniteItems.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
-    }
+        for (const item of Object.keys(mineralizeList)) {
+            if (!INFINITE_ITEMS.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
+        }
+        return oreItems;
+    }, [recipeData, mineralizeList]);
 
     const handleChange = (item, numVal) => {
         const newQ = { ...oreQuantities };
@@ -147,7 +154,7 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onSt
         };
         applyStatsSummary();
         return () => { cancelled = true; };
-    }, [statsStarNum, statsMode, oreItems.join('|'), onStatsApplied]);
+    }, [statsStarNum, statsMode, oreItems, oreQuantities, set_settings, onStatsApplied]);
 
     return (
         <div className="border rounded p-2 mt-1">
@@ -223,7 +230,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
         if (newTabData) {
             set_settings({ mineralize_list: {} });
         }
-    }, [newTabData]);
+    }, [newTabData, set_settings]);
 
     useEffect(() => {
         // 只有当游戏名称真正变化时（不是组件重新挂载导致对象引用变化），才清空 needs_list
@@ -232,7 +239,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             prev_game_name.current = current_name;
             set_needs_list({});
         }
-    }, [game_info]);
+    }, [game_info, set_needs_list]);
 
     function clearData() {
         if (!confirm(`即将清空所有保存的生产策略、需求列表等数据，初始化整个计算器，是否继续`)) {
