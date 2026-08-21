@@ -10,6 +10,14 @@
 import { CoreEngine } from './index.js';
 import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
 import { validateFinalProliferatorChoices } from './proliferator-final-validation.js';
+import {
+    RARE_ORE_EQUIVALENCE,
+    RARE_ORE_PRACTICALITY_RATIO,
+    getRareOreCorrection,
+    correctedRareWeightUnit,
+    correctedRareBottleneckUnit,
+    convertedRareOreAmount,
+} from './rare-ore-practicality.js';
 
 /**
  * 计算给定方案下的总耗电
@@ -100,11 +108,31 @@ function isRawOreItem(itemId, recipeData, mineralizeList) {
 // 油井产量衰减系数（用户输入面板产量，实际可用量 = 面板产量 / 0.00004）
 const OIL_DECAY_FACTOR = 0.00004;
 
+/**
+ * 构建 物品 -> 有效可用量 映射（原油在矿量模式下输入的是面板产量，需还原为原始量；矿点模式不换算）
+ * @param {Object} oreQuantities - 可用量设置
+ * @param {Object} settings - 设置参数
+ * @returns {Object} 物品 -> 有效可用量
+ */
+function buildEffectiveAvailMap(oreQuantities, settings) {
+    const map = {};
+    for (const [item, raw] of Object.entries(oreQuantities || {})) {
+        if (item === '原油' && raw > 0 && settings.ore_quantity_mode !== 'point') {
+            map[item] = raw / OIL_DECAY_FACTOR;
+        } else {
+            map[item] = raw;
+        }
+    }
+    return map;
+}
+
 function calculateRawOre(gameData, schemeData, settings, needs) {
   const result = calculatePower(gameData, schemeData, settings, needs);
   const recipeData = gameData.recipe_data || [];
   const mineralizeList = settings.mineralize_list || {};
   const oreQuantities = settings.ore_quantities || {};
+  const practicalityEnabled = settings.rare_ore_practicality;
+  const effectiveAvailMap = buildEffectiveAvailMap(oreQuantities, settings);
 
   // 检查是否有可用量设置
   const hasQuantities = Object.keys(oreQuantities).length > 0;
@@ -119,14 +147,14 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
     if (isRawOreItem(item, recipeData, mineralizeList)) {
       totalRawOre += amount; // 始终计算（用于退化模式）
 
-      let available = oreQuantities[item];
-      // 原油在矿量模式下输入的是面板产量，需要还原为原始量；
-      // 矿点模式输入的是油井数量，不进行产率换算。
-      if (item === '原油' && available > 0 && settings.ore_quantity_mode !== 'point') {
-        available = available / OIL_DECAY_FACTOR;
-      }
+      const available = effectiveAvailMap[item] || 0;
       if (available > 0) {
-        const bottleneck = amount / available;
+        let bottleneck = amount / available;
+        // 珍稀实用性修正：命中等价规则时改用修正后的单位瓶颈（珍稀矿保留自己的条目）
+        const correction = practicalityEnabled ? getRareOreCorrection(item, effectiveAvailMap) : null;
+        if (correction) {
+          bottleneck = amount * correctedRareBottleneckUnit(correction);
+        }
         bottleneckArray.push({ item, bottleneck });
         if (bottleneck > maxBottleneck) {
           maxBottleneck = bottleneck;
@@ -143,6 +171,82 @@ function calculateRawOre(gameData, schemeData, settings, needs) {
   const finalRawOre = hasQuantities ? maxBottleneck : totalRawOre;
 
   return { totalRawOre: finalRawOre, bottleneckOre, bottleneckArray, ...result };
+}
+
+/**
+ * 计算珍稀权重法目标值（用于珍稀权重法优化策略）
+ * 等价权重 = 基准可用量 / 本矿可用量（相对稀缺倍数：最丰富矿=1，越稀缺权重越大），
+ * 目标值 = Σ 需求 × 权重 = 基准可用量 × Σ(需求 / 可用量)。
+ * 基准可用量取所有已设可用量中的最大值（全局常量），因此目标值仅比原始的 1/可用量
+ * 加权求和整体放大一个常数倍，单调变换不改变最优解——优化结果与线性 1/可用量 完全一致，
+ * 只是把权重缩放到可读的“稀缺倍数”量级。
+ * 相比最大瓶颈法（取 max(需求/可用量)），加权求和不会只盯住单一最大瓶颈，
+ * 对中等稀缺矿也更敏感，更适合前期多种矿物都很稀缺的场景。
+ * 未设置任何可用量时退化为无权重累加（与原矿数一致）。
+ * @param {Object} gameData - 游戏数据
+ * @param {Object} schemeData - 方案数据
+ * @param {Object} settings - 设置参数
+ * @param {Array} needs - 需求列表
+ * @returns {Object} { rareWeightObjective, totalRawOre, bottleneckOre, bottleneckArray, ... }
+ */
+function calculateRareWeight(gameData, schemeData, settings, needs) {
+  const result = calculatePower(gameData, schemeData, settings, needs);
+  const recipeData = gameData.recipe_data || [];
+  const mineralizeList = settings.mineralize_list || {};
+  const oreQuantities = settings.ore_quantities || {};
+
+  // 检查是否有可用量设置
+  const hasQuantities = Object.keys(oreQuantities).length > 0;
+
+  // 有效可用量：原油在矿量模式下输入的是面板产量，需还原为原始量；矿点模式不换算
+  const effectiveAvailMap = buildEffectiveAvailMap(oreQuantities, settings);
+
+  // 基准可用量 = 所有已设可用量中的最大值（全局常量，保证各方案间单调缩放一致）
+  let baseAvail = 0;
+  if (hasQuantities) {
+    for (const eff of Object.values(effectiveAvailMap)) {
+      if (eff > baseAvail) baseAvail = eff;
+    }
+  }
+  const practicalityEnabled = settings.rare_ore_practicality;
+
+  let totalRawOre = 0; // 真实原矿数累加（退化模式/语义值）
+  let rareWeightObjective = 0; // 加权求和目标值 = baseAvail × Σ(需求/有效可用量)
+  let maxWeight = 0;
+  let bottleneckOre = '';
+  const bottleneckArray = []; // 按相对稀缺倍数降序，便于展示最稀缺矿
+
+  for (const [item, amount] of Object.entries(result.resourceUsage)) {
+    if (amount <= 0) continue; // 跳过副产物/盈余
+    if (isRawOreItem(item, recipeData, mineralizeList)) {
+      totalRawOre += amount; // 始终计算（用于退化模式/语义值）
+
+      const available = effectiveAvailMap[item] || 0;
+      if (available > 0) {
+        // 相对稀缺倍数：最丰富矿=1，越稀缺权重越大
+        let weight = baseAvail / available;
+        // 珍稀实用性修正：命中等价规则时改用修正后的单位权重
+        const correction = practicalityEnabled ? getRareOreCorrection(item, effectiveAvailMap) : null;
+        if (correction) {
+          weight = correctedRareWeightUnit(correction, baseAvail);
+        }
+        rareWeightObjective += amount * weight; // = 基准可用量 × 需求 / 可用量
+        bottleneckArray.push({ item, bottleneck: weight });
+        if (weight > maxWeight) {
+          maxWeight = weight;
+          bottleneckOre = item;
+        }
+      }
+    }
+  }
+
+  // 按相对稀缺倍数降序排列
+  bottleneckArray.sort((a, b) => b.bottleneck - a.bottleneck);
+
+  // 未设置任何可用量时，退化为无权重累加
+  const finalObjective = hasQuantities ? rareWeightObjective : totalRawOre;
+
+  return { rareWeightObjective: finalObjective, totalRawOre, bottleneckOre, bottleneckArray, ...result };
 }
 
 /**
@@ -212,6 +316,9 @@ function getObjectiveValue(result, strategy) {
   if (strategy === 'min_raw_ore') {
     return result.totalRawOre ?? 0;
   }
+  if (strategy === 'min_rare_weight') {
+    return result.rareWeightObjective ?? 0;
+  }
   if (strategy === 'min_net_heat') {
     return result.netOreHeat ?? 0;
   }
@@ -252,6 +359,15 @@ function formatObjectiveValue(value, strategy, bottleneckOre = '', baseline = nu
   }
   if (strategy === 'min_footprint') {
     return value.toFixed(0) + ' 格';
+  }
+  if (strategy === 'min_rare_weight') {
+    // 目标值为小数（量级约 1e-3），固定 2 位小数会截成 0.00，需自适应精度
+    if (!Number.isFinite(value) || value === 0) return '0 稀缺权重';
+    const a = Math.abs(value);
+    if (a >= 100) return value.toFixed(2) + ' 稀缺权重';
+    if (a >= 1) return value.toFixed(3) + ' 稀缺权重';
+    if (a >= 0.01) return value.toFixed(4) + ' 稀缺权重';
+    return Number(value.toPrecision(4)).toString() + ' 稀缺权重';
   }
   return formatPowerValue(value);
 }
@@ -387,6 +503,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
   // 根据策略选择计算函数
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
     : strategy === 'min_raw_ore' ? calculateRawOre
+    : strategy === 'min_rare_weight' ? calculateRareWeight
     : calculatePower;
 
   // 获取每个物品的可用增产选择
@@ -509,6 +626,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
   const recipeData = gameData.recipe_data || [];
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
     : strategy === 'min_raw_ore' ? calculateRawOre
+    : strategy === 'min_rare_weight' ? calculateRareWeight
     : calculatePower;
   const oreQuantities = settings.ore_quantities || {};
   const hasQuantities = Object.keys(oreQuantities).length > 0;
@@ -594,7 +712,14 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         }
       }
 
-      resolved.set(itemId, { strategy: bestChoice || choices[0], cost: bestCost });
+      // 实际应用的增产选择：参照当前方案，而非默认首项 choices[0]（首项恒为“无”）
+      const appliedLevel = currentScheme.scheme_for_recipe[recipeIndex]['增产剂等级'];
+      const appliedMode = currentScheme.scheme_for_recipe[recipeIndex]['增产模式'];
+      const appliedChoice = bestChoice
+        || choices.find(c => c.level === appliedLevel && c.mode === appliedMode)
+        || choices[0];
+
+      resolved.set(itemId, { strategy: appliedChoice, cost: bestCost });
       // 仅当实际应用了更优选择时才记录 changes
       if (bestChoice) {
         changes.push({
@@ -608,10 +733,9 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
       }
 
       if (onLog) {
-        const appliedChoice = bestChoice || choices[0];
         const status = bestChoice ? '' : ' (已最优)';
         const oreTag = strategy === 'min_raw_ore' && bottleneckOre ? ` 瓶颈:${bottleneckOre}` : '';
-        onLog(`[${changes.length}] ${itemId} (单节点) → ${appliedChoice.name}${status} (${formatObjectiveValue(bestCost, strategy, bottleneckOre, initialMaxBottleneck)}${oreTag})`);
+        onLog(`[${sccIdx}] ${itemId} (单节点) → ${appliedChoice.name}${status} (${formatObjectiveValue(bestCost, strategy, bottleneckOre, initialMaxBottleneck)}${oreTag})`);
       }
 
     } else {
@@ -662,11 +786,10 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         const oreTag = strategy === 'min_raw_ore' && bottleneckOre ? ` 瓶颈:${bottleneckOre}` : '';
         onLog(`  总计: ${formatObjectiveValue(currentObjective, strategy, bottleneckOre, initialMaxBottleneck)}${oreTag}`);
       }
-      // 输出循环组内每个物品的选择
-      for (let i = 0; i < cycleItems.length; i++) {
-        const item = cycleItems[i];
-        const choice = cycleResult.choices[i];
-        if (onLog) onLog(`  ${item} → ${choice.name}`);
+      // 输出循环组内每个物品的选择（单行合并显示）
+      if (onLog) {
+        const choiceParts = cycleItems.map((item, i) => `${item} → ${cycleResult.choices[i].name}`);
+        onLog(`  ${choiceParts.join('  ')}`);
       }
     }
 
@@ -704,19 +827,20 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   // 根据策略选择计算函数
   const calculateResult = strategy === 'min_net_heat' ? calculateOreHeat
     : strategy === 'min_raw_ore' ? calculateRawOre
+    : strategy === 'min_rare_weight' ? calculateRareWeight
     : calculatePower; // min_power 和 min_footprint 都用 calculatePower
 
   // 1. 输出初始信息
   const strategyName = strategy === 'min_raw_ore' ? '最小原矿瓶颈'
     : strategy === 'min_net_heat' ? '最小净热值'
     : strategy === 'min_footprint' ? '最小占地'
+    : strategy === 'min_rare_weight' ? '珍稀权重'
     : '最小电力';
   if (onLog) {
     onLog(`优化策略: ${strategyName}`);
     onLog(`需求物品: ${needs.map(n => `${n.id}x${n.count}`).join(', ')}`);
-    onLog('正在计算初始值...');
   }
-  onProgress?.(0, 1, '正在计算初始值...');
+  onProgress?.(0, 1, '正在初始化...');
   await new Promise(resolve => setTimeout(resolve, 0));
 
   // 2. 执行初始计算
@@ -727,20 +851,9 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   const initialMaxBottleneck = strategy === 'min_raw_ore' ? initialObjective : 1;
 
   if (onLog) {
-    if (strategy === 'min_net_heat') {
-      onLog(`初始净热值: ${formatObjectiveValue(initialObjective, strategy)}`);
-      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
-    } else if (strategy === 'min_raw_ore') {
-      const initBottleneck = initialResult.bottleneckOre || '';
-      onLog(`初始原矿: ${formatObjectiveValue(initialObjective, strategy, initBottleneck, initialMaxBottleneck)}`);
-      if (initBottleneck) onLog(`瓶颈矿物: ${initBottleneck}`);
-      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
-    } else if (strategy === 'min_footprint') {
-      onLog(`初始占地: ${formatObjectiveValue(initialObjective, strategy)}`);
-      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
-    } else {
-      onLog(`初始耗电: ${formatObjectiveValue(initialObjective, strategy)}`);
-    }
+    const initBottleneck = strategy === 'min_raw_ore' ? (initialResult.bottleneckOre || '') : '';
+    onLog(`初始目标: ${formatObjectiveValue(initialObjective, strategy, initBottleneck, initialMaxBottleneck)}`);
+    if (initBottleneck) onLog(`瓶颈矿物: ${initBottleneck}`);
   }
 
   if (!initialResult.sccs || initialResult.sccs.length === 0) {
@@ -782,6 +895,13 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   const maxResult = calculatePower(gameData, maxScheme, settings, needs);
   // SCC 顺序：Tarjan 输出是拓扑逆序（顶层在前），我们需要正序（底层在前）
   const sccsForward = [...maxResult.sccs].reverse();
+  const activeRecipeIndices = new Set();
+  for (const scc of sccsForward) {
+    for (const itemId of scc) {
+      const recipeIndex = itemToRecipe.get(itemId);
+      if (recipeIndex !== undefined) activeRecipeIndices.add(recipeIndex);
+    }
+  }
 
   if (onLog) {
     onLog(`最高等级配置下 SCC: ${sccsForward.map(scc => `[${[...scc].join(',')}]`).join(' → ')}`);
@@ -820,12 +940,8 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
 
   // 5. 输出最终结果
   const optimalObjective = currentObjective;
-  const metricName = strategy === 'min_raw_ore' ? '原矿'
-    : strategy === 'min_net_heat' ? '净热值'
-    : strategy === 'min_footprint' ? '占地'
-    : '耗电';
 
-  // 获取最终瓶颈矿物（用于格式化）
+  // 获取最终瓶颈矿物（用于格式化，仅最大瓶颈法展示）
   const finalBottleneck = strategy === 'min_raw_ore'
     ? (calculateResult(gameData, currentScheme, settings, needs).bottleneckOre || '')
     : '';
@@ -833,22 +949,15 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   if (onLog) {
     onLog('\n========== 优化结果 ==========');
     onLog(`策略: ${strategyName}`);
-    if (strategy === 'min_raw_ore') {
-      const initBottleneck = initialResult.bottleneckOre || '';
-      onLog(`初始${metricName}: ${formatObjectiveValue(initialObjective, strategy, initBottleneck, initialMaxBottleneck)} 瓶颈:${initBottleneck || '无'}`);
-      onLog(`最终${metricName}: ${formatObjectiveValue(optimalObjective, strategy, finalBottleneck, initialMaxBottleneck)} 瓶颈:${finalBottleneck || '无'}`);
-    } else {
-      onLog(`初始${metricName}: ${formatObjectiveValue(initialObjective, strategy, '', initialMaxBottleneck)}`);
-      onLog(`最终${metricName}: ${formatObjectiveValue(optimalObjective, strategy, '', initialMaxBottleneck)}`);
-    }
-    if (strategy !== 'min_power') {
-      onLog(`初始耗电: ${formatPowerValue(initialPower)}`);
-      onLog(`最终耗电: ${formatPowerValue(currentPower)}`);
-    }
+    const initBottleneck = strategy === 'min_raw_ore' ? (initialResult.bottleneckOre || '') : '';
+    const initTag = initBottleneck ? ` 瓶颈:${initBottleneck}` : '';
+    const finalTag = finalBottleneck ? ` 瓶颈:${finalBottleneck}` : '';
+    onLog(`初始目标: ${formatObjectiveValue(initialObjective, strategy, initBottleneck, initialMaxBottleneck)}${initTag}`);
+    onLog(`最终目标: ${formatObjectiveValue(optimalObjective, strategy, finalBottleneck, initialMaxBottleneck)}${finalTag}`);
     if (result.changes.length > 0) {
       const reduction = initialObjective - optimalObjective;
       const percent = initialObjective > 0 ? (reduction / initialObjective * 100).toFixed(2) : '0.00';
-      onLog(`${metricName}减少: ${formatObjectiveValue(reduction, strategy, finalBottleneck, initialMaxBottleneck)} (${percent}%)`);
+      onLog(`目标减少: ${formatObjectiveValue(reduction, strategy, finalBottleneck, initialMaxBottleneck)} (${percent}%)`);
     } else {
       onLog('当前配置已是最优');
     }
@@ -862,6 +971,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     initialObjective,
     optimalObjective,
     changes: result.changes,
+    activeRecipeIndices,
     processedCount: result.changes.length,
     totalCount: result.changes.length
   };
