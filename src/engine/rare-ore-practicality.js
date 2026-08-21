@@ -1,7 +1,7 @@
 /**
  * 珍稀矿实用性修正
  *
- * 珍稀权重法 / 最大瓶颈法只按矿脉可用量衡量稀缺度，未考虑某些珍稀矿可被普通矿配方替代。
+ * 珍稀权重法只按矿脉可用量衡量稀缺度，未考虑某些珍稀矿可被普通矿配方替代。
  * 本模块为刺笋结晶、金伯利矿石、分形硅石定义"等价普通矿"规则，将它们的稀缺度按
  * 替代比例折算到普通矿上（保留少量珍稀溢价，以体现占地/产线复杂度等未量化优势）。
  *
@@ -45,15 +45,6 @@ export function getRareOreCorrection(item, availMap) {
 export function correctedRareWeightUnit(correction, baseAvail, ratio = RARE_ORE_PRACTICALITY_RATIO) {
     const {rule, rareAvail, commonAvail} = correction;
     return ratio * rule.factor * (baseAvail / commonAvail) + (1 - ratio) * (baseAvail / rareAvail);
-}
-
-/**
- * 修正后单位瓶颈（最大瓶颈法）
- * 单位瓶颈 = ratio × factor / 普通矿可用量 + (1-ratio) / 珍稀矿可用量
- */
-export function correctedRareBottleneckUnit(correction, ratio = RARE_ORE_PRACTICALITY_RATIO) {
-    const {rule, rareAvail, commonAvail} = correction;
-    return ratio * rule.factor / commonAvail + (1 - ratio) / rareAvail;
 }
 
 /**

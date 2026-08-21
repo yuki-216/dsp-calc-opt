@@ -6,7 +6,6 @@ import {
     RARE_ORE_PRACTICALITY_RATIO,
     getRareOreCorrection,
     correctedRareWeightUnit,
-    correctedRareBottleneckUnit,
     convertedRareOreAmount,
 } from './rare-ore-practicality.js';
 
@@ -44,13 +43,6 @@ test('correctedRareWeightUnit: 95% 折算 + 5% 保留', () => {
     const w = correctedRareWeightUnit(corr, 100000);
     const expected = 0.95 * (1 / 3) * (100000 / 10000) + 0.05 * (100000 / 500);
     assert.ok(Math.abs(w - expected) < 1e-9);
-});
-
-test('correctedRareBottleneckUnit: 单位瓶颈', () => {
-    const corr = getRareOreCorrection('刺笋结晶', {刺笋结晶: 500, 钛石: 10000});
-    const b = correctedRareBottleneckUnit(corr);
-    const expected = 0.95 * (1 / 3) / 10000 + 0.05 / 500;
-    assert.ok(Math.abs(b - expected) < 1e-15);
 });
 
 test('ratio=1 时等于纯折算, ratio=0 时等于原权重', () => {

@@ -288,7 +288,9 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
     const [optimStrategy, setOptimStrategy] = useState(() => {
-        return localStorage.getItem('dsp-optim-strategy') || 'min_net_heat';
+        const saved = localStorage.getItem('dsp-optim-strategy');
+        // min_raw_ore（最大瓶颈法）已移除，映射到上位替代珍稀权重
+        return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_net_heat');
     });
     const [noProliferatorPercent, setNoProliferatorPercent] = useState(() => {
         return localStorage.getItem('dsp-no-proliferator-weight-percent') || '0.5';
@@ -311,8 +313,8 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
 
     // 切换优化目标时自动调整
     useEffect(() => {
-        // 最小原矿瓶颈/珍稀权重法→展开矿物可用量
-        if (optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight') {
+        // 珍稀权重法→展开矿物可用量
+        if (optimStrategy === 'min_rare_weight') {
             set_show_ore_quantities?.(true);
         }
         // 最小占地→全部模式；其他→仅增产
@@ -530,12 +532,11 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 title="选择优化策略"
             >
                 <option value="min_power">最小电力</option>
-                <option value="min_raw_ore">最小原矿瓶颈</option>
                 <option value="min_rare_weight">珍稀权重</option>
                 <option value="min_net_heat">最小净热值</option>
                 <option value="min_footprint">最小占地</option>
             </select>
-            {(optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight') && (
+            {optimStrategy === 'min_rare_weight' && (
                 <button
                     className={`btn btn-sm ${rarePracticality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
                     onClick={() => setRarePracticality(v => !v)}
@@ -564,7 +565,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
                 className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
                 onClick={runOptimization}
                 disabled={isOptimizing || Object.keys(needs_list || {}).length === 0}
-                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_raw_ore' ? '最小原矿瓶颈' : optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
+                title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
             >
                 <FaMagic/>
                 <span className="compact-hide-text">
@@ -574,7 +575,7 @@ export function BatchSetting({needs_list, set_show_ore_quantities}) {
             {optimStrategy === 'min_power' && (
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}
-            {optimStrategy === 'min_raw_ore' || optimStrategy === 'min_rare_weight' ? (
+            {optimStrategy === 'min_rare_weight' ? (
                 <small className="text-muted ms-1" style={{whiteSpace: 'nowrap'}}>💡已自动应用统计均值</small>
             ) : null}
         </div>

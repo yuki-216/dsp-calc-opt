@@ -1,7 +1,7 @@
 import {getThresholdMetric, relativeThresholdImprovement, shouldAcceptProliferator} from './proliferator-threshold.js';
 
 function getObjectiveValue(result, strategy) {
-    if (strategy === 'min_raw_ore') return result.totalRawOre ?? 0;
+    if (strategy === 'min_rare_weight') return result.rareWeightObjective ?? 0;
     if (strategy === 'min_net_heat') return result.netOreHeat ?? 0;
     if (strategy === 'min_footprint') return result.totalFootprint ?? 0;
     return result.totalEnergyCost ?? 0;
@@ -9,7 +9,7 @@ function getObjectiveValue(result, strategy) {
 
 function getMetric(result, strategy) {
     const objectiveValue = getObjectiveValue(result, strategy);
-    return getThresholdMetric({...result, objectiveValue}, strategy);
+    return getThresholdMetric({...result, objectiveValue});
 }
 
 function isProliferatorEnabled(recipeScheme) {
@@ -67,9 +67,9 @@ export async function validateFinalProliferatorChoices({
                 });
                 const improvement = relativeThresholdImprovement(noProMetric, candidateMetric) * 100;
                 const improvementText = Number.isFinite(improvement) ? improvement.toFixed(2) : '∞';
-                onLog?.(`${itemId}：改善 ${improvementText}%，${accepted ? '保留' : '撤销'}`);
 
                 if (!accepted) {
+                    onLog?.(`${itemId}：撤销（改善 ${improvementText}%，未达阈值）`);
                     currentScheme = noProScheme;
                     currentResult = noProResult;
                     if (!revertedItems.includes(itemId)) revertedItems.push(itemId);
