@@ -473,6 +473,14 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                     </div>;
                 })}
             </div>
+            <button
+                className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
+                disabled={isOptimizing}
+                title="自动优化时可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
+            >
+                自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
+            </button>
             {optimStrategy === 'min_rare_weight' && (
                 <button
                     className={`btn btn-sm ${rarePracticality ? 'btn-outline-success' : 'btn-outline-secondary'}`}

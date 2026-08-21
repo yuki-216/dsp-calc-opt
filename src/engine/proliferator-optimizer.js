@@ -292,14 +292,17 @@ function getAvailableChoices(recipe, settings = {}) {
   const choices = [{ level: 0, mode: 0, name: '无' }];
   const noAccelerate = settings.proliferate_no_accelerate || false;
   const allowedLevels = settings.proliferate_allowed_levels || [1, 2, 3];
+  // 自由等级开关：开启时可在 1..最高等级 间自由选择（不受可选增产剂限制；各级增产剂本就在产线上）
+  const flexibleLevels = settings.proliferate_flexible_levels || false;
+  const maxLevel = allowedLevels.length > 0 ? Math.max(...allowedLevels) : 0;
 
   // 位掩码：bit0=可加速, bit1=可增产, bit2=特殊(透镜)
   const canAccelerate = (proliferator & 1) && !noAccelerate;
   const canExtraProduct = proliferator & 2;
 
-  for (let level = 1; level <= 3; level++) {
-    // 跳过不允许的等级
-    if (!allowedLevels.includes(level)) continue;
+  for (let level = 1; level <= maxLevel; level++) {
+    // 默认仅允许可选增产剂选中的等级；开启自由等级后允许 1..最高等级
+    if (!flexibleLevels && !allowedLevels.includes(level)) continue;
 
     if (canAccelerate) {
       choices.push({ level, mode: 1, name: `MK${level}加速` });

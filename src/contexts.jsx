@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS = {
     proliferate_itself: true,
     proliferate_no_accelerate: false,
     proliferate_allowed_levels: [3],  // 默认仅允许 Mk.III；1=MK1, 2=MK2, 3=MK3
+    proliferate_flexible_levels: false,  // 自动优化时是否允许各级增产剂自由选择(≤最高等级)，不受可选增产剂限制
 
     mineralize_list: [],
     ore_quantities: {}, // {矿名: 可用量}，用于最大瓶颈法优化
