@@ -10,9 +10,18 @@ import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
 import {FaExternalLinkAlt} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
+import {formatObjectiveValue} from './engine/proliferator-optimizer.js';
+import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
+
+// 瓶颈值格式化：保留两位有效数字，过小的小数用科学计数法（如 0.0000025 → "2.5e-6"）
+function formatBottleneck(v) {
+    if (v >= 1) return v.toFixed(2);
+    if (v >= 0.01) return v.toPrecision(2);
+    return v.toExponential(1);
+}
 
 /**
  * 创建 scheme_data 更新闭包
@@ -671,6 +680,44 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             .sort(([a], [b]) => a.localeCompare(b));
     }, [result_dict, isRawMaterial]);
 
+    // 当前珍稀权重目标值与最大瓶颈物品（仅展示当前计算值，不依赖优化运行）
+    const rareWeightInfo = useMemo(() => {
+        const oreQuantities = settings.ore_quantities || {};
+        if (Object.keys(oreQuantities).length === 0) return null;
+
+        const availMap = {};
+        let baseAvail = 0;
+        for (const [item, raw] of Object.entries(oreQuantities)) {
+            let avail = Number(raw) || 0;
+            if (item === '原油' && avail > 0 && settings.ore_quantity_mode !== 'point') {
+                avail = avail / 0.00004; // 与优化器一致的油井产量还原
+            }
+            availMap[item] = avail;
+            if (avail > baseAvail) baseAvail = avail;
+        }
+        if (baseAvail <= 0) return null;
+
+        let objective = 0;
+        let maxBottleneck = { item: '', bottleneck: 0 };
+        for (const [item, amount] of Object.entries(result_dict)) {
+            if (amount <= 0) continue;
+            if (!isRawMaterial(item)) continue;
+            const avail = availMap[item];
+            if (!avail || avail <= 0) continue;
+
+            const correction = settings.rare_ore_practicality ? getRareOreCorrection(item, availMap) : null;
+            const weight = correction ? correctedRareWeightUnit(correction, baseAvail) : (baseAvail / avail);
+            objective += amount * weight;
+
+            const bottleneck = amount / avail;
+            if (bottleneck > maxBottleneck.bottleneck) {
+                maxBottleneck = { item, bottleneck };
+            }
+        }
+        if (!maxBottleneck.item) return null;
+        return { objective, maxBottleneck };
+    }, [result_dict, settings.ore_quantities, settings.ore_quantity_mode, settings.rare_ore_practicality, isRawMaterial]);
+
     // 计算数值变化的差值
     // 更新历史值
     useEffect(() => {
@@ -679,7 +726,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             energyCost: energy_cost,
             totalEnergyCost: energy_cost + miner_energy_cost,
             buildingCounts: { ...building_list },
-            rawMaterials: {}
+            rawMaterials: {},
+            totalFootprint: total_footprint,
         };
 
         Object.entries(result_dict).forEach(([item, amount]) => {
@@ -777,6 +825,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <legend><small>预估占地</small></legend>
                         <div className="d-flex flex-column">
                             <span>{formatValue(total_footprint, fixed_num)} 格</span>
+                            {historyValues?.[1]?.totalFootprint !== undefined && Math.abs(total_footprint - historyValues[1].totalFootprint) > 1e-6 && (
+                                <span style={{fontSize: '0.85em', color: total_footprint > historyValues[1].totalFootprint ? 'red' : 'green'}}>
+                                    {total_footprint > historyValues[1].totalFootprint ? '+' : ''}{formatValue(total_footprint - historyValues[1].totalFootprint, fixed_num)} 格
+                                </span>
+                            )}
                         </div>
                     </fieldset>}
             </div>
@@ -868,19 +921,38 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <legend><small>预估占地</small></legend>
                             <div className="d-flex flex-column">
                                 <span>{formatValue(total_footprint, fixed_num)} 格</span>
+                                {historyValues?.[1]?.totalFootprint !== undefined && Math.abs(total_footprint - historyValues[1].totalFootprint) > 1e-6 && (
+                                    <span style={{fontSize: '0.85em', color: total_footprint > historyValues[1].totalFootprint ? 'red' : 'green'}}>
+                                        {total_footprint > historyValues[1].totalFootprint ? '+' : ''}{formatValue(total_footprint - historyValues[1].totalFootprint, fixed_num)} 格
+                                    </span>
+                                )}
                             </div>
                         </fieldset>}
                 </div>
 
-                {/* 右列：建筑统计 */}
-                {building_rows.length > 0 &&
-                    <fieldset className="w-fit">
-                        <legend><small>建筑统计</small></legend>
-                        <table>
-                            <tbody>{building_rows}</tbody>
-                        </table>
-                    </fieldset>
-                }
+                {/* 右列：建筑统计 + 目标值 */}
+                <div className="d-flex flex-column gap-2">
+                    {building_rows.length > 0 &&
+                        <fieldset className="w-fit">
+                            <legend><small>建筑统计</small></legend>
+                            <table>
+                                <tbody>{building_rows}</tbody>
+                            </table>
+                        </fieldset>
+                    }
+                    {rareWeightInfo && (
+                        <fieldset className="w-fit">
+                            <legend><small>目标值</small></legend>
+                            <div className="d-flex flex-column">
+                                <span>珍稀权重:{formatObjectiveValue(rareWeightInfo.objective, 'min_rare_weight')}</span>
+                                <span>
+                                    最大瓶颈:{rareWeightInfo.maxBottleneck.item}
+                                    ({formatBottleneck(rareWeightInfo.maxBottleneck.bottleneck)})
+                                </span>
+                            </div>
+                        </fieldset>
+                    )}
+                </div>
             </div>
         </div>}
         </div>

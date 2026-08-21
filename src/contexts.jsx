@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = {
     proliferate_no_accelerate: false,
     proliferate_allowed_levels: [3],  // 默认仅允许 Mk.III；1=MK1, 2=MK2, 3=MK3
     proliferate_flexible_levels: false,  // 自动优化时是否允许各级增产剂自由选择(≤最高等级)，不受可选增产剂限制
+    rare_ore_practicality: true,  // 珍稀矿实用性修正（刺笋结晶/金伯利矿石/分形硅石按可替代普通矿折算稀缺度）
 
     mineralize_list: [],
     ore_quantities: {}, // {矿名: 可用量}，用于最大瓶颈法优化

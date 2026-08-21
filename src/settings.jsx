@@ -303,12 +303,6 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
     useEffect(() => {
         localStorage.setItem('dsp-no-proliferator-weight-percent', noProliferatorPercent);
     }, [noProliferatorPercent]);
-    const [rarePracticality, setRarePracticality] = useState(() => {
-        return (localStorage.getItem('dsp-rare-practicality') ?? '1') === '1';
-    });
-    useEffect(() => {
-        localStorage.setItem('dsp-rare-practicality', rarePracticality ? '1' : '0');
-    }, [rarePracticality]);
     const [showStatsApplied, setShowStatsApplied] = useState(false);
     const logContainerRef = useRef(null);
 
@@ -375,7 +369,6 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                     optimStrategy,
                     {
                         no_proliferator_weight: Number(noProliferatorPercent) / 100,
-                        rare_ore_practicality: rarePracticality,
                     }
                 );
 
@@ -415,7 +408,7 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                 setIsOptimizing(false);
             }
         }, 50);
-    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent, rarePracticality]);
+    }, [game_data, scheme_data, global_state.settings, needs_list, set_scheme_data, optimStrategy, noProliferatorPercent]);
 
     const is_mobile = compact_mode === "mobile";
     const mob_icon = is_mobile ? 22 : undefined;
@@ -483,12 +476,12 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
             </button>
             {optimStrategy === 'min_rare_weight' && (
                 <button
-                    className={`btn btn-sm ${rarePracticality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                    onClick={() => setRarePracticality(v => !v)}
+                    className={`btn btn-sm ${settings.rare_ore_practicality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                    onClick={() => set_settings({ rare_ore_practicality: !settings.rare_ore_practicality })}
                     disabled={isOptimizing}
                     title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）"
                 >
-                    珍稀实用性修正:{rarePracticality ? '开' : '关'}
+                    珍稀实用性修正:{settings.rare_ore_practicality ? '开' : '关'}
                 </button>
             )}
             <label className="d-inline-flex align-items-center gap-1 small text-nowrap" title="增产剂带来的目标改善低于此比例时，保留无增产剂方案">

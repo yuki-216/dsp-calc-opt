@@ -249,7 +249,7 @@ function getNoProliferatorThreshold(settings) {
  * @param {string} strategy - 策略标识
  * @returns {string} 格式化后的字符串
  */
-function formatObjectiveValue(value, strategy) {
+export function formatObjectiveValue(value, strategy) {
   if (strategy === 'min_net_heat') {
     return formatHeatValue(value);
   }
