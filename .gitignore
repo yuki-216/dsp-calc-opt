@@ -44,6 +44,11 @@ reference/
 # 本地编译工具链（不属于项目依赖）
 .tools/
 
+# 本地缓存/临时目录
+.superpowers/
+.tmp-pytest/
+.pytest_cache/
+
 # 生成的文件
 graph_data.json
 
