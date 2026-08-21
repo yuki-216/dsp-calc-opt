@@ -177,7 +177,6 @@ export function Header({onNavigate, currentPage}) {
                         <FaSearch/>
                         <span>种子查看</span>
                     </Nav.Link>
-                    <Nav.Link href="https://github.com/yuki-216/dsp-calc-opt" target="_blank">开源仓库</Nav.Link>
                     {/* <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link> */}
                     {/* <Nav.Link href="https://space.bilibili.com/16051534">联系作者</Nav.Link> */}
                 </Nav>
@@ -193,7 +192,14 @@ export function Header({onNavigate, currentPage}) {
                     </OverlayTrigger>
                 </Nav>
 
-                <span className="navbar-text ms-auto small me-3">
+                <span className="navbar-text ms-auto small me-2">
+                    <a href="https://github.com/yuki-216/dsp-calc-opt" target="_blank" rel="noopener noreferrer"
+                       style={{textDecoration: 'none'}}>
+                        如果本项目对您有帮助，不妨给点个star吧
+                    </a>
+                </span>
+                <Nav.Link href="https://github.com/yuki-216/dsp-calc-opt" target="_blank">开源仓库</Nav.Link>
+                <span className="navbar-text small me-3">
                     游戏版本 v{vanilla_game_version}
                 </span>
                 <Nav>
