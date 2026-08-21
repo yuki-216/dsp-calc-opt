@@ -10,19 +10,10 @@ import allowed_recipes from '../data/allowed_recipes.json';
 import {DEBUG} from './engine/debug.js';
 import {FaExternalLinkAlt} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
-import {formatObjectiveValue} from './engine/proliferator-optimizer.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
-
-// 瓶颈值格式化：<1 时缩放到两位有效数字的尾数（如 4.3e-5 → "4.3"）；≥1 直接显示
-function formatBottleneck(v) {
-    if (v === 0) return '0';
-    if (v >= 1) return v.toFixed(2);
-    const exp = Math.floor(Math.log10(v));
-    return (v / Math.pow(10, exp)).toFixed(1);
-}
 
 // 珍稀权重目标值：纯数字（自适应精度，不带单位后缀）
 function formatRareWeightValue(value) {
@@ -758,6 +749,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             buildingCounts: { ...building_list },
             rawMaterials: {},
             totalFootprint: total_footprint,
+            rareWeightObjective: rareWeightInfo?.objective ?? null,
+            netHeat,
+            maxBottleneckItem: rareWeightInfo?.maxBottleneck?.item ?? null,
+            maxBottleneckValue: rareWeightInfo?.maxBottleneck?.bottleneck ?? null,
         };
 
         Object.entries(result_dict).forEach(([item, amount]) => {
@@ -774,6 +769,19 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [engineResult]);
+
+    // 目标值板块：三项指标的增减值（与上一次计算对比）与瓶颈缩放
+    const prevRare = historyValues?.[1]?.rareWeightObjective;
+    const prevNet = historyValues?.[1]?.netHeat;
+    const prevBotItem = historyValues?.[1]?.maxBottleneckItem;
+    const prevBot = historyValues?.[1]?.maxBottleneckValue;
+    const rareWeightDelta = (rareWeightInfo && prevRare != null) ? (rareWeightInfo.objective - prevRare) : null;
+    const netHeatDelta = prevNet != null ? (netHeat - prevNet) : null;
+    const bottleneckExp = rareWeightInfo ? Math.floor(Math.log10(rareWeightInfo.maxBottleneck.bottleneck)) : 0;
+    const bottleneckMantissa = rareWeightInfo ? (rareWeightInfo.maxBottleneck.bottleneck / Math.pow(10, bottleneckExp)) : 0;
+    const bottleneckDelta = (rareWeightInfo && prevBot != null && prevBotItem === rareWeightInfo.maxBottleneck.item)
+        ? (rareWeightInfo.maxBottleneck.bottleneck - prevBot) : null;
+    const bottleneckDeltaMantissa = bottleneckDelta != null ? (bottleneckDelta / Math.pow(10, bottleneckExp)) : null;
 
     return <div className="result-container">
         {/* 计算错误提示 */}
@@ -976,10 +984,25 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <div className="d-flex flex-column">
                                 <span>珍稀权重</span>
                                 <span>{formatRareWeightValue(rareWeightInfo.objective)}</span>
-                                <span>净热值</span>
-                                <span>{formatObjectiveValue(netHeat, 'min_net_heat')}</span>
-                                <span>最大瓶颈</span>
-                                <span>{rareWeightInfo.maxBottleneck.item}{formatBottleneck(rareWeightInfo.maxBottleneck.bottleneck)}</span>
+                                {rareWeightDelta != null && Math.abs(rareWeightDelta) > 1e-9 && (
+                                    <span style={{fontSize: '0.85em', color: rareWeightDelta > 0 ? 'red' : 'green'}}>
+                                        {rareWeightDelta > 0 ? '+' : ''}{formatValue(rareWeightDelta, fixed_num)}
+                                    </span>
+                                )}
+                                <span>净热值（GJ）</span>
+                                <span>{formatValue(netHeat / 1000, fixed_num)}</span>
+                                {netHeatDelta != null && Math.abs(netHeatDelta / 1000) > 1e-9 && (
+                                    <span style={{fontSize: '0.85em', color: netHeatDelta > 0 ? 'red' : 'green'}}>
+                                        {netHeatDelta > 0 ? '+' : ''}{formatValue(netHeatDelta / 1000, fixed_num)}
+                                    </span>
+                                )}
+                                <span>最大瓶颈(e{bottleneckExp})</span>
+                                <span>{rareWeightInfo.maxBottleneck.item}{bottleneckMantissa.toFixed(1)}</span>
+                                {bottleneckDeltaMantissa != null && Math.abs(bottleneckDeltaMantissa) > 1e-9 && (
+                                    <span style={{fontSize: '0.85em', color: bottleneckDeltaMantissa > 0 ? 'red' : 'green'}}>
+                                        {bottleneckDeltaMantissa > 0 ? '+' : ''}{bottleneckDeltaMantissa.toFixed(1)}
+                                    </span>
+                                )}
                             </div>
                         </fieldset>
                     )}
