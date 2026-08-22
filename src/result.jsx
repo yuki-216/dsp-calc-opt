@@ -1,13 +1,13 @@
 import {useCallback, useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
-import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
+import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext, EngineLogContext} from './contexts';
+import {DEBUG} from './engine/debug.js';
 import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION, FUEL_DATA_BASE} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
-import {DEBUG} from './engine/debug.js';
 import {FaExternalLinkAlt} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
@@ -265,6 +265,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const global_state = useContext(GlobalStateContext);
     const engineCalculate = useContext(EngineCalculateContext);
     const calculationError = useContext(CalculationErrorContext);
+    const engineLogs = useContext(EngineLogContext) || [];
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
@@ -776,6 +777,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             <div className="alert alert-danger m-2" role="alert">
                 <strong>计算错误：</strong>{calculationError}
             </div>
+        )}
+        {DEBUG && engineLogs.length > 0 && (
+            <details className="m-2 border rounded p-2" style={{fontSize: '0.8rem'}}>
+                <summary>引擎计算日志（共生产品机制等）</summary>
+                <pre className="mb-0" style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>{engineLogs.join('\n')}</pre>
+            </details>
         )}
         {/* 左侧：结果表格独立滚动区域 */}
         <div className="result-table-scroll">

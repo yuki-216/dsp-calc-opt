@@ -1,4 +1,4 @@
-import { DEBUG } from './debug.js';
+﻿import { DEBUG } from './debug.js';
 /**
  * 核心计算引擎主入口
  * 职责：整合DAG、SCC、单位成本（系数表+矩阵求逆）
@@ -59,21 +59,103 @@ export class CoreEngine {
   }
 
   /**
+   * 检测循环组中的共生产品组（同一配方的多个产物在同一 SCC 内，如 原油精炼 产出 氢+精炼油），
+   * 并通过"一步递归测量"选择胜者代表：
+   *   对每个候选代表，把联产品视为外部来源（加入过滤列表）整线重算一次，
+   *   读取联产品多余量（负余额），按 coOutput 折算成配方运行次数，取最小者。
+   * 原理：正确的代表是生产递归"多余量被消耗完才生产、没消耗完就抵消"的稳定不动点——
+   * 联产品多余量最小（可被内生需求自我消耗），而非失控放大造成的持续浪费。
+   * @param {Array} needs - 需求列表
+   * @param {Object} recipes - 配方数据
+   * @returns {Map|null} recipeId -> 胜者代表；无共生产品组时返回 null
+   */
+  detectAndSelectCoproductRepresentatives(needs, recipes, onLog = null) {
+    if (onLog) onLog(`[共生产品][DBG] detect entered; onLog=${typeof onLog}; sccs=${this.sccs ? this.sccs.length : 'null'}`);
+    const emitCoproductLog = (msg) => { if (onLog) onLog(msg); };
+    // 1. 按配方分组检测共生产品组（多节点 SCC 内、同配方产物 ≥2）
+    const recipeGroups = new Map(); // recipeId(string) -> [itemIds]
+    for (const scc of this.sccs || []) {
+      if (scc.size <= 1) continue;
+      for (const itemId of scc) {
+        const node = this.graph.get(itemId);
+        const recipeId = node?.recipeId;
+        if (recipeId == null) continue;
+        const key = String(recipeId);
+        if (!recipeGroups.has(key)) recipeGroups.set(key, []);
+        recipeGroups.get(key).push(itemId);
+      }
+    }
+    const groups = [...recipeGroups.entries()].filter(([, items]) => items.length > 1);
+    if (onLog) onLog(`[共生产品][DBG] groupsLen=${groups.length}`);
+    if (groups.length === 0) {
+      emitCoproductLog('[共生产品] 未检测到共生产品组（无同配方多产物循环组），沿用默认代表');
+      return null;
+    }
+    emitCoproductLog(`[共生产品] 检测到 ${groups.length} 个共生产品组: ` + groups.map(([k, items]) => `${k}[${items.join(',')}]`).join('; '));
+
+    // 2. 对每个组做测量选择（先支持多组分别处理；组内组合爆炸留作后续）
+    const coproductRepMap = new Map();
+    for (const [recipeKey, items] of groups) {
+      const recipe = this.recipeMap.get(recipeKey);
+      const outputs = recipe?.产物 || {};
+      let bestRep = items[0];
+      let bestRuns = Infinity;
+
+      for (const candidate of items) {
+        // 联产品 = 组内其他物品；测量时全部视为外部来源
+        const coProducts = items.filter(id => id !== candidate);
+        const measureResult = this.calculate(needs, recipes, new Set(coProducts), true);
+        let coRuns = 0;
+        let valid = true; // 候选是否适合做代表：其联产品必须过剩，否则该候选本身才是紧缺品
+        for (const co of coProducts) {
+          const balance = measureResult.resourceUsage?.[co] ?? 0;
+          if (onLog) onLog(`[共生产品][DBG] 测量 candidate=${candidate} co=${co} balance=${balance} hasRU=${!!measureResult.resourceUsage}`);
+          if (balance < 0) {
+            const coOutput = outputs[co] || 1;
+            coRuns += -balance / coOutput;
+          } else {
+            // 联产品仍紧缺（balance>=0）：说明该候选做代表会导致联产品短缺，候选本身应是被需要的紧缺品，不应当选代表
+            valid = false;
+          }
+        }
+        emitCoproductLog(`[共生产品] 配方 ${recipeKey} 候选代表=${candidate}: 联产品多余折算运行次数=${coRuns.toFixed(6)} (有效=${valid})`);
+        if (valid && coRuns < bestRuns) {
+          bestRuns = coRuns;
+          bestRep = candidate;
+        }
+      }
+
+      coproductRepMap.set(recipeKey, bestRep);
+      emitCoproductLog(`[共生产品] 配方 ${recipeKey} 采用代表=${bestRep}（最小多余 ${bestRuns.toFixed(6)} 次运行）`);
+    }
+    return coproductRepMap;
+  }
+
+  /**
    * 主计算函数（系数表 + 矩阵求逆方案）
    * @param {Array} needs - 需求列表
    * @param {Object} recipes - 配方数据
+   * @param {Set} initialFilterList - 初始过滤列表（把物品视为原矿；共生产品测量时传入联产品）
+   * @param {boolean} measurementMode - 测量模式：true 时跳过共生产品组检测（防递归嵌套）
    * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
    */
-  calculate(needs, recipes) {
+  calculate(needs, recipes, initialFilterList = new Set(), measurementMode = false, onLog = null) {
     if (DEBUG) console.log('[Engine] ====== 计算开始 ======');
     if (DEBUG) console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
 
-    // 迭代过滤逻辑
-    const filterList = new Set(); // 过滤列表（负需求物品）
+    // 迭代过滤逻辑（初始过滤列表：测量时把联产品视为原矿）
+    const filterList = new Set(initialFilterList);
     let iteration = 0;
     const maxIterations = 10; // 最大迭代次数
     let costs = new Map();
     const SOLUTION_ID = '__solution__';
+
+    // 共生产品组检测与胜者代表选择（主计算专用，测量计算跳过以避免递归嵌套）
+    let coproductRepMap = null;
+    if (!measurementMode) {
+      this.initialize(needs, recipes, filterList);
+      coproductRepMap = this.detectAndSelectCoproductRepresentatives(needs, recipes, onLog);
+    }
 
     while (iteration < maxIterations) {
       iteration++;
@@ -124,7 +206,7 @@ export class CoreEngine {
 
 
       // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, this.recipeMap);
+      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, this.recipeMap, coproductRepMap, onLog);
 
       // 5. 检查是否需要迭代
       // 检查是否有新的负需求物品（不在过滤列表中的）

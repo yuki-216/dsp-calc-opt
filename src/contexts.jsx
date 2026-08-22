@@ -4,7 +4,7 @@ import {init_scheme_data} from './scheme_data';
 import {default_game_data} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
-import './engine/debug.js'; // 初始化 __DEBUG 全局开关
+import {DEBUG} from './engine/debug.js'; // 初始化 __DEBUG 全局开关并导出 DEBUG 标志
 
 /** set_game_name_and_data(game_name, game_data) */
 export const GameInfoSetterContext = createContext(null);
@@ -17,6 +17,7 @@ export const GameInfoContext = createContext(null);
 export const EngineGraphDataContext = createContext(null);
 export const EngineCalculateContext = createContext(null);
 export const CalculationErrorContext = createContext(null);
+export const EngineLogContext = createContext(null);
 export const FuelContext = createContext(null);
 export const FuelSetterContext = createContext(null);
 
@@ -82,6 +83,8 @@ export function ContextProvider({children}) {
                     delete recipe['增产点数'];
                 }
             }
+            // 清理遗留死数据：cost_weight 从未被引擎/优化器读取，仅占位
+            delete saved.cost_weight;
             return saved;
         }
         return init_scheme_data(default_game_data);
@@ -144,6 +147,7 @@ export function ContextProvider({children}) {
 
     const [engineGraphData, setEngineGraphData] = useState(null);
     const [calculationError, setCalculationError] = useState(null);
+    const [engineLogs, setEngineLogs] = useState([]);
 
     // 主引擎计算函数
     const engineCalculate = useMemo(() => {
@@ -160,7 +164,16 @@ export function ContextProvider({children}) {
                 count
             }));
             try {
-                const result = engine.calculate(needsArray, game_info.game_data.recipe_data);
+                const runLogs = [];
+                const onLog = DEBUG ? (msg) => { runLogs.push(msg); } : null;
+                const result = engine.calculate(
+                    needsArray,
+                    game_info.game_data.recipe_data,
+                    new Set(),
+                    false,
+                    onLog
+                );
+                if (DEBUG) setTimeout(() => setEngineLogs(runLogs), 0);
                 // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
                 setTimeout(() => setCalculationError(null), 0);
                 if (engine.graph && engine.edges) {
@@ -202,6 +215,7 @@ export function ContextProvider({children}) {
             <GlobalStateContext.Provider value={global_state}>
                 <EngineCalculateContext.Provider value={engineCalculate}>
                     <CalculationErrorContext.Provider value={calculationError}>
+                        <EngineLogContext.Provider value={engineLogs}>
                         <EngineGraphDataContext.Provider value={engineGraphData}>
                             <GameInfoSetterContext.Provider value={set_game_data}>
                                 <SchemeDataSetterContext.Provider value={set_scheme_data}>
@@ -217,6 +231,7 @@ export function ContextProvider({children}) {
                                 </SchemeDataSetterContext.Provider>
                             </GameInfoSetterContext.Provider>
                         </EngineGraphDataContext.Provider>
+                        </EngineLogContext.Provider>
                     </CalculationErrorContext.Provider>
                 </EngineCalculateContext.Provider>
             </GlobalStateContext.Provider>

@@ -18,7 +18,7 @@ import { invertMatrix } from './matrix.js';
  * @param {Map} graph - 物品图
  * @param {Array<Set<string>>} sccs - SCC分组（逆拓扑序：顶层在前，底层在后）
  */
-export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new Map()) {
+export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new Map(), coproductRepMap = null, onLog = null) {
 
   // 负需求物品集合（用于迭代过滤）
   const negativeDemandItems = new Set();
@@ -37,11 +37,14 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
 
   /**
    * 代入函数：将 key 对应的 source 代入 solution，同时维护两个列表
+   * @param {Object} solution - 目标 solution（候选比较时可为克隆）
+   * @param {Set} expansionList - 待展开列表（候选比较时可为克隆）
+   * @param {Set} reverseProductionList - 待逆生产列表（候选比较时可为克隆）
    * @param {string} key - 要代入的物品 key
    * @param {Object} source - 源物品的系数表
    * @param {number} multiplier - 乘数（默认使用 solution[key]，逆生产时传入 -cancelAmount）
    */
-  function substitute(key, source, multiplier = null) {
+  function substitute(solution, expansionList, reverseProductionList, key, source, multiplier = null) {
     // 从待展开列表删除当前 key（因为要展开了）
     expansionList.delete(key);
 
@@ -119,14 +122,22 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
         const itemCost = costs.get(itemId);
         if (itemCost) {
           if (DEBUG) console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
-          substitute(itemId, itemCost);
+          substitute(solution, expansionList, reverseProductionList, itemId, itemCost);
           if (DEBUG) console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
         }
       }
     } else {
       // 多节点 SCC（循环组）：矩阵求逆一次性解出全部物品
+      // 共生产品对的胜者代表由引擎级"一步递归测量"决定（最小联产品多余折算运行次数），
+      // 此处直接用 coproductRepMap 中的代表构建合并映射。
+      const sccArray = [...scc];
+      const mergeMap = buildMergeMap(sccArray, graph, recipeMap, (items) => {
+        const rid = graph.get(items[0])?.recipeId;
+        const rep = rid != null && coproductRepMap ? coproductRepMap.get(String(rid)) : null;
+        return rep && items.includes(rep) ? rep : items[0];
+      }, onLog);
 
-      solveSCCByMatrix(scc, costs, graph, recipeMap);
+      solveSCCByMatrix(scc, costs, graph, recipeMap, mergeMap);
       // 打印求解后的 cost
       for (const itemId of scc) {
         const cost = costs.get(itemId);
@@ -140,7 +151,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
           const itemCost = costs.get(itemId);
           if (itemCost) {
             if (DEBUG) console.log(`[阶段1] SCC[${i}] 代入 "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
-            substitute(itemId, itemCost);
+            substitute(solution, expansionList, reverseProductionList, itemId, itemCost);
             if (DEBUG) console.log(`[阶段1] 代入后 solution:`, JSON.stringify(solution));
           }
         }
@@ -185,7 +196,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
       const itemCost = costs.get(itemId);
       if (itemCost) {
         if (DEBUG) console.log(`[阶段2-展开] "${itemId}" (系数=${coeff.toFixed(6)})`, JSON.stringify(itemCost));
-        substitute(itemId, itemCost);
+        substitute(solution, expansionList, reverseProductionList, itemId, itemCost);
         if (DEBUG) console.log(`[阶段2-展开后] solution:`, JSON.stringify(solution));
       }
     }
@@ -229,7 +240,7 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
             scaledCost[key] = val * (-cancelAmount);
           }
           if (DEBUG) console.log(`[阶段2-逆生产] "${itemId}" 乘以系数(${(-cancelAmount).toFixed(6)}):`, JSON.stringify(scaledCost));
-          substitute(itemId, itemCost, -cancelAmount);  // 负号表示抵消
+          substitute(solution, expansionList, reverseProductionList, itemId, itemCost, -cancelAmount);  // 负号表示抵消
 
           // 恢复抵消后的系数（substitute 内部会删除 solution[itemId]）
           const newV = v + cancelAmount;
@@ -263,6 +274,50 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
 }
 
 /**
+ * 构建共生产品合并映射: coProductId → { representative, ratio, coOutput }
+ * 同一配方在 SCC 中的多个产物需要合并为一个代表，消除矩阵奇异。
+ * 代表选择决定副产物归因方向，由调用方（expandInSCCOrder）通过 chooseRepresentative 指定，
+ * 用于双向求解取最小联产品多余量。
+ * @param {Array<string>} sccArray - SCC 物品列表
+ * @param {Map} graph - 物品图
+ * @param {Map} recipeMap - 配方映射
+ * @param {Function} chooseRepresentative - 可选，自定义代表选择 (items, outputs) => representative
+ * @returns {Map} 合并映射
+ */
+function buildMergeMap(sccArray, graph, recipeMap, chooseRepresentative = null, onLog = null) {
+  const mergeMap = new Map();
+  const recipeGroups = new Map();
+  for (const itemId of sccArray) {
+    const node = graph?.get(itemId);
+    const recipeId = node?.recipeId;
+    if (recipeId != null) {
+      if (!recipeGroups.has(recipeId)) recipeGroups.set(recipeId, []);
+      recipeGroups.get(recipeId).push(itemId);
+    }
+  }
+  for (const [recipeId, items] of recipeGroups) {
+    if (items.length <= 1) continue;
+    const recipe = recipeMap.get(String(recipeId));
+    if (!recipe?.产物) continue;
+    const outputs = recipe.产物;
+    const representative = chooseRepresentative ? chooseRepresentative(items, outputs) : items[0];
+    const repOutput = outputs[representative] || 1;
+    for (const item of items) {
+      if (item === representative) continue;
+      const coOutput = outputs[item] || 1;
+      mergeMap.set(item, {
+        representative,
+        ratio: coOutput / repOutput,
+        coOutput,
+      });
+    }
+    if (DEBUG) console.log(`[solveSCCByMatrix] 配方 ${recipeId} 合并: ${items.join(',')} → 代表=${representative}`);
+    if (onLog) onLog(`[共生产品] 合并 ${recipeId}: ${items.join(',')} → 代表=${representative}`);
+  }
+  return mergeMap;
+}
+
+/**
  * 用矩阵求逆解决 SCC 循环组
  *
  * 核心思想：
@@ -281,44 +336,14 @@ export function expandInSCCOrder(solutionId, costs, graph, sccs, recipeMap = new
  * @param {Map} costs - 系数表映射（会被修改）
  * @param {Map} graph - 物品图（可选，用于配方合并）
  * @param {Map} recipeMap - 配方映射（可选，用于配方合并）
+ * @param {Map} mergeMap - 合并映射（可选；未传入时由调用方默认构建）
  */
-function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null) {
+function solveSCCByMatrix(scc, costs, graph = null, recipeMap = null, mergeMap = null) {
   const sccArray = [...scc];
   const sccSet = scc;
 
-  // ====== 配方变量法：检测并合并同配方产物 ======
-  const mergeMap = new Map(); // coProductId → { representative, ratio }
-  const recipeGroups = new Map(); // recipeId → [itemIds]
-
-  if (graph && recipeMap) {
-    // 1. 按配方分组
-    for (const itemId of sccArray) {
-      const node = graph.get(itemId);
-      const recipeId = node?.recipeId;
-      if (recipeId != null) {
-        if (!recipeGroups.has(recipeId)) recipeGroups.set(recipeId, []);
-        recipeGroups.get(recipeId).push(itemId);
-      }
-    }
-
-    // 2. 找出需要合并的配方组（大小 > 1）
-    for (const [recipeId, items] of recipeGroups) {
-      if (items.length <= 1) continue;
-      const recipe = recipeMap.get(String(recipeId));
-      if (!recipe?.产物) continue;
-      const outputs = recipe.产物;
-      const representative = items[0];
-      const repOutput = outputs[representative] || 1;
-      for (let k = 1; k < items.length; k++) {
-        const coOutput = outputs[items[k]] || 1;
-        mergeMap.set(items[k], {
-          representative,
-          ratio: coOutput / repOutput
-        });
-      }
-      if (DEBUG) console.log(`[solveSCCByMatrix] 配方 ${recipeId} 合并: ${items.join(',')} → 代表=${representative}`);
-    }
-  }
+  // ====== 配方变量法：合并同配方产物（合并映射由调用方构建，可指定代表） ======
+  if (!mergeMap) mergeMap = buildMergeMap(sccArray, graph, recipeMap);
 
   // 输出被合并联产物的原始直接成本
   for (const [coProductId, { representative, ratio }] of mergeMap) {

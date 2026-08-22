@@ -8,19 +8,6 @@ const DEFAULT_SCHEME_DATA = {
     "item_recipe_choices": {"氢": 1},
     "scheme_for_recipe": [{"建筑": 0, "增产剂等级": 0, "增产模式": 0}],
     "selected_fuel": "无",
-    // 这是示例,实际上cost_weight之后会在init_scheme_data中重置
-    "cost_weight": {
-        "占地": 1,
-        "电力": 0,
-        "建筑成本": {
-            "分拣器": 0,
-            "制造台": 0,
-        },
-        "物品额外成本": {
-            "单极磁石": {"成本": 10, "启用": 1, "与其它成本累计": 0},
-            "铁": {"成本": 1, "启用": 0, "与其它成本累计": 0}
-        }
-    },
 };
 
 export function init_scheme_data(game_data) {
@@ -29,23 +16,6 @@ export function init_scheme_data(game_data) {
     scheme_data.item_recipe_choices = {};
     scheme_data.scheme_for_recipe = [];
     scheme_data.selected_fuel = "无";
-    scheme_data.cost_weight["占地"] = 1;
-    scheme_data.cost_weight["电力"] = 0;
-    scheme_data.cost_weight["建筑成本"] = {"分拣器": 0};
-    scheme_data.cost_weight["物品额外成本"] = {};
-    for (var factory in game_data.factory_data) {
-        for (var building_id in game_data.factory_data[factory]) {
-            scheme_data.cost_weight["建筑成本"][game_data.factory_data[factory][building_id]["名称"]] = 0;
-        }
-    }
-    for (var item in item_data) {
-        scheme_data.cost_weight["物品额外成本"][item] = {
-            "成本": 0,
-            "启用": 0,
-            "与其它成本累计": 0,
-            "溢出时处理成本": 0
-        };
-    }
     for (let item in item_data) {
         // 默认选择 allowed_recipes 中排第一的配方（顺序即偏好顺序，如硅石默认直接获取而非石矿配方）
         const allowed = allowed_recipes[item];
@@ -126,6 +96,8 @@ export function SchemeStorage() {
             if (!loaded.selected_fuel) {
                 loaded.selected_fuel = "无";
             }
+            // 清理遗留死数据：cost_weight 从未被引擎/优化器读取，仅占位
+            delete loaded.cost_weight;
             set_scheme_data(loaded);
         } else {
             alert(`未找到名为${name}的方案`);
