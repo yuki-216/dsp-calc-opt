@@ -62,3 +62,4 @@ __pycache__/
 # 统计计算运行数据（进度与结果由程序生成，不提交）
 backend/data/
 backend/.pytest_cache/
+scheme_export.json
