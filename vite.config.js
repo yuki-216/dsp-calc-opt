@@ -5,7 +5,6 @@ import {createRequire} from 'module';
 import sharp from 'sharp';
 import path from 'path';
 import {defineConfig} from 'vite';
-import legacy from '@vitejs/plugin-legacy';
 import {VitePWA} from 'vite-plugin-pwa';
 
 const require = createRequire(import.meta.url);
@@ -198,6 +197,9 @@ export default defineConfig(({mode}) => ({
                         if (id.includes('/react-icons/')) {
                             return 'vendor-icons';
                         }
+                        if (id.includes('/highs/') || id.includes('/pako/')) {
+                            return 'vendor-highs';
+                        }
                     }
                     // 将游戏数据 JSON 文件分割到单独的 chunk
                     if (id.includes('/data/') && id.endsWith('.json')) {
@@ -210,10 +212,6 @@ export default defineConfig(({mode}) => ({
     plugins: [
         react(),
         ...get_sprite_plugins(mode),
-        legacy({
-            targets: ['edge>=79', 'firefox>=67', 'chrome>=64', 'safari>=12'],
-            additionalLegacyPolyfills:['regenerator-runtime/runtime'],
-        }),
         VitePWA({
             registerType: 'prompt',
             injectRegister: false,
@@ -247,8 +245,8 @@ export default defineConfig(({mode}) => ({
                 ],
             },
             workbox: {
-                globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
-                maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+                globPatterns: ['**/*.{js,css,html,ico,svg,woff2,wasm}'],
+                maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,  // highs.wasm 约1-2MB，留余量
                 navigateFallback: 'index.html',
                 cleanupOutdatedCaches: true,
                 runtimeCaching: [
@@ -260,6 +258,18 @@ export default defineConfig(({mode}) => ({
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 30,
+                            },
+                            cacheableResponse: {statuses: [0, 200]},
+                        },
+                    },
+                    {
+                        urlPattern: /\.wasm$/i,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'wasm-cache',
+                            expiration: {
+                                maxEntries: 10,
+                                maxAgeSeconds: 60 * 60 * 24 * 365,
                             },
                             cacheableResponse: {statuses: [0, 200]},
                         },

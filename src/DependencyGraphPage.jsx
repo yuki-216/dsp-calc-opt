@@ -1,8 +1,7 @@
 import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'react';
-import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter, FaLink, FaBolt} from 'react-icons/fa';
-import {GlobalStateContext, EngineGraphDataContext, FuelContext} from './contexts.jsx';
+import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter} from 'react-icons/fa';
+import {GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
-import {tarjanSCC, compressToDag, dagTopologicalSort} from './engine/graph-utils.js';
 import './DependencyGraph.css';
 
 const STORAGE_KEY_DELETED = 'dependency_graph_deleted_items';
@@ -14,59 +13,19 @@ const STORAGE_KEY_POSITIONS_NEEDS = 'dependency_graph_custom_positions_needs';
  * @param {Object} game_data - 游戏数据
  * @param {Object} item_data - 物品数据
  * @param {Object} scheme_data - 方案数据
- * @param {string} selected_fuel - 用户选择的燃料名称
- * @returns {Object} {edges, items_with_edges, proliferator_edges}
- * 边方向: from=产物, to=原料；增产剂消耗会作为额外原料加入
+ * @returns {Object} {edges, items_with_edges}
+ * 边方向: from=产物, to=原料
+ * 浅层化：不再含电力边、燃料配方边、增产剂边
  */
-function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel) {
+function build_dependency_graph(game_data, item_data, scheme_data) {
     const edges = [];
     const edge_set = new Set();
     const items_with_edges = new Set();
-    const proliferator_edges = new Set(); // 因为增产剂而添加的边的key集合
-    const proliferator_data = game_data.proliferator_data || [];
 
     const recipe_handled = new Set();
 
-    // 处理电力物品的燃料配方
-    if (selected_fuel && selected_fuel !== '无') {
-        const fuelRecipe = game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === selected_fuel);
-        if (fuelRecipe) {
-            const recipe_index = game_data.recipe_data.indexOf(fuelRecipe);
-            const recipe_scheme = scheme_data.scheme_for_recipe[recipe_index];
-            const proliferate_mode = recipe_scheme?.["增产模式"] || 0;
-            let proliferate_num = recipe_scheme?.["增产剂等级"] || 0;
-            if (proliferate_num >= proliferator_data.length) proliferate_num = 0;
-
-            const materials = new Set(Object.keys(fuelRecipe.原料));
-            const original_materials = new Set(Object.keys(fuelRecipe.原料));
-
-            if (proliferate_mode > 0 && proliferate_num > 0) {
-                const proItem = proliferator_data[proliferate_num]?.增产剂;
-                if (proItem) {
-                    materials.add(proItem);
-                }
-            }
-
-            for (const product of Object.keys(fuelRecipe.产物)) {
-                for (const material of materials) {
-                    const edge_key = `${product}->${material}`;
-                    if (!edge_set.has(edge_key)) {
-                        edge_set.add(edge_key);
-                        edges.push({from: product, to: material});
-                        items_with_edges.add(material);
-                        items_with_edges.add(product);
-
-                        if (!original_materials.has(material)) {
-                            proliferator_edges.add(edge_key);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     for (const item in item_data) {
-        // 跳过电力物品，已单独处理
+        // 电力不进依赖图（燃料配方/设备耗电均不在此展示）
         if (item === '电力') continue;
 
         const choice = scheme_data.item_recipe_choices[item] || 1;
@@ -78,20 +37,7 @@ function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel
         const recipe = game_data.recipe_data[recipe_index];
         if (!recipe) continue;
 
-        const recipe_scheme = scheme_data.scheme_for_recipe[recipe_index];
-        const proliferate_mode = recipe_scheme?.["增产模式"] || 0;
-        let proliferate_num = recipe_scheme?.["增产剂等级"] || 0;
-        if (proliferate_num >= proliferator_data.length) proliferate_num = 0;
-
         const materials = new Set(Object.keys(recipe.原料));
-        const original_materials = new Set(Object.keys(recipe.原料));
-
-        if (proliferate_mode > 0 && proliferate_num > 0) {
-            const proItem = proliferator_data[proliferate_num]?.增产剂;
-            if (proItem) {
-                materials.add(proItem);
-            }
-        }
 
         for (const product of Object.keys(recipe.产物)) {
             for (const material of materials) {
@@ -101,61 +47,28 @@ function build_dependency_graph(game_data, item_data, scheme_data, selected_fuel
                     edges.push({from: product, to: material});
                     items_with_edges.add(material);
                     items_with_edges.add(product);
-
-                    if (!original_materials.has(material)) {
-                        proliferator_edges.add(edge_key);
-                    }
-                }
-            }
-
-            // 为有设备且设备消耗电力的配方添加对电力的依赖
-            // 注意：射线接收站等设施不消耗玩家电网电力，不应添加依赖
-            if (recipe.设施 !== undefined && recipe.设施 !== null) {
-                const factoryGroup = game_data.factory_data[recipe.设施];
-                if (factoryGroup && Array.isArray(factoryGroup)) {
-                    // 检查该配方的所有可用工厂是否都无功耗
-                    const hasPowerCost = factoryGroup.some(factory => factory["耗能"] > 0);
-                    if (hasPowerCost) {
-                        const power_edge_key = `${product}->电力`;
-                        if (!edge_set.has(power_edge_key)) {
-                            edge_set.add(power_edge_key);
-                            edges.push({from: product, to: '电力'});
-                            items_with_edges.add('电力');
-                            items_with_edges.add(product);
-                        }
-                    }
                 }
             }
         }
     }
 
-    return {edges, items_with_edges, proliferator_edges};
+    return {edges, items_with_edges};
 }
 
 /**
- * 依赖图布局算法：SCC 分组 + 拓扑排序 + 重心法优化
+ * 依赖图布局算法：纯 Kahn 分层 + 重心法优化（图已保证无环，无需 SCC）
  * @param {Set} items - 所有物品集合
  * @param {Array} edges - 边列表 [{from: 产物, to: 原料}, ...]
  * @param {number} canvas_width - 画布宽度
  * @param {number} canvas_height - 画布最小高度
  * @param {Map|null} custom_first_layer_positions - 首层自定义位置
  * @param {number|null} page_width - 页面宽度
- * @param {Array<Set<string>>|null} precomputed_sccs - 预计算的 SCC 分组（核心计算输出）
- * @param {Set<string>} proliferator_edges - 因增产而添加的边的 key 集合
- * @returns {Object} {positions, debug_layers, canvas_width, canvas_height, layers_map, sorted_layers, detect_y_array, scc_groups, scc_info, node_to_scc}
+ * @returns {Object} {positions, debug_layers, canvas_width, canvas_height, layers_map, sorted_layers, detect_y_array, item_dag_layer}
  */
-function layout_graph(items, edges, canvas_width, canvas_height, custom_first_layer_positions = null, page_width = null, precomputed_sccs = null, proliferator_edges = new Set()) {
+function layout_graph(items, edges, canvas_width, canvas_height, custom_first_layer_positions = null, page_width = null) {
     const positions = new Map();
     const MARGIN_X = 50;
     const MARGIN_Y = 80;
-
-    // 1-3. SCC 分解 + DAG 压缩（优先使用核心计算的 SCC）
-    const scc_groups = precomputed_sccs || tarjanSCC(items, edges);
-    const {dagNodes: dag_nodes, dagEdges: dag_edges, nodeToScc: node_to_scc} = compressToDag(scc_groups, edges);
-
-    // 4. Kahn 拓扑排序（入度=0 先出队，原料在 layer 0，产物在高层）
-    //    dagTopologicalSort 返回 scc_id → 层级映射（layer 0=原料，layer max=产物）
-    const sccVisualLayer = dagTopologicalSort(dag_nodes, dag_edges);
 
     // 构建邻接关系（自环边跳过）
     // 边方向 {from: 产物, to: 原料}，children=下游产物，parents=上游原料
@@ -179,40 +92,50 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         out_degree.set(to, out_degree.get(to) + 1);
     });
 
-    // 5. 物品初始层级映射（循环组保持原始层级）
+    // 5. 物品初始层级映射（纯 Kahn：layer = 1 + max(parents' layer)，原料为 0）
     const item_layer = new Map();
-    const cycle_items = [];
-    scc_groups.forEach((scc, scc_idx) => {
-        const base_layer = sccVisualLayer.get(scc_idx) ?? 0;
-        scc.forEach(item => {
-            item_layer.set(item, base_layer);
-            if (scc.size > 1) cycle_items.push(item);
+    const remaining_in_degree = new Map(in_degree);
+    let frontier = [...items].filter(item => remaining_in_degree.get(item) === 0);
+    frontier.forEach(item => item_layer.set(item, 0));
+    let current_layer = 0;
+    while (frontier.length > 0) {
+        const next_frontier = [];
+        frontier.forEach(item => {
+            children.get(item).forEach(child => {
+                remaining_in_degree.set(child, remaining_in_degree.get(child) - 1);
+                if (remaining_in_degree.get(child) === 0) {
+                    item_layer.set(child, current_layer + 1);
+                    next_frontier.push(child);
+                }
+            });
         });
+        current_layer++;
+        frontier = next_frontier;
+    }
+    // 防御：纯源物品或孤立节点默认层 0
+    items.forEach(item => {
+        if (!item_layer.has(item)) item_layer.set(item, 0);
     });
-    const cycle_set = new Set(cycle_items);
 
-    // 6. 下移优化：按 SCC 逆拓扑序（产物在前），尝试增大层级直到遇到产物同层
-    //    循环物品不参与下移（保持原始层级）
+    // 6. 下移优化：按层级从高到低（产物在前），尝试增大层级直到遇到产物同层
     //    目标：拉大原料与产物的间距，减少引线交叉
     //    回退机制：原本是第一层（layer 0）的物品，如果下移只能移动1层，就保持第一层
-    for (const scc of scc_groups) {
-        for (const item of scc) {
-            if (cycle_set.has(item)) continue;
-            const child_items = children.get(item) || [];
-            if (child_items.length === 0) continue;
-            const original_layer = item_layer.get(item) ?? 0;
-            const min_child_layer = Math.min(...child_items.map(c => item_layer.get(c) ?? 0));
-            const max_allowed = min_child_layer - 1;
-            if (max_allowed > original_layer) {
-                const new_layer = max_allowed;
-                // 回退机制：原本是非循环第一层，下移只能移动1层，就保持第一层
-                if (original_layer === 0 && new_layer === 1) {
-                    continue;
-                }
-                item_layer.set(item, new_layer);
+    const items_by_layer_desc = [...items].sort((a, b) => (item_layer.get(b) ?? 0) - (item_layer.get(a) ?? 0));
+    items_by_layer_desc.forEach(item => {
+        const child_items = children.get(item) || [];
+        if (child_items.length === 0) return;
+        const original_layer = item_layer.get(item) ?? 0;
+        const min_child_layer = Math.min(...child_items.map(c => item_layer.get(c) ?? 0));
+        const max_allowed = min_child_layer - 1;
+        if (max_allowed > original_layer) {
+            const new_layer = max_allowed;
+            // 回退机制：原本是第一层，下移只能移动1层，就保持第一层
+            if (original_layer === 0 && new_layer === 1) {
+                return;
             }
+            item_layer.set(item, new_layer);
         }
-    }
+    });
 
     // 7. 构建层级映射
     const layers_map = new Map();
@@ -228,19 +151,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         const items = layers_map.get(layer_idx);
         if (items && items.length > 0) {
             debug_layers.push({layer: layer_idx, items});
-        }
-    });
-
-    const scc_info = [];
-    scc_groups.forEach((scc, scc_idx) => {
-        if (scc.size > 1) {
-            const first_member = [...scc][0];
-            const scc_layer = item_layer.get(first_member) ?? 0;
-            scc_info.push({
-                id: scc_idx,
-                members: [...scc],
-                layer: scc_layer
-            });
         }
     });
 
@@ -327,23 +237,14 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             const base_y = layer_y.get(layer_idx);
             const gap = layer_gap_map.get(layer_idx);
 
-            // 首层排列：循环组算一个整体放到最右边
+            // 首层排列：按矿石顺序排列
             if (layer_order === 0) {
-                // 分离循环组和普通节点
-                const cycle_items_in_layer = layer_items.filter(item => cycle_set.has(item));
-                const normal_items_in_layer = layer_items.filter(item => !cycle_set.has(item));
+                const layer_gap_first = available_width / Math.max(layer_items.length, 1);
+                const start_x = MARGIN_X + layer_gap_first / 2;
 
-                // 计算循环组宽度（成员数 * gap）
-                const cycle_group_width = cycle_items_in_layer.length > 0 ? cycle_items_in_layer.length * gap : 0;
-
-                // 普通节点排列（排除循环组占用的宽度）
-                const available_width = effective_page_width - MARGIN_X * 2 - cycle_group_width;
-                const normal_gap = normal_items_in_layer.length > 0 ? available_width / normal_items_in_layer.length : 0;
-                const normal_start_x = MARGIN_X + normal_gap / 2;
-
-                // 按矿石顺序排列普通节点
+                // 按矿石顺序排列
                 const default_order = ['铁矿', '铜矿', '石矿', '硅矿', '原油', '煤矿', '钛矿'];
-                const sorted_normal_items = [...normal_items_in_layer].sort((a, b) => {
+                const sorted_layer_items = [...layer_items].sort((a, b) => {
                     const index_a = default_order.indexOf(a);
                     const index_b = default_order.indexOf(b);
                     if (index_a !== -1 && index_b !== -1) return index_a - index_b;
@@ -352,9 +253,8 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     return 0;
                 });
 
-                // 排列普通节点
-                sorted_normal_items.forEach((item, i) => {
-                    let x = normal_start_x + i * normal_gap;
+                sorted_layer_items.forEach((item, i) => {
+                    let x = start_x + i * layer_gap_first;
                     if (custom_first_layer_positions && custom_first_layer_positions.has(item)) {
                         x = custom_first_layer_positions.get(item).x;
                     }
@@ -370,28 +270,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     });
                 });
 
-                // 排列循环组（放到最右边）
-                if (cycle_items_in_layer.length > 0) {
-                    const cycle_start_x = effective_page_width - MARGIN_X - cycle_group_width + gap / 2;
-                    cycle_items_in_layer.forEach((item, i) => {
-                        let x = cycle_start_x + i * gap;
-                        if (custom_first_layer_positions && custom_first_layer_positions.has(item)) {
-                            x = custom_first_layer_positions.get(item).x;
-                        }
-                        positions.set(item, {
-                            x: x,
-                            y: base_y,
-                            is_source: in_degree.get(item) === 0,
-                            is_sink: out_degree.get(item) === 0,
-                            is_cycle: true,
-                            layer: layer_idx,
-                            index: sorted_normal_items.length + i,
-                            is_first_layer: true
-                        });
-                    });
-                }
-
-                layers_map.set(layer_idx, [...sorted_normal_items, ...cycle_items_in_layer]);
+                layers_map.set(layer_idx, sorted_layer_items);
             } else {
                 // 非首层：正常排列
                 const layer_width = layer_items.length * gap;
@@ -403,7 +282,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                         y: base_y,
                         is_source: in_degree.get(item) === 0,
                         is_sink: out_degree.get(item) === 0,
-                        is_cycle: cycle_set.has(item),
+                        is_cycle: false,
                         layer: layer_idx,
                         index: i,
                         is_first_layer: false
@@ -422,31 +301,12 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         const deferred_set = new Set();
 
         /**
-         * 解决节点与 SCC 包围盒的重叠，将节点推挤到 SCC 左侧或右侧
-         * @param {number} x - 节点x坐标
-         * @param {Array} layer_scc_bboxes - 该层的 SCC 包围盒列表
-         * @returns {number} 调整后的 x 坐标
-         */
-        function resolve_scc_overlap(x, layer_scc_bboxes) {
-            for (const bbox of layer_scc_bboxes) {
-                const overlap = x + MIN_GAP / 2 > bbox.left && x - MIN_GAP / 2 < bbox.right;
-                if (overlap) {
-                    const dist_to_left = Math.abs(x - (bbox.left - MIN_GAP / 2));
-                    const dist_to_right = Math.abs(x - (bbox.right + MIN_GAP / 2));
-                    x = dist_to_left < dist_to_right ? bbox.left - MIN_GAP / 2 : bbox.right + MIN_GAP / 2;
-                }
-            }
-            return x;
-        }
-
-        /**
-         * 重排组内节点位置，处理 SCC 障碍物推挤
+         * 重排组内节点位置
          * @param {Object} group - 节点组
          * @param {number} min_gap - 最小间距
-         * @param {Array} layer_scc_bboxes - SCC 包围盒列表（可选）
          * @param {Function} get_half_width - 获取节点半宽的函数
          */
-        function repack_group(group, min_gap, layer_scc_bboxes, get_half_width) {
+        function repack_group(group, min_gap, get_half_width) {
             group.items.sort((a, b) => a.ideal_x - b.ideal_x);
             if (group.items.length > 0) {
                 group.items[0].render_x = group.items[0].ideal_x;
@@ -460,27 +320,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
             group.left = group.items.length > 0 ? group.items[0].render_x - get_half_width(group.items[0]) : 0;
             group.right = group.items.length > 0 ? group.items[group.items.length - 1].render_x + get_half_width(group.items[group.items.length - 1]) : 0;
             group.center = group.items.reduce((sum, p) => sum + p.ideal_x, 0) / Math.max(group.items.length, 1);
-
-            // 处理 SCC 障碍物推挤
-            if (layer_scc_bboxes && layer_scc_bboxes.length > 0) {
-                for (const bbox of layer_scc_bboxes) {
-                    if (group.right + min_gap / 2 > bbox.left && group.left - min_gap / 2 < bbox.right) {
-                        const group_width = group.right - group.left;
-                        const dist_to_left = Math.abs(group.center - (bbox.left - group_width / 2 - min_gap / 2));
-                        const dist_to_right = Math.abs(group.center - (bbox.right + group_width / 2 + min_gap / 2));
-                        group.center = dist_to_left < dist_to_right
-                            ? bbox.left - group_width / 2 - min_gap / 2
-                            : bbox.right + group_width / 2 + min_gap / 2;
-                        // 重新排布
-                        let start_x = group.center - (group.items.length - 1) * min_gap / 2;
-                        group.items.forEach((p, idx) => {
-                            p.render_x = start_x + idx * min_gap;
-                        });
-                        group.left = group.items[0].render_x - get_half_width(group.items[0]);
-                        group.right = group.items[group.items.length - 1].render_x + get_half_width(group.items[group.items.length - 1]);
-                    }
-                }
-            }
         }
 
         /**
@@ -488,9 +327,8 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
          * @param {Array} groups - 组列表
          * @param {number} min_gap - 最小间距
          * @param {Function} get_half_width - 获取节点半宽的函数
-         * @param {Array} layer_scc_bboxes - SCC 包围盒列表（可选）
          */
-        function merge_adjacent_groups(groups, min_gap, get_half_width, layer_scc_bboxes) {
+        function merge_adjacent_groups(groups, min_gap, get_half_width) {
             let merged = true;
             let iterations = 0;
             const MAX_ITERATIONS = 100;
@@ -500,13 +338,12 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 for (let i = 0; i < groups.length - 1; i++) {
                     const g1 = groups[i];
                     const g2 = groups[i + 1];
-                    if (g1.is_scc_obstacle || g2.is_scc_obstacle) continue;
                     const gap = get_half_width(g1.items[g1.items.length - 1]) + get_half_width(g2.items[0]);
                     if (g1.right > g2.left - gap) {
                         g1.items = [...g1.items, ...g2.items];
                         g1.items.sort((a, b) => a.ideal_x - b.ideal_x);
                         g1.center = g1.items.reduce((sum, p) => sum + p.ideal_x, 0) / g1.items.length;
-                        repack_group(g1, min_gap, layer_scc_bboxes, get_half_width);
+                        repack_group(g1, min_gap, get_half_width);
                         groups.splice(i + 1, 1);
                         merged = true;
                         break;
@@ -519,38 +356,19 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
          * 通用的节点组布局算法
          * @param {Array} items_to_layout - 待布局节点 [{item, ideal_x}, ...]
          * @param {number} min_gap - 最小间距
-         * @param {Array} layer_scc_bboxes - SCC 包围盒列表（可选）
          * @returns {Map} item -> render_x
          */
-        function layout_items_in_groups(items_to_layout, min_gap, layer_scc_bboxes = []) {
+        function layout_items_in_groups(items_to_layout, min_gap) {
             const groups = [];
-
-            // 添加 SCC 障碍物虚拟组
-            layer_scc_bboxes.forEach(bbox => {
-                groups.push({
-                    items: [{item: `__scc_${bbox.scc_id}__`, ideal_x: (bbox.left + bbox.right) / 2, render_x: (bbox.left + bbox.right) / 2, is_scc_obstacle: true}],
-                    left: bbox.left,
-                    right: bbox.right,
-                    center: (bbox.left + bbox.right) / 2,
-                    is_scc_obstacle: true
-                });
-            });
-
             const get_half_width = () => min_gap / 2;
 
             for (const new_item of items_to_layout) {
-                let new_x = new_item.ideal_x;
-
-                // 解决与 SCC 障碍物的重叠
-                if (layer_scc_bboxes.length > 0) {
-                    new_x = resolve_scc_overlap(new_x, layer_scc_bboxes);
-                }
+                const new_x = new_item.ideal_x;
 
                 // 检测与现有组的重叠
                 const overlapping_indices = [];
                 for (let j = 0; j < groups.length; j++) {
                     const g = groups[j];
-                    if (g.is_scc_obstacle) continue;
                     if (new_x >= g.left - min_gap && new_x <= g.right + min_gap) {
                         overlapping_indices.push(j);
                     }
@@ -563,8 +381,8 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                         right: new_x,
                         center: new_x
                     };
-                    let insert_idx = groups.findIndex(g => !g.is_scc_obstacle && g.left > new_x);
-                    if (insert_idx === -1) insert_idx = groups.filter(g => !g.is_scc_obstacle).length;
+                    let insert_idx = groups.findIndex(g => g.left > new_x);
+                    if (insert_idx === -1) insert_idx = groups.length;
                     groups.splice(insert_idx, 0, new_group);
                 } else {
                     const target_group = groups[overlapping_indices[0]];
@@ -576,60 +394,36 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
 
                     target_group.items.sort((a, b) => a.ideal_x - b.ideal_x);
                     target_group.center = target_group.items.reduce((sum, p) => sum + p.ideal_x, 0) / target_group.items.length;
-                    repack_group(target_group, min_gap, layer_scc_bboxes, get_half_width);
+                    repack_group(target_group, min_gap, get_half_width);
 
                     for (let j = overlapping_indices.length - 1; j >= 1; j--) {
                         groups.splice(overlapping_indices[j], 1);
                     }
 
-                    merge_adjacent_groups(groups, min_gap, get_half_width, layer_scc_bboxes);
+                    merge_adjacent_groups(groups, min_gap, get_half_width);
                 }
             }
 
             // 收集结果
             const result = new Map();
             groups.forEach(group => {
-                if (group.is_scc_obstacle) return;
                 group.items.forEach(p => {
-                    if (p.item.startsWith('__scc_')) return;
                     result.set(p.item, p.render_x);
                 });
             });
             return result;
         }
 
-        // 第一遍：从上到下，普通节点排布，SCC 节点不参与重心法排布
+        // 第一遍：从上到下，普通节点排布
         sorted_layers.forEach((layer_idx, layer_order) => {
             const layer_items = layers_map.get(layer_idx);
             const base_y = layer_y.get(layer_idx);
             if (layer_items.length === 0) return;
 
-            const layer_scc_ids = new Set();
-            const non_scc_items = [];
-
-            layer_items.forEach(item => {
-                const scc_id = node_to_scc.get(item);
-                if (scc_id !== undefined && scc_groups[scc_id].size > 1) {
-                    layer_scc_ids.add(scc_id);
-                } else {
-                    non_scc_items.push(item);
-                }
-            });
-
             const ideal_positions = new Map();
-            non_scc_items.forEach(item => {
+            layer_items.forEach(item => {
                 const parent_items = parents.get(item) || [];
-                // 循环组父节点也参与重心计算，使用物品自身的 x 坐标
-                // 排除电力和因增产加入的增产剂（只去除因增产才加入的增产剂需求，生产3级增产剂本来就需求的2级增产剂不去除）
-                const valid_parents = parent_items.filter(p => {
-                    if (!positions.has(p) || deferred_set.has(p)) return false;
-                    // 排除电力
-                    if (p === '电力') return false;
-                    // 排除因增产才加入的增产剂
-                    const edge_key = `${item}->${p}`;
-                    if (proliferator_edges.has(edge_key)) return false;
-                    return true;
-                });
+                const valid_parents = parent_items.filter(p => positions.has(p) && !deferred_set.has(p));
                 if (valid_parents.length > 0) {
                     const avg_x = valid_parents.reduce((sum, p) => sum + positions.get(p).x, 0) / valid_parents.length;
                     ideal_positions.set(item, avg_x);
@@ -642,27 +436,15 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 }
             });
 
-            const sorted_items = [...non_scc_items]
+            const sorted_items = [...layer_items]
                 .filter(item => ideal_positions.get(item) !== null)
                 .sort((a, b) => ideal_positions.get(a) - ideal_positions.get(b));
 
-            // 计算该层 SCC 循环组的包围盒，作为避让障碍物
-            const layer_scc_bboxes = [];
-            layer_scc_ids.forEach(scc_id => {
-                const scc_items = [...scc_groups[scc_id]].filter(item => positions.has(item));
-                if (scc_items.length === 0) return;
-                const xs = scc_items.map(item => positions.get(item).x);
-                const left = Math.min(...xs) - MIN_GAP / 2;
-                const right = Math.max(...xs) + MIN_GAP / 2;
-                layer_scc_bboxes.push({ scc_id, left, right });
-            });
-
-            // 使用通用布局算法（传入 SCC 包围盒作为障碍物）
             const items_to_layout = sorted_items.map(item => ({
                 item,
                 ideal_x: ideal_positions.get(item)
             }));
-            const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP, layer_scc_bboxes);
+            const layout_result = layout_items_in_groups(items_to_layout, MIN_GAP);
 
             sorted_items.forEach(item => {
                 const x = layout_result.get(item) ?? ideal_positions.get(item);
@@ -694,15 +476,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                 const base_y = layer_y.get(layer_idx);
                 const layer_all_items = layers_map.get(layer_idx) || [];
 
-                // 计算该层的 SCC id
-                const layer_scc_ids = new Set();
-                layer_all_items.forEach(item => {
-                    const scc_id = node_to_scc.get(item);
-                    if (scc_id !== undefined && scc_groups[scc_id].size > 1) {
-                        layer_scc_ids.add(scc_id);
-                    }
-                });
-
                 // 计算延迟节点的理想位置（靠近子节点）
                 const ideal_positions = new Map();
                 deferred_items.forEach(item => {
@@ -716,25 +489,12 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                     }
                 });
 
-                // 计算该层 SCC 循环组的包围盒，作为避让障碍物
-                const layer_scc_bboxes = [];
-                layer_scc_ids.forEach(scc_id => {
-                    const scc_items = [...scc_groups[scc_id]].filter(item => positions.has(item));
-                    if (scc_items.length === 0) return;
-                    const xs = scc_items.map(item => positions.get(item).x);
-                    const left = Math.min(...xs) - MIN_GAP / 2;
-                    const right = Math.max(...xs) + MIN_GAP / 2;
-                    layer_scc_bboxes.push({ scc_id, left, right });
-                });
-
                 // 该层所有节点一起进入重叠处理：非延迟节点用当前 x，延迟节点用重心位置
-                const all_items_for_layout = layer_all_items
-                    .filter(item => !layer_scc_ids.has(node_to_scc.get(item)))
-                    .map(item => ({
-                        item,
-                        ideal_x: deferred_set.has(item) ? (ideal_positions.get(item) ?? final_canvas_width / 2) : positions.get(item).x
-                    }));
-                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP, layer_scc_bboxes);
+                const all_items_for_layout = layer_all_items.map(item => ({
+                    item,
+                    ideal_x: deferred_set.has(item) ? (ideal_positions.get(item) ?? final_canvas_width / 2) : (positions.get(item)?.x ?? final_canvas_width / 2)
+                }));
+                const layout_result = layout_items_in_groups(all_items_for_layout, MIN_GAP);
 
                 all_items_for_layout.forEach(({item}) => {
                     const x = layout_result.get(item) ?? positions.get(item)?.x ?? final_canvas_width / 2;
@@ -743,7 +503,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
                         y: base_y,
                         is_source: in_degree.get(item) === 0,
                         is_sink: out_degree.get(item) === 0,
-                        is_cycle: cycle_set.has(item),
+                        is_cycle: false,
                         layer: layer_idx,
                         is_first_layer: false
                     });
@@ -763,13 +523,6 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
     const NODE_R = 32;
     const {detect_y_array} = collect_dots(positions, in_degree, out_degree, NODE_R);
 
-    // 计算每个物品的 DAG 层级
-    const item_dag_layer = new Map();
-    items.forEach(item => {
-        const scc_idx = node_to_scc.get(item) ?? 0;
-        item_dag_layer.set(item, sccVisualLayer.get(scc_idx) ?? 0);
-    });
-
     return {
         positions,
         debug_layers,
@@ -778,10 +531,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         layers_map,
         sorted_layers,
         detect_y_array,
-        scc_groups,
-        scc_info,
-        node_to_scc,
-        item_dag_layer
+        item_dag_layer: item_layer
     };
 }
 
@@ -994,7 +744,6 @@ export function DependencyGraphPage({onBack, needs_list, isActive}) {
  */
 function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
     const engineGraphData = useContext(EngineGraphDataContext);
-    const selected_fuel = useContext(FuelContext);
     const container_ref = useRef(null);
 
     const game_data = global_state.game_data;
@@ -1025,8 +774,6 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
 
     const [show_deleted_list, setShowDeletedList] = useState(false);
     const [show_debug_panel, setShowDebugPanel] = useState(false);
-    const [hide_scc_external_edges, setHideSccExternalEdges] = useState(true);
-    const [hide_power_edges, setHidePowerEdges] = useState(true);
     const [, setFirstLayerMoved] = useState(0);
 
     // 清除旧的持久化数据
@@ -1109,19 +856,15 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
     }, []);
 
     const full_graph_data = useMemo(() => {
-        return build_dependency_graph(game_data, item_data, scheme_data, selected_fuel);
-    }, [game_data, item_data, scheme_data, selected_fuel]);
+        return build_dependency_graph(game_data, item_data, scheme_data);
+    }, [game_data, item_data, scheme_data]);
 
     const filtered_graph = useMemo(() => {
         // 仅需求模式（复用核心计算数据）
         if (show_needs_only && needs_list && Object.keys(needs_list).length > 0 && engineGraphData) {
-            // 直接复用核心计算的边（过滤已删除物品和电力边）
+            // 直接复用核心计算的边（过滤已删除物品；核心计算的边含电力入边，不渲染）
             const filtered_edges = engineGraphData.edges.filter(e =>
                 !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to !== '电力'
-            );
-            // 电力边集合（用于可选渲染）
-            const power_edges = engineGraphData.edges.filter(e =>
-                !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to === '电力'
             );
             const filtered_items = new Set();
             filtered_edges.forEach(e => {
@@ -1129,38 +872,14 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                 filtered_items.add(e.to);
             });
 
-            // 从核心计算的SCC中过滤已删除物品，且只保留存在于 filtered_items 中的物品
-            // Task 4 后核心计算不再输出 sccs，缺失时按当前边集本地自算（与全量模式路径一致）
-            const source_sccs = engineGraphData.sccs || tarjanSCC(filtered_items, filtered_edges);
-            const filtered_sccs = source_sccs
-                .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
-                .filter(scc => scc.size > 0);
-
-            // 复用核心计算的增产剂边标记（过滤已删除边）
-            const filtered_proliferator_edges = new Set();
-            if (engineGraphData.proliferatorEdgeKeys) {
-                engineGraphData.proliferatorEdgeKeys.forEach(key => {
-                    const [from, to] = key.split('->');
-                    if (!deleted_items.has(from) && !deleted_items.has(to)) {
-                        filtered_proliferator_edges.add(key);
-                    }
-                });
-            }
-
-            return {edges: filtered_edges, items: filtered_items, proliferator_edges: filtered_proliferator_edges, power_edges, sccs: filtered_sccs};
+            return {edges: filtered_edges, items: filtered_items, power_edges: new Set(), sccs: [], proliferator_edges: new Set()};
         }
 
-        // 全部配方模式：从全量数据中过滤已删除物品
-        // SCC 基于完整边集（包括电力边）计算，保持布局稳定
-        const {edges, proliferator_edges} = full_graph_data;
-        // 完整边集（包括电力边，用于 SCC 计算）
-        const full_edges = edges.filter(e =>
+        // 全部配方模式：从全量数据中过滤已删除物品（无电力边、无增产剂边）
+        const {edges} = full_graph_data;
+        const filtered_edges = edges.filter(e =>
             !deleted_items.has(e.from) && !deleted_items.has(e.to)
         );
-        // 渲染边集（过滤电力边）
-        const filtered_edges = full_edges.filter(e => e.to !== '电力');
-        // 电力边集合（用于可选渲染）
-        const power_edges = full_edges.filter(e => e.to === '电力');
 
         // filtered_items 从渲染边集构建，不包含孤立物品
         const filtered_items = new Set();
@@ -1169,20 +888,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
             filtered_items.add(e.to);
         });
 
-        // 基于完整边集计算 SCC
-        const full_items = new Set();
-        full_edges.forEach(e => {
-            full_items.add(e.from);
-            full_items.add(e.to);
-        });
-        const sccs = tarjanSCC(full_items, full_edges);
-
-        // 过滤 SCC，只保留存在于 filtered_items 中的物品
-        const filtered_sccs = sccs
-            .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
-            .filter(scc => scc.size > 0);
-
-        return {edges: filtered_edges, items: filtered_items, proliferator_edges, power_edges, sccs: filtered_sccs};
+        return {edges: filtered_edges, items: filtered_items, power_edges: new Set(), sccs: [], proliferator_edges: new Set()};
     }, [full_graph_data, deleted_items, show_needs_only, needs_list, engineGraphData]);
 
     const edge_colors = useMemo(() => {
@@ -1195,7 +901,6 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         layers_map: layout_layers_map,
         sorted_layers: layout_sorted_layers,
         detect_y_array: layout_detect_y_array,
-        scc_info: layout_scc_info,
         item_dag_layer: layout_item_dag_layer
     } = useMemo(() => {
         if (filtered_graph.items.size === 0) {
@@ -1207,9 +912,6 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                 layers_map: new Map(),
                 sorted_layers: [],
                 detect_y_array: [],
-                scc_info: [],
-                node_to_scc: new Map(),
-                scc_groups: [],
                 item_dag_layer: new Map()
             };
         }
@@ -1226,7 +928,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
             }
         });
 
-        const result = layout_graph(filtered_graph.items, filtered_graph.edges, CANVAS_WIDTH, CANVAS_HEIGHT, first_layer_positions, container_width, filtered_graph.sccs || null, filtered_graph.proliferator_edges);
+        const result = layout_graph(filtered_graph.items, filtered_graph.edges, CANVAS_WIDTH, CANVAS_HEIGHT, first_layer_positions, container_width);
 
         return result;
     }, [filtered_graph, active_custom_positions, container_width]);
@@ -1513,27 +1215,15 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         const is_node_highlighting = !legend_hover && highlighted_items.size > 0;
 
         return filtered_graph.edges.map((edge, index) => {
-            if (hide_scc_external_edges && filtered_graph.proliferator_edges?.size > 0) {
-                const edge_key = `${edge.from}->${edge.to}`;
-                if (filtered_graph.proliferator_edges.has(edge_key)) {
-                    return null;
-                }
-            }
-
-            // 电力的入边默认不渲染
-            if (edge.to === '电力') {
-                return null;
-            }
-
             const edge_key = `${edge.from}->${edge.to}`;
             const color = edge_colors.get(edge_key) || '#666';
 
-            const edge_key_for_highlight = `${edge.from}->${edge.to}`;
-            const is_edge_highlighted = !legend_hover && highlighted_edges.size > 0 && highlighted_edges.has(edge_key_for_highlight);
+            const is_edge_highlighted = !legend_hover && highlighted_edges.size > 0 && highlighted_edges.has(edge_key);
             const edge_opacity = legend_hover ? 0.15 : (is_node_highlighting ? (is_edge_highlighted ? 1 : 0.15) : 1);
             const stroke_width = is_edge_highlighted ? 3 : 2;
 
             if (edge.from === edge.to) {
+                // 自环边防御保留（无环图下不应出现）
                 const pos = positions.get(edge.from);
                 if (!pos) return null;
                 const x = pos.x;
@@ -1559,40 +1249,11 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
             const product_pos = positions.get(edge.from);
             if (!material_pos || !product_pos) return null;
 
-            const material_in_cycle = material_pos.is_cycle;
-            const product_in_cycle = product_pos.is_cycle;
-            const same_cycle_group = material_in_cycle && product_in_cycle;
-            const CYCLE_DOT_OFFSET = 15;
-
-            let x1, y1;
-            if (same_cycle_group) {
-                x1 = material_pos.x + CYCLE_DOT_OFFSET;
-                y1 = material_pos.y - NODE_R;
-            } else {
-                x1 = material_pos.x;
-                y1 = material_pos.y + NODE_R;
-            }
-
-            let x2, y2;
-            if (product_in_cycle) {
-                x2 = product_pos.x - CYCLE_DOT_OFFSET;
-                y2 = product_pos.y - NODE_R;
-            } else {
-                x2 = product_pos.x;
-                y2 = product_pos.y - NODE_R;
-            }
-
-            let control_offset = 0;
-            if (same_cycle_group) {
-                const dx = Math.abs(x2 - x1);
-                const MIN_OFFSET = 5;
-                const MAX_OFFSET = 60;
-                const MAX_DX = 200; // dx最大参考值
-                control_offset = MIN_OFFSET + (MAX_OFFSET - MIN_OFFSET) * Math.min(dx / MAX_DX, 1);
-            }
-            const path = same_cycle_group
-                ? generate_simple_path(x1, y1, x2, y2, layout_detect_y_array, control_offset)
-                : generate_simple_path(x1, y1, x2, y2, layout_detect_y_array);
+            const x1 = material_pos.x;
+            const y1 = material_pos.y + NODE_R;
+            const x2 = product_pos.x;
+            const y2 = product_pos.y - NODE_R;
+            const path = generate_simple_path(x1, y1, x2, y2, layout_detect_y_array);
 
             return (
                 <g key={`${edge.from}->${edge.to}-${index}`} style={{ opacity: edge_opacity }}>
@@ -1605,120 +1266,6 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                         markerEnd="url(#dot-black)"
                     />
                 </g>
-            );
-        });
-    };
-
-    const render_power_edges = () => {
-        if (hide_power_edges || !filtered_graph.power_edges || filtered_graph.power_edges.length === 0) return null;
-
-        const NODE_R = 32;
-        const is_node_highlighting = !legend_hover && highlighted_items.size > 0;
-        const POWER_COLOR = '#f59e0b'; // 琥珀色，区别于普通边
-        const CYCLE_DOT_OFFSET = 15;
-
-        return filtered_graph.power_edges.map((edge, index) => {
-            const edge_key = `${edge.from}->${edge.to}`;
-            const is_edge_highlighted = !legend_hover && highlighted_edges.size > 0 && highlighted_edges.has(edge_key);
-            const edge_opacity = legend_hover ? 0.15 : (is_node_highlighting ? (is_edge_highlighted ? 1 : 0.15) : 1);
-            const stroke_width = is_edge_highlighted ? 3 : 2;
-
-            const from_pos = positions.get(edge.from);
-            const to_pos = positions.get(edge.to);
-            if (!from_pos || !to_pos) return null;
-
-            const from_in_cycle = from_pos.is_cycle;
-            const to_in_cycle = to_pos.is_cycle;
-            const same_cycle_group = from_in_cycle && to_in_cycle;
-
-            // 起点（产物端）：循环组内用上偏移点
-            let x1, y1;
-            if (from_in_cycle) {
-                x1 = from_pos.x - CYCLE_DOT_OFFSET;
-                y1 = from_pos.y - NODE_R;
-            } else {
-                x1 = from_pos.x;
-                y1 = from_pos.y - NODE_R;
-            }
-
-            // 终点（电力端）：循环组内用上偏移点
-            let x2, y2;
-            if (to_in_cycle) {
-                x2 = to_pos.x + CYCLE_DOT_OFFSET;
-                y2 = to_pos.y - NODE_R;
-            } else {
-                x2 = to_pos.x;
-                y2 = to_pos.y + NODE_R;
-            }
-
-            let control_offset = 0;
-            if (same_cycle_group) {
-                const dx = Math.abs(x2 - x1);
-                const MIN_OFFSET = 5;
-                const MAX_OFFSET = 60;
-                const MAX_DX = 200;
-                control_offset = MIN_OFFSET + (MAX_OFFSET - MIN_OFFSET) * Math.min(dx / MAX_DX, 1);
-            }
-            const path = same_cycle_group
-                ? generate_simple_path(x1, y1, x2, y2, layout_detect_y_array, control_offset)
-                : generate_simple_path(x1, y1, x2, y2, layout_detect_y_array);
-
-            return (
-                <g key={`power-${edge.from}->${edge.to}-${index}`} style={{ opacity: edge_opacity }}>
-                    <path
-                        d={path}
-                        stroke={POWER_COLOR}
-                        strokeWidth={stroke_width}
-                        fill="none"
-                        strokeDasharray="6 3"
-                        markerStart="url(#dot-blue)"
-                        markerEnd="url(#dot-black)"
-                    />
-                </g>
-            );
-        });
-    };
-
-    const render_scc_groups = () => {
-        if (!layout_scc_info || layout_scc_info.length === 0) return null;
-
-        const NODE_R = 32;
-
-        return layout_scc_info.map(scc => {
-            const member_positions = scc.members
-                .map(item => positions.get(item))
-                .filter(Boolean);
-
-            if (member_positions.length === 0) return null;
-
-            const min_x = Math.min(...member_positions.map(p => p.x)) - NODE_R;
-            const max_x = Math.max(...member_positions.map(p => p.x)) + NODE_R;
-            const min_y = Math.min(...member_positions.map(p => p.y)) - NODE_R - 15;
-            const max_y = Math.max(...member_positions.map(p => p.y)) + NODE_R + 8;
-
-            const width = max_x - min_x;
-            const height = max_y - min_y;
-
-            const is_any_member_highlighted = scc.members.some(item => effective_highlighted_items.has(item));
-            const box_opacity = (highlighted_items.size > 0 || legend_hover) ? (is_any_member_highlighted ? 0.3 : 0.08) : 0.15;
-
-            return (
-                <div
-                    key={`scc-${scc.id}`}
-                    style={{
-                        position: 'absolute',
-                        left: min_x,
-                        top: min_y,
-                        width: width,
-                        height: height,
-                        border: '2px dashed #ff6b6b',
-                        borderRadius: '12px',
-                        backgroundColor: `rgba(255, 107, 107, ${box_opacity})`,
-                        pointerEvents: 'none',
-                        zIndex: 1,
-                        transition: 'opacity 0.15s'
-                    }}
-                />
             );
         });
     };
@@ -1801,26 +1348,6 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                     <FaList/>
                     <span>层级</span>
                 </button>
-                {filtered_graph.proliferator_edges?.size > 0 && (
-                    <button
-                        className={`btn btn-sm d-inline-flex align-items-center gap-1 ${hide_scc_external_edges ? 'btn-warning' : 'btn-outline-warning'}`}
-                        onClick={() => setHideSccExternalEdges(!hide_scc_external_edges)}
-                        title={hide_scc_external_edges ? '显示增产剂消耗引线' : '隐藏增产剂消耗引线'}
-                    >
-                        <FaLink/>
-                        <span>{hide_scc_external_edges ? '显示增产剂线' : '隐藏增产剂线'}</span>
-                    </button>
-                )}
-                {filtered_graph.power_edges?.length > 0 && (
-                    <button
-                        className={`btn btn-sm d-inline-flex align-items-center gap-1 ${hide_power_edges ? 'btn-secondary' : 'btn-outline-secondary'}`}
-                        onClick={() => setHidePowerEdges(!hide_power_edges)}
-                        title={hide_power_edges ? '显示电力依赖线' : '隐藏电力依赖线'}
-                    >
-                        <FaBolt/>
-                        <span>{hide_power_edges ? '显示电力线' : '隐藏电力线'}</span>
-                    </button>
-                )}
                 {needs_list && Object.keys(needs_list).length > 0 && (
                     <button
                         className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_needs_only ? 'btn-success' : 'btn-outline-success'}`}
@@ -1894,10 +1421,8 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                                     </marker>
                                 </defs>
                                 {render_edges()}
-                                {render_power_edges()}
                             </svg>
 
-                            {render_scc_groups()}
                             {render_nodes()}
                         </div>
                     )}
@@ -1949,37 +1474,21 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                             {debug_layers.map((layer, idx) => (
                                 <div key={idx} className="debug-layer">
                                     <div className="debug-layer-title">
-                                        {layer.layer >= 0 && <span>层级 {layer.layer}</span>}
-                                        {layer.layer === -1 && <span>循环物品</span>}
+                                        <span>层级 {layer.layer}</span>
                                         <span className="debug-layer-count">({layer.items.length})</span>
                                     </div>
                                     <div className="debug-layer-items">
                                         {layer.items.map(item => {
-                                            const is_cycle = layout_scc_info?.some(s => s.members.includes(item));
                                             const dag_layer_val = layout_item_dag_layer?.get(item);
                                             return (
-                                                <span key={item} className="debug-item" style={is_cycle ? {color: '#ff6b6b', fontWeight: 'bold'} : {}}>
-                                                    {item}{dag_layer_val !== undefined ? ` (${dag_layer_val})` : ''}{is_cycle ? ' [循环]' : ''}
+                                                <span key={item} className="debug-item">
+                                                    {item}{dag_layer_val !== undefined ? ` (${dag_layer_val})` : ''}
                                                 </span>
                                             );
                                         })}
                                     </div>
                                 </div>
                             ))}
-                            {layout_scc_info && layout_scc_info.length > 0 && (
-                                <div className="debug-layer" style={{marginTop: '8px', borderTop: '1px solid #555', paddingTop: '8px'}}>
-                                    <div className="debug-layer-title">
-                                        <span style={{color: '#ff6b6b'}}>SCC 循环组</span>
-                                    </div>
-                                    {layout_scc_info.map(scc => (
-                                        <div key={scc.id} style={{marginBottom: '4px'}}>
-                                            <span style={{color: '#ff6b6b'}}>循环组</span>
-                                            <span style={{color: '#999'}}> (层{scc.layer}, {scc.members.length}节点): </span>
-                                            {scc.members.map(m => <span key={m} className="debug-item" style={{color: '#ff6b6b'}}>{m} </span>)}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}
