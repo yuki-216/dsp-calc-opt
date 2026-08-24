@@ -137,6 +137,16 @@ export function Settings() {
                 <td className="ps-2">{"%（科技面板右上）"}</td>
             </tr>
             <tr>
+                <td>不计挖矿电力</td>
+                <td className="ps-2">
+                    <label className="d-flex align-items-center gap-1 text-nowrap">
+                        <input type="checkbox" checked={!!settings.exclude_miner_power}
+                               onChange={e => set_settings(prev => ({...prev, exclude_miner_power: e.target.checked}))}/>
+                        不计挖矿电力
+                    </label>
+                </td>
+            </tr>
+            <tr>
                 <td>分馏带速</td>
                 <td className="ps-2">
                     <input value={fractionating_speed} onChange={change_fractionating_speed}

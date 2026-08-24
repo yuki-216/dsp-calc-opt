@@ -206,10 +206,10 @@ async function calculateOreHeat(gameData, schemeData, settings, needs) {
   // 副产品燃料热值抵扣
   let byproductHeat = 0;
   for (const [item, amount] of Object.entries(result.surplusByproducts || {})) {
-    if (amount >= 0) continue; // 只处理负系数（副产品）
+    if (amount <= 0) continue; // surplusByproducts 已为正值（多余量），只累加正系数
     const fuel = FUEL_DATA_BASE.find(f => f.name === item);
     if (fuel && fuel.heatValue > 0) {
-      byproductHeat += Math.abs(amount) * fuel.heatValue;
+      byproductHeat += amount * fuel.heatValue;
     }
   }
 

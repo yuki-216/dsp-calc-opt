@@ -15,6 +15,9 @@ import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-p
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
 
+// 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
+const PANEL_DISPLAY_EPS = 0.01;
+
 // 珍稀权重目标值：纯数字（自适应精度，不带单位后缀）
 function formatRareWeightValue(value) {
     if (!Number.isFinite(value) || value === 0) return '0';
@@ -390,8 +393,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }, [engineResult]);
 
     // 从新引擎获取耗电和建筑数据
-    let energy_cost = engineResult?.energyCost || 0;
-    let miner_energy_cost = engineResult?.minerEnergyCost || 0;
+    // 电力合一：引擎侧 energyCost==totalEnergyCost、minerEnergyCost 恒 0，UI 统一读总耗电
+    let total_energy_cost = engineResult?.totalEnergyCost || 0;
     let building_list = engineResult?.buildingList || {};
     let building_details = engineResult?.buildingDetails || {};
     let total_footprint = engineResult?.totalFootprint || 0;
@@ -481,8 +484,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     };
 
     // 置顶电力行（如果选择了燃料且有电力消耗）
-    if (selectedFuel && selectedFuel !== "无" && (energy_cost > 0 || miner_energy_cost > 0)) {
-        const totalEnergy = energy_cost + miner_energy_cost;
+    if (selectedFuel && selectedFuel !== "无" && total_energy_cost > 0) {
+        const totalEnergy = total_energy_cost;
         const fuelRecipe = getFuelRecipe(selectedFuel);
         if (fuelRecipe) {
             const fuelDataList = getFuelData(game_data);
@@ -732,25 +735,32 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
         let byproductHeat = 0;
         for (const [item, amount] of Object.entries(surplusByproducts || {})) {
-            if (amount >= 0) continue;
+            if (amount <= 0) continue; // surplusByproducts 已为正值（多余量），正值直接累加
             const fuel = FUEL_DATA_BASE.find(f => f.name === item);
-            if (fuel && fuel.heatValue > 0) byproductHeat += Math.abs(amount) * fuel.heatValue;
+            if (fuel && fuel.heatValue > 0) byproductHeat += amount * fuel.heatValue;
         }
         return oreHeat - byproductHeat;
     }, [result_dict, surplusByproducts, isRawMaterial]);
 
+    // 面板显示列表：过滤 |value| < PANEL_DISPLAY_EPS 的数值噪声条目（仅显示层兜底，不污染 history）
+    const surplusDisplayEntries = Object.entries(surplusByproducts)
+        .filter(([, amount]) => Math.abs(amount) >= PANEL_DISPLAY_EPS);
+    const rawMaterialDisplayEntries = rawMaterials
+        .filter(([, amount]) => Math.abs(amount) >= PANEL_DISPLAY_EPS);
+
     // 计算数值变化的差值
     // 更新历史值
     useEffect(() => {
+        // M-1 修复：首次挂载 engineResult=null 时跳过，避免全零基线污染 history 导致净热值/电力虚假增减
+        if (!engineResult) return;
         // 构建新的值对象
         const currentValues = {
-            energyCost: energy_cost,
-            totalEnergyCost: energy_cost + miner_energy_cost,
+            energyCost: total_energy_cost,
+            totalEnergyCost: total_energy_cost,
             buildingCounts: { ...building_list },
             rawMaterials: {},
-            surplusByproducts: Object.fromEntries(
-                Object.entries(surplusByproducts).map(([item, amount]) => [item, -amount])
-            ),
+            // surplusByproducts 引擎侧已是正值（多余量），直接透传保持口径一致
+            surplusByproducts: { ...surplusByproducts },
             totalFootprint: total_footprint,
             rareWeightObjective: rareWeightInfo?.objective ?? null,
             netHeat,
@@ -835,20 +845,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <legend><small>预估电力 (MW)</small></legend>
                         <div className="d-flex flex-column gap-1">
                             <div className="d-flex align-items-center gap-1 text-nowrap">
-                                <span className="text-muted">生产：</span>
-                                <span className="fast-tooltip" data-tooltip="不包含采集设备">
-                                    <ValueWithDifference
-                                        currentValue={energy_cost}
-                                        previousValue={historyValues?.[1]?.energyCost}
-                                        key="energy-cost"
-                                    />
-                                </span>
-                            </div>
-                            <div className="d-flex align-items-center gap-1 text-nowrap">
                                 <span className="text-muted">总计：</span>
                                 <span className="fast-tooltip" data-tooltip="包含采集设备">
                                     <ValueWithDifference
-                                        currentValue={energy_cost + miner_energy_cost}
+                                        currentValue={total_energy_cost}
                                         previousValue={historyValues?.[1]?.totalEnergyCost}
                                         key="total-energy-cost"
                                     />
@@ -877,20 +877,20 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 {/* 左列：多余产物 + 原矿需求 + 预估电力 */}
                 <div className="d-flex flex-column gap-2">
                     {/* 多余产物 */}
-                    {Object.keys(surplusByproducts).length > 0 &&
+                    {surplusDisplayEntries.length > 0 &&
                         <fieldset className="w-fit">
                             <legend><small>多余产物</small></legend>
                             <table>
                                 <tbody>
-                                    {Object.entries(surplusByproducts).map(([item, amount]) => (
+                                    {surplusDisplayEntries.map(([item, amount]) => (
                                         <tr key={item}>
                                             <td className="d-flex align-items-center text-nowrap">
                                                 <ItemIcon item={item} tooltip={false} size={mob_icon}/>
                                                 <div className="d-flex flex-column ms-1">
-                                                    <span>{'×'}{formatValue(-amount, fixed_num)}</span>
-                                                    {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs((-amount) - historyValues[1].surplusByproducts[item]) > 1e-6 && (
-                                                        <span style={{fontSize: '0.85em', color: (-amount) > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
-                                                            {(-amount) > historyValues[1].surplusByproducts[item] ? '+' : ''}{formatValue((-amount) - historyValues[1].surplusByproducts[item], fixed_num)}
+                                                    <span>{'×'}{formatValue(amount, fixed_num)}</span>
+                                                    {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs(amount - historyValues[1].surplusByproducts[item]) > 1e-6 && (
+                                                        <span style={{fontSize: '0.85em', color: amount > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
+                                                            {amount > historyValues[1].surplusByproducts[item] ? '+' : ''}{formatValue(amount - historyValues[1].surplusByproducts[item], fixed_num)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -903,12 +903,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     }
 
                     {/* 原矿输入总需求 */}
-                    {rawMaterials.length > 0 && (
+                    {rawMaterialDisplayEntries.length > 0 && (
                         <fieldset className="w-fit">
                             <legend><small>原矿输入总需求</small></legend>
                             <table>
                                 <tbody>
-                                    {rawMaterials.map(([item, amount]) => (
+                                    {rawMaterialDisplayEntries.map(([item, amount]) => (
                                         <tr key={item}>
                                             <td className="d-flex align-items-center text-nowrap">
                                                 <ItemIcon item={item} tooltip={false} size={mob_icon}/>
@@ -934,23 +934,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <legend><small>预估电力 (MW)</small></legend>
                             <div className="d-flex flex-column gap-2">
                                 <div className="d-flex align-items-center text-nowrap">
-                                    <span className="text-muted">生产：</span>
-                                    <div className="d-flex flex-column">
-                                        <span>{formatValue(energy_cost, fixed_num)}</span>
-                                        {historyValues?.[1]?.energyCost !== undefined && Math.abs(energy_cost - historyValues[1].energyCost) > 1e-6 && (
-                                            <span style={{fontSize: '0.85em', color: energy_cost > historyValues[1].energyCost ? 'red' : 'green'}}>
-                                                {energy_cost > historyValues[1].energyCost ? '+' : ''}{formatValue(energy_cost - historyValues[1].energyCost, fixed_num)}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="d-flex align-items-center text-nowrap">
                                     <span className="text-muted">总计：</span>
                                     <div className="d-flex flex-column">
-                                        <span>{formatValue(energy_cost + miner_energy_cost, fixed_num)}</span>
-                                        {historyValues?.[1]?.totalEnergyCost !== undefined && Math.abs((energy_cost + miner_energy_cost) - historyValues[1].totalEnergyCost) > 1e-6 && (
-                                            <span style={{fontSize: '0.85em', color: (energy_cost + miner_energy_cost) > historyValues[1].totalEnergyCost ? 'red' : 'green'}}>
-                                                {(energy_cost + miner_energy_cost) > historyValues[1].totalEnergyCost ? '+' : ''}{formatValue((energy_cost + miner_energy_cost) - historyValues[1].totalEnergyCost, fixed_num)}
+                                        <span>{formatValue(total_energy_cost, fixed_num)}</span>
+                                        {historyValues?.[1]?.totalEnergyCost !== undefined && Math.abs(total_energy_cost - historyValues[1].totalEnergyCost) > 1e-6 && (
+                                            <span style={{fontSize: '0.85em', color: total_energy_cost > historyValues[1].totalEnergyCost ? 'red' : 'green'}}>
+                                                {total_energy_cost > historyValues[1].totalEnergyCost ? '+' : ''}{formatValue(total_energy_cost - historyValues[1].totalEnergyCost, fixed_num)}
                                             </span>
                                         )}
                                     </div>
@@ -1030,12 +1019,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                     </div>
                                 </fieldset>
                             }
-                            {Object.keys(surplusByproducts).length > 0 &&
+                            {surplusDisplayEntries.length > 0 &&
                                 <fieldset className="w-fit">
                                     <legend><small>多余产物</small></legend>
                                     <table>
                                         <tbody>
-                                            {Object.entries(surplusByproducts).map(([item, amount]) => (
+                                            {surplusDisplayEntries.map(([item, amount]) => (
                                                 <tr key={item}>
                                                     <td className="d-flex align-items-center text-nowrap">
                                                         <ItemIcon item={item} tooltip={false} size={mob_icon}/>
@@ -1043,10 +1032,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                                     </td>
                                                     <td className="ps-2 text-nowrap">
                                                         <div className="d-flex flex-column">
-                                                            <span>{(-amount).toFixed(fixed_num)}/{time_tick === 60 ? 'min' : 'sec'}</span>
-                                                            {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs((-amount) - historyValues[1].surplusByproducts[item]) > 1e-6 && (
-                                                                <span style={{fontSize: '0.85em', color: (-amount) > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
-                                                                    {(-amount) > historyValues[1].surplusByproducts[item] ? '+' : ''}{(-amount - historyValues[1].surplusByproducts[item]).toFixed(fixed_num)}
+                                                            <span>{amount.toFixed(fixed_num)}/{time_tick === 60 ? 'min' : 'sec'}</span>
+                                                            {historyValues?.[1]?.surplusByproducts?.[item] !== undefined && Math.abs(amount - historyValues[1].surplusByproducts[item]) > 1e-6 && (
+                                                                <span style={{fontSize: '0.85em', color: amount > historyValues[1].surplusByproducts[item] ? 'red' : 'green'}}>
+                                                                    {amount > historyValues[1].surplusByproducts[item] ? '+' : ''}{(amount - historyValues[1].surplusByproducts[item]).toFixed(fixed_num)}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1077,7 +1066,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             {(() => {
                                 const rawMaterials = Object.entries(result_dict)
                                     .filter(([item]) => isRawMaterial(item))
-                                    .sort(([a], [b]) => a.localeCompare(b));
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .filter(([, amount]) => Math.abs(amount) >= PANEL_DISPLAY_EPS);
                                 return rawMaterials.length > 0 && (
                                     <fieldset className="w-fit">
                                         <legend><small>原矿输入总需求</small></legend>
@@ -1118,21 +1108,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <div className="modal-footer border-secondary justify-content-start">
                                 <div className="d-flex flex-column gap-1">
                                     <div className="d-flex align-items-center gap-1 text-nowrap">
-                                        <span className="text-muted">生产电力：</span>
-                                        <span className="fast-tooltip" data-tooltip="不包含采集设备">
-                                            <ValueWithDifference
-                                                currentValue={energy_cost}
-                                                previousValue={historyValues?.[1]?.energyCost}
-                                                key="energy-cost"
-                                            />
-                                        </span>
-                                        <span className="text-muted">MW</span>
-                                    </div>
-                                    <div className="d-flex align-items-center gap-1 text-nowrap">
                                         <span className="text-muted">总电力：</span>
                                         <span className="fast-tooltip" data-tooltip="包含采集设备">
                                             <ValueWithDifference
-                                                currentValue={energy_cost + miner_energy_cost}
+                                                currentValue={total_energy_cost}
                                                 previousValue={historyValues?.[1]?.totalEnergyCost}
                                                 key="total-energy-cost"
                                             />
