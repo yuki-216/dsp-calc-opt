@@ -1,0 +1,96 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+// game_data.jsx 使用 Vite 专属语法(.jsx 扩展名 + import.meta.glob),
+// 通过共享的 vite SSR 实例加载引擎模块,与前端构建工具链保持一致。
+import {getViteServer, closeViteServer} from '../helpers/vite-game-data.mjs';
+
+const server = await getViteServer();
+const {CoreEngine} = await server.ssrLoadModule('/src/engine/index.js');
+
+// 释放 vite 实例句柄,保证 node --test 正常退出
+test.after(async () => {
+    await closeViteServer();
+});
+
+// 极简游戏数据:配方0 铁矿→铁块×1;配方1 铁块→齿轮×1;配方2 燃料→电力×10(isFuelRecipe)
+function makeGameData() {
+    return {
+        recipe_data: [
+            {_id: 0, 原料: {铁矿: 1}, 产物: {铁块: 1}, 设施: 0, 时间: 2, Type: 0, 增产: 0},
+            {_id: 1, 原料: {铁块: 1}, 产物: {齿轮: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0},
+            {_id: 2, Type: 3, 原料: {燃料: 1}, 产物: {电力: 10}, 设施: 5, 时间: 1, isFuelRecipe: true, fuelName: '燃料', 增产: 0},
+        ],
+        factory_data: {
+            '0': [{'名称': '制造台', '倍率': 1, '耗能': 6}],
+            '5': [{'名称': '火力发电厂', '倍率': 1, '耗能': 0, '发电功率': 100}],
+        },
+        proliferator_data: [],
+        proliferator_effect: [],
+    };
+}
+
+function makeScheme() {
+    return {
+        item_recipe_choices: {},
+        scheme_for_recipe: [
+            {'建筑': 0, '增产剂等级': 0, '增产模式': 0},
+            {'建筑': 0, '增产剂等级': 0, '增产模式': 0},
+            {'建筑': 0, '增产剂等级': 0, '增产模式': 0},
+        ],
+        selected_fuel: null,
+    };
+}
+
+test('端到端:需求齿轮×10 → 铁矿缺口/执行次数/电力聚合', async () => {
+    const gd = makeGameData();
+    const scheme = makeScheme();
+    scheme.selected_fuel = '燃料';
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    const result = await engine.calculate([{id: '齿轮', name: '齿轮', count: 10}], gd.recipe_data);
+
+    assert.equal(result.recipeExecutions['齿轮'], 10);
+    assert.equal(result.resourceUsage['铁矿'], 10);
+    // 电力:齿轮10次×0.1 + 铁块10次×0.2 = 3 MW·min;发电配方每次产10电力 → 执行 3/10 次
+    const totalPower = result.totalEnergyCost;
+    assert.ok(Math.abs(totalPower - 3) < 1e-6);
+    assert.ok(Math.abs(result.recipeExecutions['电力'] - totalPower / 10) < 1e-6);
+    assert.ok(!result.surplusByproducts['齿轮']);
+});
+
+test('端到端:联产物抵消——多余副产品进 surplusByproducts(正值)', async () => {
+    const gd = makeGameData();
+    // 加联产配方:原油→氢×1+精炼油×2;配方:氢×2→水×1(虚构但线性)
+    gd.recipe_data.push({_id: 3, 原料: {原油: 1}, 产物: {氢: 1, 精炼油: 2}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    gd.recipe_data.push({_id: 4, 原料: {氢: 2}, 产物: {水: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    const scheme = makeScheme();
+    // 需求 水×10 → 氢20 → 跑联产20次 → 精炼油40全多余
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    const result = await engine.calculate([
+        {id: '水', name: '水', count: 10},
+    ], gd.recipe_data);
+
+    assert.ok(Math.abs(result.surplusByproducts['精炼油'] - 40) < 1e-6);
+    assert.ok(Math.abs(result.resourceUsage['原油'] - 20) < 1e-6);
+});
+
+test('端到端:采集配方(空原料单产物)产量计入 resourceUsage', async () => {
+    const gd = makeGameData();
+    // 原油萃取站式采集配方:空原料→原油×1
+    gd.factory_data['9'] = [{'名称': '原油萃取站', '倍率': 1, '耗能': 4}];
+    gd.recipe_data.push({_id: 3, 原料: {}, 产物: {原油: 1}, 设施: 9, 时间: 1, Type: -1, 增产: 0, 可采集: true});
+    // 简单加工:原油×2→塑料×1
+    gd.recipe_data.push({_id: 4, 原料: {原油: 2}, 产物: {塑料: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    const scheme = makeScheme();
+    const settings = {is_time_unit_minute: true, mining_speed_multiple: 1, mining_speed_oil: 1};
+    const engine = new CoreEngine(gd, scheme, settings, null);
+    const result = await engine.calculate([{id: '塑料', name: '塑料', count: 5}], gd.recipe_data);
+
+    // 塑料5次耗原油10 → 采集配方执行10次 → 采集量10计入 resourceUsage(设备表保留采集设备)
+    assert.ok(Math.abs(result.recipeExecutions['原油'] - 10) < 1e-6);
+    assert.ok(Math.abs(result.resourceUsage['原油'] - 10) < 1e-6);
+    assert.ok(!result.surplusByproducts['原油']);
+    // 采集设备进入设备表
+    assert.ok(result.buildingDetails['原油']);
+    assert.equal(result.buildingDetails['原油'].factoryName, '原油萃取站');
+});

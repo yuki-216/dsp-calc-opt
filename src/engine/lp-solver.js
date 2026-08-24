@@ -22,9 +22,11 @@ export function getHighs() {
 const SENSE_MAP = {'>=': '>=', '<=': '<='};
 
 // CPLEX LP 格式标识符不允许以数字开头(配方索引作变量名时形如 "15" 会导致 HiGHS 解析崩溃),
-// 序列化时统一映射为 v0..vn 别名,解析结果再映射回原名。
+// 且不允许含空格(约束名 con_增产剂 Mk.IIII 中的空格会截断行导致解析失败),
+// 序列化时统一映射为 v0..vn 别名(变量)/c0..cn 别名(约束),解析结果再映射回原名。
 function serializeToLpText(model) {
     const alias = new Map(model.variables.map((v, i) => [v.name, `v${i}`]));
+    const conAlias = new Map(model.constraints.map((c, i) => [c.name, `c${i}`]));
     const lines = [];
     lines.push('Minimize');
     const objTerms = model.variables
@@ -47,7 +49,7 @@ function serializeToLpText(model) {
             first = false;
         }
         if (terms.length === 0) terms.push(`0 ${model.variables[0] ? alias.get(model.variables[0].name) : '_zero'}`);
-        lines.push(` ${con.name}: ${terms.join(' ')} ${SENSE_MAP[con.sense] ?? '>='} ${con.rhs}`);
+        lines.push(` ${conAlias.get(con.name)}: ${terms.join(' ')} ${SENSE_MAP[con.sense] ?? '>='} ${con.rhs}`);
     }
 
     lines.push('Bounds');

@@ -1,28 +1,23 @@
-﻿import { DEBUG } from './debug.js';
 /**
- * 核心计算引擎主入口
- * 职责：整合DAG、SCC、单位成本（系数表+矩阵求逆）
+ * 核心计算引擎主入口(LP 方案)
+ * 职责:二部图构建 → LP 构模 → HiGHS 求解 → 结果映射
  */
 
-import { buildItemGraph, tarjanSCC } from './dag.js';
-import { expandInSCCOrder } from './unit-cost.js';
-import { getPowerDeviceCount } from '../power-device-count.js';
+import {buildRecipeGraph} from './bipartite-graph.js';
+import {buildLPModel, parseSlackItem} from './lp-model.js';
+import {solveLP} from './lp-solver.js';
+import {getPowerDeviceCount} from '../power-device-count.js';
 
-/**
- * 核心计算引擎
- */
 export class CoreEngine {
-  static VERSION = 'current';
+  static VERSION = 'lp-v1';
 
   constructor(gameData, schemeData, settings = {}, sprayCosts = null) {
     this.gameData = gameData;
     this.schemeData = schemeData;
     this.settings = settings;
     this.sprayCosts = sprayCosts;
-    this.recipeMap = new Map();
     this.graph = null;
     this.edges = [];
-    this.sccs = [];
     this.proliferatorEdgeKeys = new Set();
   }
 
@@ -32,332 +27,187 @@ export class CoreEngine {
    * @returns {Object} 配方数据
    */
   getRecipeById(recipeId) {
-    return this.recipeMap.get(String(recipeId));
+    return this.gameData?.recipe_data?.[Number(recipeId)];
   }
 
   /**
-   * 初始化引擎
-   * @param {Array} needs - 需求列表
-   * @param {Object} recipes - 配方数据
-   * @param {Set} filterList - 过滤列表（上次迭代中的负需求物品）
+   * 主计算(LP 方案)
+   * @param {Array} needs - 需求列表 [{id, name, count}]
+   * @param {Array} recipes - recipe_data
+   * @param {Set} initialFilterList - 向后兼容位(忽略)
+   * @param {boolean} measurementMode - 向后兼容位(忽略)
+   * @param {Function|null} onLog - 日志回调
+   * @returns {Object} 聚合结果(字段清单见规格)
    */
-  initialize(needs, recipes, filterList = new Set()) {
-    // 构建配方映射（确保键是字符串类型）
-    for (const [id, recipe] of Object.entries(recipes)) {
-      this.recipeMap.set(String(id), recipe);
-    }
+  // initialFilterList/measurementMode/onLog 为向后兼容位:旧调用方仍按位置传参,
+  // 参数必须保留但引擎不再读取(no-op)。
+  async calculate(needs, recipes, initialFilterList = new Set(), measurementMode = false, onLog = null) { // eslint-disable-line no-unused-vars
+    const excludeMinerPower = !!this.settings.exclude_miner_power;
 
-    // 1. 构建物品图（BFS从需求出发，使用用户选择的主配方）
-    const result = buildItemGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts, filterList);
-    this.graph = result.graph;
-    this.edges = result.edges;
-    this.proliferatorEdgeKeys = result.proliferatorEdgeKeys || new Set();
+    // 1. 二部图
+    this.graph = buildRecipeGraph(needs, recipes, this.gameData, this.schemeData, this.settings, this.sprayCosts, {excludeMinerPower});
+    this.edges = this.graph.edges;
+    this.proliferatorEdgeKeys = this.graph.proliferatorEdgeKeys;
 
-    // 2. SCC算法识别所有SCC（包括单节点和循环组）
-    // Tarjan输出顺序：拓扑逆序（第一个SCC是最顶层需求，最后一个SCC是最底层资源）
-    this.sccs = tarjanSCC(this.graph, this.edges);
-  }
+    // 2. 构模 + 求解
+    const {model, varToRecipe} = buildLPModel(this.graph);
+    const lpResult = await solveLP(model);
 
-  /**
-   * 检测循环组中的共生产品组（同一配方的多个产物在同一 SCC 内，如 原油精炼 产出 氢+精炼油），
-   * 并通过"一步递归测量"选择胜者代表：
-   *   对每个候选代表，把联产品视为外部来源（加入过滤列表）整线重算一次，
-   *   读取联产品多余量（负余额），按 coOutput 折算成配方运行次数，取最小者。
-   * 原理：正确的代表是生产递归"多余量被消耗完才生产、没消耗完就抵消"的稳定不动点——
-   * 联产品多余量最小（可被内生需求自我消耗），而非失控放大造成的持续浪费。
-   * @param {Array} needs - 需求列表
-   * @param {Object} recipes - 配方数据
-   * @returns {Map|null} recipeId -> 胜者代表；无共生产品组时返回 null
-   */
-  detectAndSelectCoproductRepresentatives(needs, recipes, onLog = null) {
-    if (onLog) onLog(`[共生产品][DBG] detect entered; onLog=${typeof onLog}; sccs=${this.sccs ? this.sccs.length : 'null'}`);
-    const emitCoproductLog = (msg) => { if (onLog) onLog(msg); };
-    // 1. 按配方分组检测共生产品组（多节点 SCC 内、同配方产物 ≥2）
-    const recipeGroups = new Map(); // recipeId(string) -> [itemIds]
-    for (const scc of this.sccs || []) {
-      if (scc.size <= 1) continue;
-      for (const itemId of scc) {
-        const node = this.graph.get(itemId);
-        const recipeId = node?.recipeId;
-        if (recipeId == null) continue;
-        const key = String(recipeId);
-        if (!recipeGroups.has(key)) recipeGroups.set(key, []);
-        recipeGroups.get(key).push(itemId);
-      }
-    }
-    const groups = [...recipeGroups.entries()].filter(([, items]) => items.length > 1);
-    if (onLog) onLog(`[共生产品][DBG] groupsLen=${groups.length}`);
-    if (groups.length === 0) {
-      emitCoproductLog('[共生产品] 未检测到共生产品组（无同配方多产物循环组），沿用默认代表');
-      return null;
-    }
-    emitCoproductLog(`[共生产品] 检测到 ${groups.length} 个共生产品组: ` + groups.map(([k, items]) => `${k}[${items.join(',')}]`).join('; '));
-
-    // 2. 对每个组做测量选择（先支持多组分别处理；组内组合爆炸留作后续）
-    const coproductRepMap = new Map();
-    for (const [recipeKey, items] of groups) {
-      const recipe = this.recipeMap.get(recipeKey);
-      const outputs = recipe?.产物 || {};
-      let bestRep = items[0];
-      let bestRuns = Infinity;
-
-      for (const candidate of items) {
-        // 联产品 = 组内其他物品；测量时全部视为外部来源
-        const coProducts = items.filter(id => id !== candidate);
-        const measureResult = this.calculate(needs, recipes, new Set(coProducts), true);
-        let coRuns = 0;
-        let valid = true; // 候选是否适合做代表：其联产品必须过剩，否则该候选本身才是紧缺品
-        for (const co of coProducts) {
-          const balance = measureResult.resourceUsage?.[co] ?? 0;
-          if (onLog) onLog(`[共生产品][DBG] 测量 candidate=${candidate} co=${co} balance=${balance} hasRU=${!!measureResult.resourceUsage}`);
-          if (balance < 0) {
-            const coOutput = outputs[co] || 1;
-            coRuns += -balance / coOutput;
-          } else {
-            // 联产品仍紧缺（balance>=0）：说明该候选做代表会导致联产品短缺，候选本身应是被需要的紧缺品，不应当选代表
-            valid = false;
-          }
-        }
-        emitCoproductLog(`[共生产品] 配方 ${recipeKey} 候选代表=${candidate}: 联产品多余折算运行次数=${coRuns.toFixed(6)} (有效=${valid})`);
-        if (valid && coRuns < bestRuns) {
-          bestRuns = coRuns;
-          bestRep = candidate;
-        }
-      }
-
-      coproductRepMap.set(recipeKey, bestRep);
-      emitCoproductLog(`[共生产品] 配方 ${recipeKey} 采用代表=${bestRep}（最小多余 ${bestRuns.toFixed(6)} 次运行）`);
-    }
-    return coproductRepMap;
-  }
-
-  /**
-   * 主计算函数（系数表 + 矩阵求逆方案）
-   * @param {Array} needs - 需求列表
-   * @param {Object} recipes - 配方数据
-   * @param {Set} initialFilterList - 初始过滤列表（把物品视为原矿；共生产品测量时传入联产品）
-   * @param {boolean} measurementMode - 测量模式：true 时跳过共生产品组检测（防递归嵌套）
-   * @returns {Object} 计算结果 {resourceUsage, power, buildings, footprint}
-   */
-  calculate(needs, recipes, initialFilterList = new Set(), measurementMode = false, onLog = null) {
-    if (DEBUG) console.log('[Engine] ====== 计算开始 ======');
-    if (DEBUG) console.log('[Engine] 需求:', needs.map(n => n.name + '×' + n.count).join(', '));
-
-    // 迭代过滤逻辑（初始过滤列表：测量时把联产品视为原矿）
-    const filterList = new Set(initialFilterList);
-    let iteration = 0;
-    const maxIterations = 10; // 最大迭代次数
-    let costs = new Map();
-    const SOLUTION_ID = '__solution__';
-
-    // 共生产品组检测与胜者代表选择（主计算专用，测量计算跳过以避免递归嵌套）
-    let coproductRepMap = null;
-    if (!measurementMode) {
-      this.initialize(needs, recipes, filterList);
-      coproductRepMap = this.detectAndSelectCoproductRepresentatives(needs, recipes, onLog);
-    }
-
-    while (iteration < maxIterations) {
-      iteration++;
-      if (DEBUG) console.log(`[Engine] ====== 迭代 ${iteration} ======`);
-      if (filterList.size > 0) {
-        if (DEBUG) console.log(`[Engine] 过滤列表:`, [...filterList].join(', '));
-      }
-
-      // 1. 初始化（设备数和耗电已在 dag.js 中计算，存储在 node.buildingPower）
-      this.initialize(needs, recipes, filterList);
-
-      if (DEBUG) console.log('[Engine] 图节点数:', this.graph.size);
-
-      // 2. 创建虚拟"解"物品和虚拟配方
-      const solutionNode = {
-        id: SOLUTION_ID,
-        name: '解',
-        recipeId: null,
-        directCost: {},
-        dependents: [],
-        inputs: [],
-        outputs: []
-      };
-
-      // 虚拟配方：需求表中的物品作为输入，产出1个"解"
-      // 注意：这里用物品数量（没有$前缀），不是执行次数
+    if (lpResult.status === 'Infeasible') {
+      // 诊断:找没有任何产出配方的需求物品
+      const orphanNeeds = [];
       for (const need of needs) {
-        solutionNode.directCost[need.id] = need.count;
-
-        // 补上依赖边：需求物品的dependents包含解
-        const needNode = this.graph.get(need.id);
-        if (needNode && !needNode.dependents.includes(SOLUTION_ID)) {
-          needNode.dependents.push(SOLUTION_ID);
+        const hasSource = [...this.graph.recipes.values()].some(r => r.outputs[need.id]);
+        if (!hasSource) {
+          orphanNeeds.push(this.graph.noRecipeItems.has(need.id)
+            ? `${need.id}(视为原矿,无外部来源)`
+            : `${need.id}(无生产链可达)`);
         }
       }
-
-      // 将"解"添加到图中
-      this.graph.set(SOLUTION_ID, solutionNode);
-
-      // 3. 计算所有物品的直接成本（系数表）
-      costs = new Map();
-      for (const [itemId, node] of this.graph) {
-        // 直接使用节点已有的 directCost（BFS阶段已计算）
-        costs.set(itemId, node.directCost || { [`$${itemId}`]: 1 });
-      }
-      // 添加 solution 的成本
-      costs.set(SOLUTION_ID, solutionNode.directCost);
-
-
-      // 4. 按 SCC 逆序展开成本到 solution（从顶层开始）
-      const { negativeDemandItems } = expandInSCCOrder(SOLUTION_ID, costs, this.graph, this.sccs, this.recipeMap, coproductRepMap, onLog);
-
-      // 5. 检查是否需要迭代
-      // 检查是否有新的负需求物品（不在过滤列表中的）
-      const newNegativeItems = [...negativeDemandItems].filter(id => !filterList.has(id));
-      if (newNegativeItems.length === 0) {
-        if (DEBUG) console.log(`[Engine] 迭代 ${iteration} 完成，没有新的负需求物品，停止迭代`);
-        break;
-      }
-
-      // 更新过滤列表
-      for (const itemId of newNegativeItems) {
-        filterList.add(itemId);
-      }
-      if (DEBUG) console.log(`[Engine] 迭代 ${iteration} 完成，发现新的负需求物品:`, newNegativeItems.join(', '));
-      if (DEBUG) console.log(`[Engine] 更新过滤列表:`, [...filterList].join(', '));
+      throw new Error(`无可行解:以下物品无法获得:${orphanNeeds.join(', ') || '(未知)'}`);
+    }
+    if (lpResult.status !== 'Optimal') {
+      throw new Error(`LP 求解失败:${lpResult.status}`);
     }
 
-    // 6. 获取"解"的成本并缩放
-    let solutionCost = costs.get(SOLUTION_ID);
-
-    if (DEBUG) console.log('[Engine] 展开后 solutionCost:', JSON.stringify(solutionCost));
-
+    // 3. 结果映射
     const recipeExecutions = {};
     const surplusByproducts = {};
     const resourceUsage = {};
-    let energyCost = 0; // 生产设备耗电
-    let minerEnergyCost = 0; // 采集设备耗电
+    const execByRecipe = new Map(); // recipeKey -> x
 
-    if (solutionCost) {
-      // "解"的成本是生产1个"解"需要的资源
-      // 由于"解"的虚拟配方是 需求物品*数量 -> 解*1
-      // 所以解的成本已经是按需求量缩放后的结果
-      for (const [key, coeff] of Object.entries(solutionCost)) {
-        if (key.startsWith('$')) {
-          const execItem = key.slice(1);
-          // 特殊处理耗电键
-          if (execItem === '__factory_power__') {
-            energyCost = coeff;
-          } else if (execItem === '__miner_power__') {
-            minerEnergyCost = coeff;
-          } else {
-            resourceUsage[execItem] = (resourceUsage[execItem] || 0) + coeff;
-            recipeExecutions[execItem] = (recipeExecutions[execItem] || 0) + coeff;
-          }
-        } else if (coeff < 0) {
-          resourceUsage[key] = (resourceUsage[key] || 0) + coeff;
-          surplusByproducts[key] = (surplusByproducts[key] || 0) + coeff;
-        } else {
-          resourceUsage[key] = (resourceUsage[key] || 0) + coeff;
-        }
+    for (const [varName, xVal] of Object.entries(lpResult.x)) {
+      const recipeKey = varToRecipe.get(varName);
+      if (recipeKey === undefined) continue; // slack 变量等非配方变量跳过
+      const r = this.graph.recipes.get(recipeKey);
+      if (!r) continue;
+      execByRecipe.set(recipeKey, xVal);
+      const eps = 1e-9;
+      if (xVal <= eps) continue;
+      const key = r.mainItem;
+      recipeExecutions[key] = (recipeExecutions[key] || 0) + xVal;
+    }
+
+    // 松弛量:用解代入守恒行重算(lhs − rhs),避免依赖求解器对偶值
+    // surplus > 0 → surplusByproducts(正值=多余量;含仅以联产物身份出现的物品)
+    // surplus < 0 且物品无配方 → resourceUsage 正值(外部获取缺口)
+    const EPS = 1e-6;
+    for (const item of this.graph.items) {
+      let lhs = 0;
+      for (const [recipeKey, xVal] of execByRecipe) {
+        const r = this.graph.recipes.get(recipeKey);
+        lhs += (r.outputs[item] || 0) * xVal - (r.inputs[item] || 0) * xVal;
+      }
+      const rhs = this.graph.demandByItem[item] || 0;
+      const surplus = lhs - rhs;
+
+      if (surplus > EPS) {
+        surplusByproducts[item] = surplus;
+      } else if (surplus < -EPS && !this.graph.recipeOfItem.has(item)) {
+        resourceUsage[item] = -surplus;
       }
     }
 
-    if (DEBUG) console.log('[Engine] energyCost:', energyCost, 'minerEnergyCost:', minerEnergyCost);
-    if (DEBUG) console.log('[Engine] surplusByproducts:', JSON.stringify(surplusByproducts));
+    // 真·无配方物品的缺口:slack 变量的取值即"外部获取量",计入 resourceUsage 正值
+    for (const [varName, xVal] of Object.entries(lpResult.x)) {
+      const slackItem = parseSlackItem(varName);
+      if (slackItem === null) continue;
+      if (xVal > EPS) resourceUsage[slackItem] = xVal;
+    }
 
-    const totalEnergyCost = energyCost + minerEnergyCost;
+    // 原矿采集配方(原料表为空+单产物):采集量 = 执行次数 × 单次产量,映射进 resourceUsage
+    // (与旧引擎 $原矿 执行次数同源)。这类物品走正常配方路径,绝不加 slack,
+    // 守恒行恰好平衡不会进入上面的 surplus 分支,需在此单独登记。
+    for (const [recipeKey, xVal] of execByRecipe) {
+      if (xVal <= EPS) continue;
+      const r = this.graph.recipes.get(recipeKey);
+      const raw = recipes[Number(r.recipeId)];
+      if (!raw) continue;
+      const isEmptyInput = Object.keys(raw.原料 || {}).length === 0;
+      const isSingleOutput = Object.keys(raw.产物 || {}).length === 1;
+      if (isEmptyInput && isSingleOutput) {
+        const gathered = (r.outputs[r.mainItem] || 0) * xVal;
+        if (gathered > 0) resourceUsage[r.mainItem] = (resourceUsage[r.mainItem] || 0) + gathered;
+      }
+    }
 
-    // 7. 计算设备数量
+    // 电力聚合(规格 §7.2):总耗电 = 所有配方的电力输入 × 执行次数 之和。
+    // energyCost/minerEnergyCost 双轨合并:两者同值 = totalEnergyCost;
+    // minerEnergyCost 字段名保留仅为兼容 result.jsx 现有解构,UI 只显示总数。
+    let totalEnergyCost = 0;
+    for (const [recipeKey, xVal] of execByRecipe) {
+      const r = this.graph.recipes.get(recipeKey);
+      totalEnergyCost += (r.inputs['电力'] || 0) * xVal;
+    }
+    const energyCost = totalEnergyCost;
+    const minerEnergyCost = 0; // 双轨取消;字段保留兼容,UI 只读 totalEnergyCost
+
+    // 4. 设备数量(沿用 buildingPower 公式)
     const buildingDetails = {};
     const buildingList = {};
-
-    for (const [itemId, execCount] of Object.entries(recipeExecutions)) {
-      if (execCount <= 0) continue;
-
-      // 从图中获取节点
-      const node = this.graph.get(itemId);
-      if (!node || !node.buildingPower) {
-        continue;
-      }
-
-      const { factoryName, singleExecBuildNumber, basePower = 0 } = node.buildingPower;
-
-      // 根据执行次数计算实际设备数
-      const buildNumber = execCount * singleExecBuildNumber;
-
-      // 保存详情
-      buildingDetails[itemId] = {
-        factoryName,
+    for (const [recipeKey, xVal] of execByRecipe) {
+      if (xVal <= 1e-9) continue;
+      const r = this.graph.recipes.get(recipeKey);
+      const bp = r.buildingPower;
+      if (!bp || !bp.factoryName) continue;
+      const buildNumber = xVal * bp.singleExecBuildNumber;
+      const itemKey = r.mainItem;
+      buildingDetails[itemKey] = {
+        factoryName: bp.factoryName,
         设备数量: buildNumber,
-        执行次数: execCount,
-        单次执行设备数: singleExecBuildNumber,
-        额定功率: basePower,
+        执行次数: xVal,
+        单次执行设备数: bp.singleExecBuildNumber,
+        额定功率: bp.basePower,
       };
-
-      // 汇总建筑数量
       const ceilBuildNumber = Math.ceil(buildNumber);
-      if (ceilBuildNumber > 0) {
-        buildingList[factoryName] = (buildingList[factoryName] || 0) + ceilBuildNumber;
-      }
+      if (ceilBuildNumber > 0) buildingList[bp.factoryName] = (buildingList[bp.factoryName] || 0) + ceilBuildNumber;
     }
 
-    // 发电设备数量按额定发电效率计算：基础功率乘以燃料配方的增产/加速倍率。
-    // 这与输出表的电力行使用同一公式，避免把燃料配方执行次数误当成发电设备效率。
-    // 直接依据"选定燃料 + 总耗电"计算，独立于"电力"节点是否存活（避免其在循环组迭代中被当作原矿过滤时丢失）。
+    // 发电设备数(getPowerDeviceCount 衔接,数值与置顶电力行一致)
     const selectedFuel = this.schemeData?.selected_fuel;
     if (selectedFuel && selectedFuel !== '无' && totalEnergyCost > 0) {
-      const fuelRecipe = this.gameData.recipe_data.find(r => r.isFuelRecipe && r.fuelName === selectedFuel);
+      const fuelRecipe = recipes.find(r => r.isFuelRecipe && r.fuelName === selectedFuel);
       if (fuelRecipe) {
         const factoryKey = String(fuelRecipe.设施);
         const genBuilding = this.gameData.factory_data?.[factoryKey]?.[0];
-        const devicePower = genBuilding?.["发电功率"] ?? genBuilding?.["耗能"] ?? 0;
-        const deviceName = genBuilding?.["名称"];
-        const recipeId = (fuelRecipe._id !== undefined) ? fuelRecipe._id : this.gameData.recipe_data.indexOf(fuelRecipe);
+        const devicePower = genBuilding?.['发电功率'] ?? genBuilding?.['耗能'] ?? 0;
+        const deviceName = genBuilding?.['名称'];
+        const recipeId = fuelRecipe._id !== undefined ? fuelRecipe._id : recipes.indexOf(fuelRecipe);
         const schemeRecipe = this.schemeData?.scheme_for_recipe?.[recipeId];
         const proMode = Number(schemeRecipe?.['增产模式']) || 0;
         const proLevel = Number(schemeRecipe?.['增产剂等级'] || schemeRecipe?.['增产点数']) || 0;
         const correctedCount = getPowerDeviceCount({
-          totalEnergy: totalEnergyCost,
-          devicePower,
+          totalEnergy: totalEnergyCost, devicePower,
           proliferatorEffects: this.gameData.proliferator_effect,
-          proliferatorLevel: proLevel,
-          proliferatorMode: proMode,
+          proliferatorLevel: proLevel, proliferatorMode: proMode,
         });
-        // 确保 buildingDetails 记录电力节点（供占地计算使用），覆盖 step7 可能写入的错值
         if (!buildingDetails['电力']) {
-          buildingDetails['电力'] = { factoryName: deviceName, 设备数量: 0, 执行次数: 0, 单次执行设备数: 0, 额定功率: devicePower };
+          buildingDetails['电力'] = {factoryName: deviceName, 设备数量: 0, 执行次数: 0, 单次执行设备数: 0, 额定功率: devicePower};
         }
         buildingDetails['电力'].factoryName = deviceName;
         buildingDetails['电力'].额定功率 = devicePower;
         buildingDetails['电力'].设备数量 = correctedCount;
-        // 发电建筑只用于发电，buildingList 中同名项即发电设备数，直接覆盖（step7 写入的错值一并清除）
         const ceilCount = Math.ceil(correctedCount);
-        if (ceilCount > 0) {
-          buildingList[deviceName] = ceilCount;
-        } else {
-          delete buildingList[deviceName];
-        }
+        if (ceilCount > 0) buildingList[deviceName] = ceilCount;
+        else delete buildingList[deviceName];
       }
     }
 
-    // 8. 计算占地
+    // 5. 占地(公式移植自旧版 index.js,l/n/factoryName 判定不变,
+    //    数据源从 node.buildingPower 改为 r.buildingPower + recipe 原始表)
     const footprintDetails = {};
     let totalFootprint = 0;
-    const recipeData = this.gameData?.recipe_data || [];
     const stackM = this.settings?.stack_research_lab || 15;
-
-    for (const [itemId, detail] of Object.entries(buildingDetails)) {
+    for (const [itemKey, detail] of Object.entries(buildingDetails)) {
       if (detail.设备数量 <= 0) continue;
-      const node = this.graph.get(itemId);
-      if (!node || node.recipeId === undefined || node.recipeId === null) continue;
-      const recipe = recipeData[node.recipeId];
+      const r = [...this.graph.recipes.values()].find(rr => rr.mainItem === itemKey);
+      if (!r) continue;
+      const recipe = recipes[Number(r.recipeId)];
       if (!recipe) continue;
 
       const n = Math.ceil(detail.设备数量);
       const factoryName = detail.factoryName;
-
-      // 计算 l: 原料种类数 + 产物种类数
-      const rawInputs = recipe.原料 || {};
-      const rawOutputs = recipe.产物 || {};
-      const l = Object.keys(rawInputs).length + Object.keys(rawOutputs).length;
+      const l = Object.keys(recipe.原料 || {}).length + Object.keys(recipe.产物 || {}).length;
 
       let area = 0;
       if (factoryName.includes('制造台')) {
@@ -374,7 +224,7 @@ export class CoreEngine {
         area = 5 * n * (9 + l / 2);
       } else if (factoryName.includes('研究站')) {
         const researchStations = Math.ceil(n / stackM);
-        if (node.recipeId === 73) { // 宇宙矩阵配方索引
+        if (Number(r.recipeId) === 73) { // 宇宙矩阵配方索引
           area = 12 * (5.5 * researchStations);
         } else {
           area = 5 * researchStations * (5 + l / 2);
@@ -387,42 +237,35 @@ export class CoreEngine {
         area = 28;
       }
 
-      footprintDetails[itemId] = { area, n, l, factoryName };
+      footprintDetails[itemKey] = {area, n, l, factoryName};
       totalFootprint += area;
     }
 
-    // 提取自消耗系数和副产物来源
+    // 6. selfConsumption 与 byproductSources 重导出
     const selfConsumption = {};
-    const byproductSources = {};  // {物品: {来源物品: 每单位净产出的副产物量}}
-    for (const [itemId, node] of this.graph) {
-      if (node.selfConsumption && node.selfConsumption > 0) {
-        selfConsumption[itemId] = node.selfConsumption;
+    const byproductSources = {};
+    for (const [, r] of this.graph.recipes) {
+      const sc = (r.inputs[r.mainItem] || 0);
+      const gross = r.outputs[r.mainItem] || 0;
+      if (gross > 0 && sc > 0) {
+        // 毛产量 = 净产量 × (1 + selfConsumption);净产量 = max(outputs-mainInputs, ε)
+        const net = Math.max(gross - sc, 1e-12);
+        selfConsumption[r.mainItem] = sc / net;
       }
-      // 从 directCost 提取副产物（负系数项）
-      if (node.directCost) {
-        for (const [key, coeff] of Object.entries(node.directCost)) {
-          if (key.startsWith('$') || coeff >= 0) continue;
-          if (!byproductSources[key]) byproductSources[key] = {};
-          byproductSources[key][itemId] = (byproductSources[key][itemId] || 0) + Math.abs(coeff);
-        }
+      for (const [coItem, qty] of Object.entries(r.outputs)) {
+        if (coItem === r.mainItem) continue;
+        byproductSources[coItem] = byproductSources[coItem] || {};
+        byproductSources[coItem][r.mainItem] = qty / Math.max(gross - (r.inputs[r.mainItem] || 0), 1e-12);
       }
     }
 
-    const aggregated = { resourceUsage };
-    aggregated.recipeExecutions = recipeExecutions;
-    aggregated.surplusByproducts = surplusByproducts;
-    aggregated.buildingDetails = buildingDetails;
-    aggregated.buildingList = buildingList;
-    aggregated.selfConsumption = selfConsumption;
-    aggregated.byproductSources = byproductSources;
-    aggregated.energyCost = energyCost;
-    aggregated.minerEnergyCost = minerEnergyCost;
-    aggregated.totalEnergyCost = totalEnergyCost;
-    aggregated.footprintDetails = footprintDetails;
-    aggregated.totalFootprint = totalFootprint;
-    if (DEBUG) console.log('[Engine] ====== 计算结束 ======');
-
-    return aggregated;
+    return {
+      resourceUsage, surplusByproducts, recipeExecutions,
+      buildingDetails, buildingList, selfConsumption, byproductSources,
+      energyCost, minerEnergyCost, totalEnergyCost,
+      footprintDetails, totalFootprint,
+      graph: this.graph, edges: this.edges, proliferatorEdgeKeys: this.proliferatorEdgeKeys,
+    };
   }
 }
 

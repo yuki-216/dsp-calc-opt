@@ -50,7 +50,9 @@ test('构模:每个入选配方一个变量,目标系数全为1', () => {
         makeGameData().recipe_data, makeGameData(), makeScheme(), {is_time_unit_minute: true}, null
     );
     const {model, varToRecipe} = buildLPModel(graph);
-    assert.deepEqual(model.variables.map(v => v.name).sort(), ['0', '1'].sort());
+    // 配方变量 + noRecipeItems 的 slack 变量
+    const recipeVars = model.variables.filter(v => varToRecipe.has(v.name)).map(v => v.name);
+    assert.deepEqual(recipeVars.sort(), ['0', '1'].sort());
     for (const v of model.variables) assert.equal(model.objective.coeffs[v.name], 1);
     assert.equal(varToRecipe.get('0'), '0');
 });
@@ -69,6 +71,24 @@ test("守恒约束:齿轮/铁块/铁矿三行系数与RHS正确", () => {
     assert.deepEqual(ironCon.coeffs, {'0': 1, '1': -1}); // 铁块配方产,齿轮配方耗
     assert.equal(ironCon.rhs, 0);
     const oreCon = model.constraints.find(c => c.name === 'con_铁矿');
-    assert.deepEqual(oreCon.coeffs, {'0': -1});        // 只有消耗
+    assert.equal(oreCon.coeffs['0'], -1);              // 只有消耗
     assert.equal(oreCon.rhs, 0);
+});
+
+test("noRecipeItems 加松弛列:行内 +1 系数、目标系数 1、不登记 varToRecipe", () => {
+    // 铁矿无配方 → noRecipeItems,构模后其守恒行含 +1 slack 铁矿
+    const graph = buildRecipeGraph(
+        [{id: '齿轮', name: '齿轮', count: 10}],
+        makeGameData().recipe_data, makeGameData(), makeScheme(), {is_time_unit_minute: true}, null
+    );
+    assert.ok(graph.noRecipeItems.has('铁矿'));
+    const {model, varToRecipe} = buildLPModel(graph);
+    const oreCon = model.constraints.find(c => c.name === 'con_铁矿');
+    assert.equal(oreCon.coeffs['slack_铁矿'], 1);
+    assert.equal(model.objective.coeffs['slack_铁矿'], 1);
+    // slack 不映射到配方
+    assert.equal(varToRecipe.get('slack_铁矿'), undefined);
+    // 有采集配方的原矿不在 noRecipeItems 中,不加 slack(本用例无采集配方,铁矿必然入选)
+    const oreVarNames = model.variables.map(v => v.name);
+    assert.ok(!oreVarNames.includes('slack_电力') || graph.noRecipeItems.has('电力'));
 });

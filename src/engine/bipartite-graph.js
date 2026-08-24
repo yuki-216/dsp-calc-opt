@@ -301,10 +301,16 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
         addRecipe(recipeIndex, itemId);
     }
 
-    // 收尾:noRecipeItems = BFS 显式加入项 ∪ items 中无主配方归属的项
-    // (后者覆盖:未选定燃料的'电力'、仅以联产物身份出现的物品等)
+    // 收尾:noRecipeItems = items 中无任何已入图配方产出的项
+    // (覆盖:未选定燃料的'电力'、真·无来源物品)。
+    // 注意联产物(如精炼油之于原油精炼配方)不算无来源——其缺口由该配方的执行补足,
+    // 若给联产物加 slack,min Σx+Σslack 会用 slack 直接填缺口而放弃多跑配方。
+    const producerItems = new Set();
+    for (const r of recipesOut.values()) {
+        for (const k of Object.keys(r.outputs)) producerItems.add(k);
+    }
     for (const it of items) {
-        if (!recipeOfItem.has(it)) noRecipeItems.add(it);
+        if (!producerItems.has(it)) noRecipeItems.add(it);
     }
 
     return {
