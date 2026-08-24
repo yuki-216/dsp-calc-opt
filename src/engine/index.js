@@ -8,6 +8,10 @@ import {buildLPModel, parseSlackItem} from './lp-model.js';
 import {solveLP} from './lp-solver.js';
 import {getPowerDeviceCount} from '../power-device-count.js';
 
+// 变量级零过滤:LP 解中理论为 0 的变量可能带 ~1e-9 数值噪声,统一过滤。
+// (守恒平衡残差容差见守恒重算段的相对 EPS,二者语义不同)
+const ZERO_EPS = 1e-9;
+
 export class CoreEngine {
   static VERSION = 'lp-v1';
 
@@ -82,8 +86,7 @@ export class CoreEngine {
       const r = this.graph.recipes.get(recipeKey);
       if (!r) continue;
       execByRecipe.set(recipeKey, xVal);
-      const eps = 1e-9;
-      if (xVal <= eps) continue;
+      if (xVal <= ZERO_EPS) continue;
       const key = r.mainItem;
       recipeExecutions[key] = (recipeExecutions[key] || 0) + xVal;
     }
@@ -91,7 +94,6 @@ export class CoreEngine {
     // 松弛量:用解代入守恒行重算(lhs − rhs),避免依赖求解器对偶值
     // surplus > 0 → surplusByproducts(正值=多余量;含仅以联产物身份出现的物品)
     // surplus < 0 且物品无配方 → resourceUsage 正值(外部获取缺口)
-    const EPS = 1e-6;
     for (const item of this.graph.items) {
       let lhs = 0;
       for (const [recipeKey, xVal] of execByRecipe) {
@@ -100,6 +102,9 @@ export class CoreEngine {
       }
       const rhs = this.graph.demandByItem[item] || 0;
       const surplus = lhs - rhs;
+
+      // 相对容差:rhs(该物品需求)越大容差越宽、越小越严格——挡 ~1e-4~1e-6 量级的 LP 数值噪声
+      const EPS = 1e-6 * Math.max(1, Math.abs(rhs));
 
       if (surplus > EPS) {
         surplusByproducts[item] = surplus;
@@ -112,14 +117,14 @@ export class CoreEngine {
     for (const [varName, xVal] of Object.entries(lpResult.x)) {
       const slackItem = parseSlackItem(varName);
       if (slackItem === null) continue;
-      if (xVal > EPS) resourceUsage[slackItem] = xVal;
+      if (xVal > ZERO_EPS) resourceUsage[slackItem] = xVal;
     }
 
     // 原矿采集配方(原料表为空+单产物):采集量 = 执行次数 × 单次产量,映射进 resourceUsage
     // (与旧引擎 $原矿 执行次数同源)。这类物品走正常配方路径,绝不加 slack,
     // 守恒行恰好平衡不会进入上面的 surplus 分支,需在此单独登记。
     for (const [recipeKey, xVal] of execByRecipe) {
-      if (xVal <= EPS) continue;
+      if (xVal <= ZERO_EPS) continue;
       const r = this.graph.recipes.get(recipeKey);
       const raw = recipes[Number(r.recipeId)];
       if (!raw) continue;
@@ -198,9 +203,12 @@ export class CoreEngine {
     const footprintDetails = {};
     let totalFootprint = 0;
     const stackM = this.settings?.stack_research_lab || 15;
+    // 主产物→配方索引,避免循环内 find 造成 O(配方数²)
+    const recipeByMainItem = new Map();
+    for (const r of this.graph.recipes.values()) recipeByMainItem.set(r.mainItem, r);
     for (const [itemKey, detail] of Object.entries(buildingDetails)) {
       if (detail.设备数量 <= 0) continue;
-      const r = [...this.graph.recipes.values()].find(rr => rr.mainItem === itemKey);
+      const r = recipeByMainItem.get(itemKey);
       if (!r) continue;
       const recipe = recipes[Number(r.recipeId)];
       if (!recipe) continue;
@@ -255,7 +263,8 @@ export class CoreEngine {
       for (const [coItem, qty] of Object.entries(r.outputs)) {
         if (coItem === r.mainItem) continue;
         byproductSources[coItem] = byproductSources[coItem] || {};
-        byproductSources[coItem][r.mainItem] = qty / Math.max(gross - (r.inputs[r.mainItem] || 0), 1e-12);
+        // 累加而非覆盖:两配方同 mainItem 时保留双份贡献(防御性)
+        byproductSources[coItem][r.mainItem] = (byproductSources[coItem][r.mainItem] || 0) + qty / Math.max(gross - (r.inputs[r.mainItem] || 0), 1e-12);
       }
     }
 

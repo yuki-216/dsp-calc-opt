@@ -4,6 +4,7 @@
  */
 
 const SLACK_PREFIX = 'slack_';
+// 不变量:配方键恒为数字串,故 'slack_' 前缀与配方键不可能碰撞;slack 变量仅服务无配方物品。
 
 /**
  * 生成 noRecipeItems 物品的松弛变量名
@@ -59,13 +60,11 @@ export function buildLPModel(graph) {
     // min 目标下 slack 只在必要时取正值,即"外部获取缺口"。
     // 注意:有采集配方的原矿(铁矿/原油/氢轨道采集器等)不在 noRecipeItems 中,
     // 走正常配方路径,绝不加 slack(否则设备表丢失采矿机)。
-    const slackItems = [];
     for (const item of graph.noRecipeItems) {
         variables.push({name: slackVar(item)});
         objectiveCoeffs[slackVar(item)] = 1;
         const row = ensureRow(item);
         row.coeffs.set(slackVar(item), (row.coeffs.get(slackVar(item)) || 0) + 1);
-        slackItems.push(item);
     }
 
     const constraints = [];

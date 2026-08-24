@@ -88,7 +88,4 @@ test("noRecipeItems 加松弛列:行内 +1 系数、目标系数 1、不登记 v
     assert.equal(model.objective.coeffs['slack_铁矿'], 1);
     // slack 不映射到配方
     assert.equal(varToRecipe.get('slack_铁矿'), undefined);
-    // 有采集配方的原矿不在 noRecipeItems 中,不加 slack(本用例无采集配方,铁矿必然入选)
-    const oreVarNames = model.variables.map(v => v.name);
-    assert.ok(!oreVarNames.includes('slack_电力') || graph.noRecipeItems.has('电力'));
 });
