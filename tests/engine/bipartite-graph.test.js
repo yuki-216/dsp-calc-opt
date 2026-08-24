@@ -99,6 +99,25 @@ test('不计挖矿电:isMiner 配方电力输入置0,普通配方不受影响', 
     assert.ok(ironR.inputs['电力'] > 0);
 });
 
+test('isMiner 判定:抽水站(非"抽水机")属于采矿类,不计挖矿电时其电力输入置0', () => {
+    const gd = makeGameData();
+    // 真实建筑名为"抽水站"(I-1 回归:旧 isMiner 列表误用"抽水机"致不计挖矿电对抽水站失效)
+    gd.factory_data['10'] = [{'名称': '抽水站', '倍率': 1, '耗能': 0.3}];
+    gd.recipe_data.push({_id: 4, 原料: {}, 产物: {水: 1}, 设施: 10, 时间: 1, Type: 0, 增产: 0, 可采集: true});
+    const scheme = makeScheme();
+    // 抽水站配方 push 到 makeGameData 的 3 个配方之后 → 数组下标 3。
+    // itemData['水'] = [null, 3](占位+配方数组下标3);显式选 choice=1 → 数组下标3配方;
+    // recipes map 的键是配方数组下标字符串。
+    scheme.item_recipe_choices = {水: 1};
+    const graph = buildRecipeGraph(
+        [{id: '水', name: '水', count: 1}],
+        gd.recipe_data, gd, scheme, SETTINGS, null, {excludeMinerPower: true}
+    );
+    const waterR = graph.recipes.get('3');
+    assert.equal(waterR.buildingPower.isMiner, true);
+    assert.ok(!waterR.inputs['电力']);
+});
+
 test('增产模式:产出乘增产效果,增产剂按喷涂成本进原料', () => {
     const gd = makeGameData();
     gd.proliferator_data = [{'增产剂': '增产剂 Mk.I'}, {'增产剂': '增产剂 Mk.II'}, {'增产剂': '增产剂 Mk.III'}, {'增产剂': '增产剂 Mk.III'}];

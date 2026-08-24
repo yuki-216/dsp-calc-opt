@@ -223,7 +223,7 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                             unitPowerCost,
                             // 额定功率:发电建筑用"发电功率"字段(自身不耗电),其余用"耗能"
                             basePower: factoryInfo['发电功率'] ?? factoryPower,
-                            isMiner: ['采矿机', '大型采矿机', '抽水机', '原油萃取站'].includes(factoryName),
+                            isMiner: ['采矿机', '大型采矿机', '抽水站', '原油萃取站'].includes(factoryName),
                         };
                     }
                 }
