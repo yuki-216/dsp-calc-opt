@@ -96,9 +96,9 @@ test('optimizeProliferatorStrategy: 异步重构后四策略均可跑通(自算S
         );
 
         // 审查 I-2:必须真实走过"循环组坐标下降"与"最终边际验证"分支。
-        // {A,C} 构成双节点循环 → optimizeCycleGroupPhase 应打印 "循环组 [C, A]" 组头日志
-        // (Set 遍历顺序不保证,但成员必然含 A 与 C),最终验证应打印 "最终边际验证开始"。
-        const cycleLog = logs.find(msg => msg.startsWith('循环组 ['));
+        // {A,C} 构成双节点循环 → optimizeCycleGroupPhase 会打印 "循环组 [...]" 组头日志
+        // (带前导换行,Set 遍历顺序不保证但成员必然含 A 与 C);最终验证打印 "最终边际验证开始"。
+        const cycleLog = logs.find(msg => msg.includes('循环组 ['));
         assert.ok(cycleLog, `${strategy}: 应进入循环组坐标下降(循环组 [...] 日志),实际日志:\n${logs.join('\n')}`);
         assert.ok(
             cycleLog.includes('A') && cycleLog.includes('C'),
