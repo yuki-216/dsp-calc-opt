@@ -862,9 +862,11 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
     const filtered_graph = useMemo(() => {
         // 仅需求模式（复用核心计算数据）
         if (show_needs_only && needs_list && Object.keys(needs_list).length > 0 && engineGraphData) {
-            // 直接复用核心计算的边（过滤已删除物品；核心计算的边含电力入边，不渲染）
+            // 直接复用核心计算的边（过滤已删除物品；核心计算的边含电力边——耗电边 product→电力 与
+            // 燃料边 电力→燃料 两个方向，均不渲染，电力完全不进依赖图）
             const filtered_edges = engineGraphData.edges.filter(e =>
-                !deleted_items.has(e.from) && !deleted_items.has(e.to) && e.to !== '电力'
+                !deleted_items.has(e.from) && !deleted_items.has(e.to)
+                && e.to !== '电力' && e.from !== '电力'
             );
             const filtered_items = new Set();
             filtered_edges.forEach(e => {

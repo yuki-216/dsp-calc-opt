@@ -197,7 +197,7 @@ export default defineConfig(({mode}) => ({
                         if (id.includes('/react-icons/')) {
                             return 'vendor-icons';
                         }
-                        if (id.includes('/highs/') || id.includes('/pako/')) {
+                        if (id.includes('/highs/')) {
                             return 'vendor-highs';
                         }
                     }
