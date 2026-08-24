@@ -151,7 +151,7 @@ export class CoreEngine {
     const buildingDetails = {};
     const buildingList = {};
     for (const [recipeKey, xVal] of execByRecipe) {
-      if (xVal <= 1e-9) continue;
+      if (xVal <= ZERO_EPS) continue;
       const r = this.graph.recipes.get(recipeKey);
       const bp = r.buildingPower;
       if (!bp || !bp.factoryName) continue;
