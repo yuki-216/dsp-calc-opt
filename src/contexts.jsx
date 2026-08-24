@@ -149,9 +149,9 @@ export function ContextProvider({children}) {
     const [calculationError, setCalculationError] = useState(null);
     const [engineLogs, setEngineLogs] = useState([]);
 
-    // 主引擎计算函数
+    // 主引擎计算函数（Task 4 后 calculate 为 async，此处改为异步等待）
     const engineCalculate = useMemo(() => {
-        return function(needs_dict) {
+        return async function(needs_dict) {
             // 需求为空时清除错误
             if (!needs_dict || Object.keys(needs_dict).length === 0) {
                 setTimeout(() => setCalculationError(null), 0);
@@ -166,7 +166,7 @@ export function ContextProvider({children}) {
             try {
                 const runLogs = [];
                 const onLog = DEBUG ? (msg) => { runLogs.push(msg); } : null;
-                const result = engine.calculate(
+                const result = await engine.calculate(
                     needsArray,
                     game_info.game_data.recipe_data,
                     new Set(),
@@ -179,9 +179,9 @@ export function ContextProvider({children}) {
                 if (engine.graph && engine.edges) {
                     const graphData = {
                         edges: engine.edges,
-                        sccs: engine.sccs || [],
                         graph: engine.graph,
                         proliferatorEdgeKeys: engine.proliferatorEdgeKeys || new Set()
+                        // 注意:sccs 字段移除——依赖图页浅层化后不再消费(Task 7)
                     };
                     setTimeout(() => setEngineGraphData(graphData), 0);
                 }

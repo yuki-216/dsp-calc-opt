@@ -1130,7 +1130,9 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
             });
 
             // 从核心计算的SCC中过滤已删除物品，且只保留存在于 filtered_items 中的物品
-            const filtered_sccs = engineGraphData.sccs
+            // Task 4 后核心计算不再输出 sccs，缺失时按当前边集本地自算（与全量模式路径一致）
+            const source_sccs = engineGraphData.sccs || tarjanSCC(filtered_items, filtered_edges);
+            const filtered_sccs = source_sccs
                 .map(scc => new Set([...scc].filter(item => filtered_items.has(item))))
                 .filter(scc => scc.size > 0);
 

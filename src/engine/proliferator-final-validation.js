@@ -39,7 +39,7 @@ export async function validateFinalProliferatorChoices({
     onLog,
 }) {
     let currentScheme = structuredClone(scheme);
-    let currentResult = calculateResult(gameData, currentScheme, settings, needs);
+    let currentResult = await calculateResult(gameData, currentScheme, settings, needs);
     const revertedItems = [];
     let changed = true;
     onLog?.(`最终边际验证开始（阈值：${(threshold * 100).toFixed(2)}%）`);
@@ -47,7 +47,6 @@ export async function validateFinalProliferatorChoices({
     while (changed) {
         changed = false;
         for (const scc of sccs) {
-            if (scc.has('__solution__')) continue;
             for (const itemId of scc) {
                 const recipeIndex = itemToRecipe.get(itemId);
                 const recipeScheme = recipeIndex === undefined
@@ -58,7 +57,7 @@ export async function validateFinalProliferatorChoices({
                 const candidateMetric = getMetric(currentResult, strategy);
                 const noProScheme = structuredClone(currentScheme);
                 clearProliferator(noProScheme.scheme_for_recipe[recipeIndex]);
-                const noProResult = calculateResult(gameData, noProScheme, settings, needs);
+                const noProResult = await calculateResult(gameData, noProScheme, settings, needs);
                 const noProMetric = getMetric(noProResult, strategy);
                 const accepted = shouldAcceptProliferator({
                     baseline: noProMetric,

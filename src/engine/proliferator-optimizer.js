@@ -10,6 +10,7 @@
 import { CoreEngine } from './index.js';
 import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
 import { validateFinalProliferatorChoices } from './proliferator-final-validation.js';
+import { tarjanSCC } from './graph-utils.js';
 import {
     RARE_ORE_EQUIVALENCE,
     RARE_ORE_PRACTICALITY_RATIO,
@@ -23,15 +24,15 @@ import {
  * @param {Object} schemeData - 方案数据
  * @param {Object} settings - 设置参数
  * @param {Array} needs - 需求列表
- * @returns {Object} { totalEnergyCost, energyCost, minerEnergyCost, resourceUsage, graph, edges, sccs }
+ * @returns {Object} { totalEnergyCost, energyCost, minerEnergyCost, resourceUsage, graph, edges }
  */
-function calculatePower(gameData, schemeData, settings, needs) {
+async function calculatePower(gameData, schemeData, settings, needs) {
   const gameInfo = { game_data: gameData, item_data: {} };
   const globalState = new GlobalState(gameInfo, schemeData, settings);
   const engine = new CoreEngine(gameData, schemeData, settings, globalState.sprayCosts);
-  const result = engine.calculate(needs, gameData.recipe_data);
+  const result = await engine.calculate(needs, gameData.recipe_data);
 
-  // 确保 graph 和 edges 存在
+  // 确保 graph 和 edges 存在（engine 属性在新方案下同样可用，取 result 更稳）
   if (!engine.graph || !engine.edges) {
     console.error('[calculatePower] engine.graph 或 engine.edges 未定义');
     return {
@@ -43,8 +44,7 @@ function calculatePower(gameData, schemeData, settings, needs) {
       totalFootprint: result.totalFootprint || 0,
       footprintDetails: result.footprintDetails || {},
       graph: new Map(),
-      edges: [],
-      sccs: []
+      edges: []
     };
   }
 
@@ -58,7 +58,6 @@ function calculatePower(gameData, schemeData, settings, needs) {
     footprintDetails: result.footprintDetails || {},
     graph: engine.graph,
     edges: engine.edges,
-    sccs: engine.sccs
   };
 }
 
@@ -129,8 +128,8 @@ function buildEffectiveAvailMap(oreQuantities, settings) {
  * @param {Array} needs - 需求列表
  * @returns {Object} { rareWeightObjective, totalRawOre, ... }
  */
-function calculateRareWeight(gameData, schemeData, settings, needs) {
-  const result = calculatePower(gameData, schemeData, settings, needs);
+async function calculateRareWeight(gameData, schemeData, settings, needs) {
+  const result = await calculatePower(gameData, schemeData, settings, needs);
   const recipeData = gameData.recipe_data || [];
   const mineralizeList = settings.mineralize_list || {};
   const oreQuantities = settings.ore_quantities || {};
@@ -187,8 +186,8 @@ function calculateRareWeight(gameData, schemeData, settings, needs) {
  * @param {Array} needs - 需求列表
  * @returns {Object} { netOreHeat, oreHeat, byproductHeat, ...calculatePower的结果 }
  */
-function calculateOreHeat(gameData, schemeData, settings, needs) {
-  const result = calculatePower(gameData, schemeData, settings, needs);
+async function calculateOreHeat(gameData, schemeData, settings, needs) {
+  const result = await calculatePower(gameData, schemeData, settings, needs);
   const recipeData = gameData.recipe_data || [];
   const mineralizeList = settings.mineralize_list || {};
 
@@ -421,7 +420,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
   });
 
   // 计算当前方案的结果
-  function calculateFullResult(choices) {
+  async function calculateFullResult(choices) {
     const tempScheme = structuredClone(baseScheme);
     for (let i = 0; i < cycleItems.length; i++) {
       const item = cycleItems[i];
@@ -432,11 +431,11 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
       }
     }
-    return calculateResult(gameData, tempScheme, settings, needs);
+    return await calculateResult(gameData, tempScheme, settings, needs);
   }
 
   // 计算初始成本
-  const initResult = calculateFullResult(currentChoices);
+  const initResult = await calculateFullResult(currentChoices);
   let currentCost = getObjectiveValue(initResult, strategy);
 
   // 坐标下降迭代
@@ -458,7 +457,7 @@ async function optimizeCycleGroupPhase(cycleItems, gameData, settings, needs, ba
         const oldChoice = currentChoices[i];
         currentChoices[i] = choice;
 
-        const result = calculateFullResult(currentChoices);
+        const result = await calculateFullResult(currentChoices);
         const cost = getObjectiveValue(result, strategy);
         totalCalculations++;
 
@@ -512,18 +511,15 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
     : strategy === 'min_rare_weight' ? calculateRareWeight
     : calculatePower;
 
-  const initialCalcResult = calculateResult(gameData, currentScheme, settings, needs);
+  const initialCalcResult = await calculateResult(gameData, currentScheme, settings, needs);
   let currentObjective = getObjectiveValue(initialCalcResult, strategy);
-  let currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
+  let currentPower = (await calculatePower(gameData, currentScheme, settings, needs)).totalEnergyCost;
   const changes = [];
   const totalSteps = Math.max(1, sccs.length);
 
   for (let sccIdx = 0; sccIdx < sccs.length; sccIdx++) {
     const scc = sccs[sccIdx];
     onProgress?.(sccIdx, totalSteps, `正在优化第${sccIdx + 1}/${totalSteps}组`);
-
-    // 跳过 solution 节点
-    if (scc.has('__solution__')) continue;
 
     if (scc.size === 1) {
       // ====== 单节点 SCC：逐个优化 ======
@@ -556,7 +552,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         tempScheme.scheme_for_recipe[recipeIndex]['增产剂等级'] = choice.level;
         tempScheme.scheme_for_recipe[recipeIndex]['增产模式'] = choice.mode;
 
-        const result = calculateResult(gameData, tempScheme, settings, needs);
+        const result = await calculateResult(gameData, tempScheme, settings, needs);
         const cost = getObjectiveValue(result, strategy);
         if (cost < bestCost) {
           bestCost = cost;
@@ -570,7 +566,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
         currentScheme.scheme_for_recipe[recipeIndex]['增产模式'] = bestChoice.mode;
         currentObjective = bestCost;
         // 重新计算获取最新的耗电
-        const afterApplyResult = calculateResult(gameData, currentScheme, settings, needs);
+        const afterApplyResult = await calculateResult(gameData, currentScheme, settings, needs);
         currentPower = afterApplyResult.totalEnergyCost;
       }
 
@@ -628,7 +624,7 @@ async function optimizePhaseBySCC(sccs, gameData, settings, needs, currentScheme
 
       currentObjective = cycleResult.cost;
       // 重新计算当前状态，获取最新耗电
-      currentPower = calculatePower(gameData, currentScheme, settings, needs).totalEnergyCost;
+      currentPower = (await calculatePower(gameData, currentScheme, settings, needs)).totalEnergyCost;
 
       changes.push({
         itemId: `[${cycleItems.join(',')}]`,
@@ -698,7 +694,7 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
   await new Promise(resolve => setTimeout(resolve, 0));
 
   // 2. 执行初始计算
-  const initialResult = calculateResult(gameData, schemeData, settings, needs);
+  const initialResult = await calculateResult(gameData, schemeData, settings, needs);
   const initialPower = initialResult.totalEnergyCost;
   const initialObjective = getObjectiveValue(initialResult, strategy);
 
@@ -731,21 +727,6 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     }
   }
 
-  if (!initialResult.sccs || initialResult.sccs.length === 0) {
-    if (onLog) onLog('无 SCC 结构，跳过优化');
-    return {
-      optimalScheme: structuredClone(schemeData),
-      initialPower,
-      optimalPower: initialPower,
-      strategy,
-      initialObjective,
-      optimalObjective: initialObjective,
-      changes: [],
-      processedCount: 0,
-      totalCount: 0
-    };
-  }
-
   // 3. 构建物品到配方映射
   const recipeData = gameData.recipe_data || [];
   const itemToRecipe = buildItemToRecipeMap(recipeData, schemeData);
@@ -766,16 +747,33 @@ export async function optimizeProliferatorStrategy(gameData, schemeData, setting
     }
   }
 
-  // 4.2 在最高等级配置下进行 SCC 分析
-  const maxResult = calculatePower(gameData, maxScheme, settings, needs);
-  // SCC 顺序：Tarjan 输出是拓扑逆序（顶层在前），我们需要正序（底层在前）
-  const sccsForward = [...maxResult.sccs].reverse();
+  // 4.2 在最高等级配置下进行 SCC 分析（Task 4 后 engine 不再输出 sccs，此处自算）
+  const maxResult = await calculatePower(gameData, maxScheme, settings, needs);
+  const graphItems = new Set();
+  maxResult.edges.forEach(e => { graphItems.add(e.from); graphItems.add(e.to); });
+  // Tarjan 输出是拓扑逆序（顶层在前），翻转得到正序（底层在前）
+  const sccsForward = [...tarjanSCC(graphItems, maxResult.edges)].reverse();
   const activeRecipeIndices = new Set();
   for (const scc of sccsForward) {
     for (const itemId of scc) {
       const recipeIndex = itemToRecipe.get(itemId);
       if (recipeIndex !== undefined) activeRecipeIndices.add(recipeIndex);
     }
+  }
+
+  if (!maxResult.edges || maxResult.edges.length === 0) {
+    if (onLog) onLog('无 SCC 结构，跳过优化');
+    return {
+      optimalScheme: structuredClone(schemeData),
+      initialPower,
+      optimalPower: initialPower,
+      strategy,
+      initialObjective,
+      optimalObjective: initialObjective,
+      changes: [],
+      processedCount: 0,
+      totalCount: 0
+    };
   }
 
   if (onLog) {

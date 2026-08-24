@@ -351,12 +351,18 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     // TODO refactor to a simple list
     let mineralize_list = settings.mineralize_list;
-    // 主引擎计算
-    const engineResult = useMemo(() => {
+    // 主引擎计算（Task 4 后 engineCalculate 为 async，改为 useEffect 异步获取）
+    const [engineResult, setEngineResult] = useState(null);
+    useEffect(() => {
+        let cancelled = false;
         if (!engineCalculate || !needs_list || Object.keys(needs_list).length === 0) {
-            return null;
+            setEngineResult(null);
+            return;
         }
-        return engineCalculate(needs_list);
+        engineCalculate(needs_list).then(res => {
+            if (!cancelled) setEngineResult(res);
+        });
+        return () => { cancelled = true; };
     }, [engineCalculate, needs_list]);
 
     // 从新引擎结果中提取数据
