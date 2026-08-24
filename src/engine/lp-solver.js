@@ -21,14 +21,17 @@ export function getHighs() {
 
 const SENSE_MAP = {'>=': '>=', '<=': '<='};
 
+// CPLEX LP 格式标识符不允许以数字开头(配方索引作变量名时形如 "15" 会导致 HiGHS 解析崩溃),
+// 序列化时统一映射为 v0..vn 别名,解析结果再映射回原名。
 function serializeToLpText(model) {
+    const alias = new Map(model.variables.map((v, i) => [v.name, `v${i}`]));
     const lines = [];
     lines.push('Minimize');
     const objTerms = model.variables
-        .map(v => ({name: v.name, c: model.objective.coeffs[v.name] || 0}))
+        .map(v => ({name: alias.get(v.name), c: model.objective.coeffs[v.name] || 0}))
         .filter(t => t.c !== 0);
     if (objTerms.length === 0) {
-        lines.push(' obj: 0 ' + model.variables.map(v => `+ 0 ${v.name}`).join(' '));
+        lines.push(' obj: 0 ' + model.variables.map(v => `+ 0 ${alias.get(v.name)}`).join(' '));
     } else {
         lines.push(' obj: ' + objTerms.map((t, i) => `${i === 0 ? '' : '+ '}${t.c} ${t.name}`).join(' '));
     }
@@ -40,16 +43,16 @@ function serializeToLpText(model) {
         for (const v of model.variables) {
             const c = con.coeffs[v.name];
             if (!c) continue;
-            terms.push(`${first ? (c < 0 ? '-' : '') : (c < 0 ? '- ' : '+ ')}${Math.abs(c)} ${v.name}`);
+            terms.push(`${first ? (c < 0 ? '-' : '') : (c < 0 ? '- ' : '+ ')}${Math.abs(c)} ${alias.get(v.name)}`);
             first = false;
         }
-        if (terms.length === 0) terms.push(`0 ${model.variables[0]?.name ?? '_zero'}`);
+        if (terms.length === 0) terms.push(`0 ${model.variables[0] ? alias.get(model.variables[0].name) : '_zero'}`);
         lines.push(` ${con.name}: ${terms.join(' ')} ${SENSE_MAP[con.sense] ?? '>='} ${con.rhs}`);
     }
 
     lines.push('Bounds');
     for (const v of model.variables) {
-        lines.push(` ${v.name} >= 0`);
+        lines.push(` ${alias.get(v.name)} >= 0`);
     }
     lines.push('End');
     return lines.join('\n');
@@ -74,11 +77,16 @@ export async function solveLP(model) {
 
     const x = {};
     if (status === 'Optimal') {
-        for (const v of model.variables) {
-            x[v.name] = result.Columns?.[v.name]?.Primal ?? 0;
-            if (!Number.isFinite(x[v.name])) {
-                throw new Error(`LP 解含非有限值: ${v.name}=${x[v.name]}`);
+        for (const [origName, i] of model.variables.map((v, i) => [v.name, i])) {
+            const primal = result.Columns?.[`v${i}`]?.Primal;
+            if (primal === undefined) {
+                // 序列化用 v{i} 别名,HiGHS 返回列必须一一对应;缺失说明名字映射断裂,禁止静默归零
+                throw new Error(`LP 解缺失变量列: ${origName}(别名 v${i})`);
             }
+            if (!Number.isFinite(primal)) {
+                throw new Error(`LP 解含非有限值: ${origName}=${primal}`);
+            }
+            x[origName] = primal;
         }
     }
     return {x, status, objective: Number(result.ObjectiveValue) || 0};
