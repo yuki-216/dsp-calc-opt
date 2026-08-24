@@ -41,7 +41,12 @@ try {
     const globalState = new GlobalState(gameInfo, schemeData, settings);
     const engine = new CoreEngine(gameData, schemeData, settings, globalState.sprayCosts);
     const cpLogs = [];
+    // 性能记录(规格 §八): 单次计算耗时(不含首次 HiGHS 初始化, 该初始化在应用生命周期只发生一次)
+    await import('./src/engine/lp-solver.js').then(m => m.getHighs()); // 预热 HiGHS
+    const t0 = performance.now();
     const result = await engine.calculate(needs, gameData.recipe_data, new Set(), false, (m) => cpLogs.push(m));
+    const t1 = performance.now();
+    console.log(`\n[性能] 单次计算耗时: ${(t1 - t0).toFixed(1)} ms`);
 
     console.log('\n===== 计算结果 =====');
     const ru = result.resourceUsage || {};

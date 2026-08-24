@@ -59,4 +59,14 @@ export default [
             },
         },
     },
+
+    // 复现脚本（ESM .mjs）在 Node.js 中运行
+    {
+        files: ['repro_*.mjs'],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+            },
+        },
+    },
 ];
