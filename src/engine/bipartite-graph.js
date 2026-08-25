@@ -36,6 +36,7 @@ import { ApplyBuildingMultiplier, buildItemRecipeIndex } from '../game_data.jsx'
  *   edges: Array<{from, to}>,
  *   proliferatorEdgeKeys: Set<string>,
  *   recipeOfItem: Map<string, string>,
+ *   mainItemsOfRecipe: Map<string, Set<string>>,  // M(r):配方 -> 用户选择指向它的物品集合(z-分摊约束用)
  * }}
  */
 export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings = {}, sprayCosts = null, options = {}) {
@@ -313,6 +314,26 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
         if (!producerItems.has(it)) noRecipeItems.add(it);
     }
 
+    // M(r)(主物品集合):对每个已入图配方,收集"用户选择指向它"的全部物品。
+    // 判据是 item_recipe_choices 本身(BFS 触发顺序不可靠——同一配方的多个产物先后
+    // 触发时,addRecipe 提前返回会丢失后续物品的归属)。供 LP 构模的 z-分摊约束使用。
+    const mainItemsOfRecipe = new Map(); // recipeKey -> Set<itemId>
+    for (const it of items) {
+        if (noRecipeItems.has(it)) continue;
+        const choiceIndex = schemeData?.item_recipe_choices?.[it] ?? 1;
+        let resolved;
+        if (it === '电力') {
+            resolved = findFuelRecipeIndex();
+        } else {
+            resolved = itemData[it]?.[choiceIndex];
+        }
+        if (resolved === undefined || resolved === null || !recipes[resolved]) continue;
+        const key = String(resolved);
+        if (!recipesOut.has(key)) continue; // 配方未入图(不可达)则无主职责
+        if (!mainItemsOfRecipe.has(key)) mainItemsOfRecipe.set(key, new Set());
+        mainItemsOfRecipe.get(key).add(it);
+    }
+
     return {
         recipes: recipesOut,
         items,
@@ -321,5 +342,6 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
         edges,
         proliferatorEdgeKeys,
         recipeOfItem,
+        mainItemsOfRecipe,
     };
 }

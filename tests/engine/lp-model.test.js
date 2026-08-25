@@ -44,7 +44,7 @@ function makeScheme() {
     };
 }
 
-test('构模:每个入选配方一个变量,目标系数全为1', () => {
+test('构模:每个入选配方一个变量,配方/slack变量目标系数为1,z变量不进目标', () => {
     const graph = buildRecipeGraph(
         [{id: '齿轮', name: '齿轮', count: 10}],
         makeGameData().recipe_data, makeGameData(), makeScheme(), {is_time_unit_minute: true}, null
@@ -53,7 +53,15 @@ test('构模:每个入选配方一个变量,目标系数全为1', () => {
     // 配方变量 + noRecipeItems 的 slack 变量
     const recipeVars = model.variables.filter(v => varToRecipe.has(v.name)).map(v => v.name);
     assert.deepEqual(recipeVars.sort(), ['0', '1'].sort());
-    for (const v of model.variables) assert.equal(model.objective.coeffs[v.name], 1);
+    for (const v of model.variables) {
+        const coeff = model.objective.coeffs[v.name] ?? 0;
+        if (varToRecipe.has(v.name) || v.name.startsWith('slack_')) {
+            assert.equal(coeff, 1, `${v.name} 目标系数应为 1`);
+        } else {
+            // z 变量(主物品吸收上限记账):不进目标函数(spec §十一)
+            assert.equal(coeff, 0, `${v.name} 是 z 变量,目标系数应为 0`);
+        }
+    }
     assert.equal(varToRecipe.get('0'), '0');
 });
 

@@ -74,6 +74,52 @@ test('端到端:联产物抵消——多余副产品进 surplusByproducts(正值
     assert.ok(Math.abs(result.resourceUsage['原油'] - 20) < 1e-6);
 });
 
+test('主配方优先:氢有净需求时缺口由主配方(采集器)补,禁止为副产扩精炼(z-分摊约束)', async () => {
+    const gd = makeGameData();
+    // 联产配方3:原油→氢×1+精炼油×2;采集配方5:空原料→氢×1;消耗配方4:氢×2→水×1
+    gd.recipe_data.push({_id: 3, 原料: {原油: 1}, 产物: {氢: 1, 精炼油: 2}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    gd.recipe_data.push({_id: 4, 原料: {氢: 2}, 产物: {水: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    gd.factory_data['9'] = [{'名称': '轨道采集器', '倍率': 1, '耗能': 0}];
+    gd.recipe_data.push({_id: 5, 原料: {}, 产物: {氢: 1}, 设施: 9, 时间: 1, Type: -1, 增产: 0, 可采集: true});
+    const scheme = makeScheme();
+    // 用户把氢的主配方选为轨道采集器(itemData['氢'] = [null, 3, 5],choice=2 → 配方下标5)
+    scheme.item_recipe_choices = {氢: 2};
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    // 需求 水×10 → 需氢20。若允许为副产扩精炼:跑20次精炼即免费得氢20(x采集=0)
+    // z-分摊约束下精炼被卡住(其主物品精炼油无人要)→ 氢只能由采集器产
+    const result = await engine.calculate([
+        {id: '水', name: '水', count: 10},
+    ], gd.recipe_data);
+
+    // 采集器必须真跑且产量计入外部获取(主配方责任制)
+    assert.ok(result.resourceUsage['氢'] > 20 - 1e-6,
+        `氢应由采集器采集 ≥20,实际 resourceUsage['氢']=${result.resourceUsage['氢']}`);
+    // 联产的精炼油无人要 → 全部盈余(若 x_精炼>0 才有;本场景 min Σx 下精炼应为 0)
+    if (result.surplusByproducts['精炼油']) {
+        assert.ok(result.surplusByproducts['精炼油'] > 0);
+    }
+});
+
+test('主配方优先不误伤:choices[氢]=精炼时联产照常抵消(默认行为不变)', async () => {
+    const gd = makeGameData();
+    gd.recipe_data.push({_id: 3, 原料: {原油: 1}, 产物: {氢: 1, 精炼油: 2}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    gd.recipe_data.push({_id: 4, 原料: {氢: 2}, 产物: {水: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    gd.factory_data['9'] = [{'名称': '轨道采集器', '倍率': 1, '耗能': 0}];
+    gd.recipe_data.push({_id: 5, 原料: {}, 产物: {氢: 1}, 设施: 9, 时间: 1, Type: -1, 增产: 0, 可采集: true});
+    const scheme = makeScheme();
+    // 氢的选择保持默认(choice=1 → itemData['氢'][1] = 配方3 精炼),M(精炼)={氢,精炼油}
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    const result = await engine.calculate([
+        {id: '水', name: '水', count: 10},
+    ], gd.recipe_data);
+
+    // 与无采集器时一致:联产驱动,精炼跑20次,氢恰好被水链吸收
+    assert.ok(Math.abs(result.recipeExecutions['精炼油'] ?? result.recipeExecutions['氢'] - 20) < 1e-6
+        || Math.abs((result.recipeExecutions['氢'] ?? 0) - 20) < 1e-6,
+        `精炼应执行20次(联产驱动),实际 recipeExecutions=${JSON.stringify(result.recipeExecutions)}`);
+    assert.ok(!result.resourceUsage['氢'], '不应启动采集器(联产足够)');
+});
+
 test('端到端:采集配方(空原料单产物)产量计入 resourceUsage', async () => {
     const gd = makeGameData();
     // 原油萃取站式采集配方:空原料→原油×1

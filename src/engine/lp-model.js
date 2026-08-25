@@ -83,6 +83,66 @@ export function buildLPModel(graph) {
         });
     }
 
+    // ===== 主配方优先:主物品吸收上限(z-分摊约束,spec §十一)=====
+    // 语义:联产物照常进守恒行(被动抵消/填需允许),但禁止"为副产主动扩别人的配方"。
+    // ① 分摊覆盖: Σ_{p∈M(r)} z_{r,p} ≥ x_r
+    // ② 吸收上限: out(r,p)·z_{r,p} ≤ D_p + Σ_{r'} in(r',p)·x_{r'}
+    // z 不进目标函数——纯记账工具,min 目标自动取最小可行值。
+    const mainItemsOfRecipe = graph.mainItemsOfRecipe || new Map();
+    for (const [recipeKey, mains] of mainItemsOfRecipe) {
+        if (!mains || mains.size === 0) continue;
+        const r = graph.recipes.get(recipeKey);
+        if (!r) continue;
+
+        // z 变量
+        const zVars = [];
+        for (const p of mains) {
+            const zName = `z_${recipeKey}_${p}`;
+            variables.push({name: zName});
+            zVars.push({item: p, name: zName});
+        }
+
+        // ① 分摊覆盖:Σz - x_r ≥ 0
+        const coverCoeffs = {};
+        coverCoeffs[recipeKey] = -1;
+        for (const z of zVars) coverCoeffs[z.name] = (coverCoeffs[z.name] || 0) + 1;
+        constraints.push({
+            name: `zcov_${recipeKey}`,
+            coeffs: coverCoeffs,
+            sense: '>=',
+            rhs: 0,
+        });
+
+        // ② 吸收上限:(out−selfIn)(r,p)·z_{r,p} - Σ_{r'≠r} in(r',p)·x_{r'} ≤ D_p
+        //    ★ 关键教训(四轮试错):
+        //      a) 自举配方的守恒行是净额(out−selfIn 合并,如增产剂 1.25−0.05=1.2),
+        //         若 zcap 用毛产出 out 记账,zcov(z≥x)+守恒(净额x≥D/净率)+zcap(毛率z≤D)
+        //         三者夹逼:z∈[x, D/out] 且 x ≥ D/(out−selfIn) > D/out ⟹ 永远矛盾 → Infeasible
+        //         (真实数据配方105 增产剂 Mk.III 自喷即此因);
+        //      b) 因此 zcap 必须用与守恒行相同的【净贡献率】(out−selfIn) 记账——
+        //         "吸收上限"约束的是有效供给,不是毛产量;
+        //      c) 别人的消耗从守恒行负系数取(未合并);自身自耗已含在净率里不再单列。
+        //      修复后无"为副产扩产"漏洞——扩规模仍被守恒行与 min Σx 约束。
+        for (const z of zVars) {
+            const gross = r.outputs[z.item] || 0;
+            if (!gross) continue; // 名义主物品但产量0(数据异常):②恒真,跳过
+            const netRate = gross - (r.inputs[z.item] || 0); // 净贡献率,与守恒行口径一致
+            if (netRate <= 0) continue; // 净产出非正(纯转换配方):主物品无法由它净供给,跳过上限
+            const capCoeffs = {};
+            capCoeffs[z.name] = netRate;
+            for (const [v, negIn] of conRows.get(z.item)?.coeffs ?? []) {
+                if (negIn >= 0 || v === z.name || v === recipeKey) continue;
+                capCoeffs[v] = (capCoeffs[v] || 0) + negIn; // 别人消耗保持负号在左侧
+            }
+            constraints.push({
+                name: `zcap_${recipeKey}_${z.item}`,
+                coeffs: capCoeffs,
+                sense: '<=',
+                rhs: graph.demandByItem[z.item] || 0,
+            });
+        }
+    }
+
     return {
         model: {variables, objective: {coeffs: objectiveCoeffs}, constraints},
         varToRecipe,
