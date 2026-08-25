@@ -149,7 +149,14 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
             inputsR[input.id] = (inputsR[input.id] || 0) + (input.count || 0);
         }
 
-        // ---- 设备数与耗电(移植自 dag.js)----
+        // ---- 设备数与耗电(x = 完整反应次数口径)----
+        // ★ 设备数必须只依赖配方本身与建筑,不可按"某个产物的净产出速率"折算:
+        //   多产物配方(如等离子精炼 氢1+精炼油2)经不同物品触发入图会差一个产出倍数
+        //   (BFS 进入顺序随需求集合漂移),同一物理解会得出不同的设备数/耗电/占地
+        //   (2026-08 用户实测:需求60塑料=2厂,+60氢=4厂,而 LP 解完全相同)。
+        //   正确基准:一台建筑完成一次反应占用 时间/建筑倍率 秒;加速模式(proMode=1)
+        //   真正缩短反应时长;增产模式(proMode=2)只放大产物(outputsR 已乘),不改时长。
+        //   采矿类/分馏塔的实际吞吐 ≠ 名义反应速率,用 ApplyBuildingMultiplier 吞吐倍率压缩。
         let buildingPower = null;
         const factoryType = recipe.设施;
         if (recipe.Type === -2) {
@@ -173,60 +180,58 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                     const factoryPower = factoryInfo['耗能'] || 0;
                     const timeTick = settings?.is_time_unit_minute ? 60 : 1;
 
-                    // 净产出 = 总产出 - 自身消耗,再乘增产效果与建筑倍率
-                    const totalOutput = recipe.产物?.[forItemId] || 0;
-                    const selfConsumption = recipe.原料?.[forItemId] || 0;
-                    let netOutput = totalOutput - selfConsumption;
-                    if (netOutput > 0) {
-                        if (proMode > 0 && proLevel > 0) {
-                            const proEffect = gameData.proliferator_effect?.[proLevel];
-                            if (proEffect) {
-                                if (proMode === 1) {
-                                    // 加速模式:净产出 × 加速效果
-                                    netOutput *= proEffect['加速效果'] || 1;
-                                } else if (proMode === 2) {
-                                    // 增产模式:净产出 × 增产效果
-                                    netOutput *= proEffect['增产效果'] || 1;
-                                }
-                            }
-                        }
-
-                        // 应用建筑倍率(采矿机/采集器等)
-                        netOutput = ApplyBuildingMultiplier(netOutput, factoryName, forItemId, settings);
-
-                        // 单次执行设备数 = 1 / timeTick / (净产出 / 时间) / 设备倍率
-                        const outputRate = netOutput / (recipe.时间 || 1); // 每 tick 产出
-                        const singleExecBuildNumber = 1 / timeTick / outputRate / factorySpeed;
-
-                        // 单次执行耗电 = 单次执行设备数 × 额定功率
-                        let unitPowerCost = singleExecBuildNumber * factoryPower;
-                        // 大型采矿机特殊处理:耗电由开采效率决定
-                        if (factoryName === '大型采矿机' && settings?.mining_efficiency_large) {
-                            const eff = settings.mining_efficiency_large / 100.0;
-                            unitPowerCost = (eff * eff * (2.94 - 0.168) + 0.168) / netOutput * timeTick;
-                        }
-                        // 分馏塔特殊处理:分馏速度超过面板值时耗电放大
-                        if (factoryName.endsWith('分馏塔') && settings?.fractionating_speed > 30) {
-                            const multiplier = (settings.fractionating_speed * 0.036 - 0.36) / 0.72;
-                            unitPowerCost *= multiplier;
-                        }
-                        // 增产剂耗电倍率
-                        if (proMode > 0 && proLevel > 0) {
-                            const proEffect = gameData.proliferator_effect?.[proLevel];
-                            if (proEffect) {
-                                unitPowerCost *= proEffect['耗电倍率'] || 1;
-                            }
-                        }
-
-                        buildingPower = {
-                            factoryName,
-                            singleExecBuildNumber,
-                            unitPowerCost,
-                            // 额定功率:发电建筑用"发电功率"字段(自身不耗电),其余用"耗能"
-                            basePower: factoryInfo['发电功率'] ?? factoryPower,
-                            isMiner: ['采矿机', '大型采矿机', '抽水站', '原油萃取站'].includes(factoryName),
-                        };
+                    // 单次执行设备数 = 反应时长折算到需求时间单位
+                    let craftSeconds = (recipe.时间 || 1) / factorySpeed;
+                    if (proMode === 1 && proLevel > 0) {
+                        const maxLevel = gameData.proliferator_data.length - 1;
+                        const accEffect = gameData.proliferator_effect?.[Math.min(proLevel, maxLevel)]?.['加速效果'] || 1;
+                        craftSeconds /= accEffect;
                     }
+                    let singleExecBuildNumber = craftSeconds / timeTick;
+
+                    // 单次执行耗电 = 单次执行设备数 × 额定功率
+                    let unitPowerCost = singleExecBuildNumber * factoryPower;
+
+                    // 应用建筑吞吐倍率(采矿机/萃取站/抽水站/轨道采集器/分馏塔:
+                    // 采矿速度、覆盖矿脉、采集效率、分馏速度等)。这类配方均为单产物,
+                    // 锚定物品取首个产物(数据序,确定性,不随 BFS 进入顺序漂移)。
+                    const anchorItem = Object.keys(outputsR)[0];
+                    const throughputMult = ApplyBuildingMultiplier(1, factoryName, anchorItem, settings);
+                    if (throughputMult && throughputMult !== 1) {
+                        singleExecBuildNumber /= throughputMult;
+                        unitPowerCost /= throughputMult;
+                    }
+
+                    // 大型采矿机特殊处理:耗电由开采效率决定(数值口径与旧引擎一致:
+                    // 恒定功率按"单次毛产出 × 吞吐倍率"摊到每次执行,不含时间/建筑倍率项)
+                    if (factoryName === '大型采矿机' && settings?.mining_efficiency_large) {
+                        const eff = settings.mining_efficiency_large / 100.0;
+                        const grossFirst = recipe.产物?.[anchorItem] || 0;
+                        unitPowerCost = (eff * eff * (2.94 - 0.168) + 0.168)
+                            / (grossFirst * throughputMult) * timeTick;
+                    }
+                    // 分馏塔特殊处理:分馏速度超过面板值时耗电放大
+                    if (factoryName.endsWith('分馏塔') && settings?.fractionating_speed > 30) {
+                        const multiplier = (settings.fractionating_speed * 0.036 - 0.36) / 0.72;
+                        unitPowerCost *= multiplier;
+                    }
+                    // 增产剂耗电倍率
+                    if (proMode > 0 && proLevel > 0) {
+                        const maxLevel = gameData.proliferator_data.length - 1;
+                        const proEffect = gameData.proliferator_effect?.[Math.min(proLevel, maxLevel)];
+                        if (proEffect) {
+                            unitPowerCost *= proEffect['耗电倍率'] || 1;
+                        }
+                    }
+
+                    buildingPower = {
+                        factoryName,
+                        singleExecBuildNumber,
+                        unitPowerCost,
+                        // 额定功率:发电建筑用"发电功率"字段(自身不耗电),其余用"耗能"
+                        basePower: factoryInfo['发电功率'] ?? factoryPower,
+                        isMiner: ['采矿机', '大型采矿机', '抽水站', '原油萃取站'].includes(factoryName),
+                    };
                 }
             }
         }

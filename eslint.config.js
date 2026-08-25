@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
     {
-        ignores: ['dist/', 'public/search_seed.js'],
+        ignores: ['dist/', 'public/search_seed.js', '.superpowers/'],
     },
 
     js.configs.recommended,

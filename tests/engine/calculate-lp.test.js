@@ -137,6 +137,42 @@ test('主配方优先不误伤:choices[氢]=精炼时联产照常抵消(默认�
     assert.ok(!result.resourceUsage['氢'], '不应启动采集器(联产足够)');
 });
 
+test('设备数/耗电不随 BFS 入图物品漂移:60塑料 与 60塑料+60氢 同解同设备(2026-08 用户实测回归)', async () => {
+    const gd = makeGameData();
+    // 等离子精炼式多产物配方:原油2 → 精炼油2+氢1(时间4s);下游 塑料:精炼油2→1(T3)
+    gd.recipe_data.push({_id: 3, 原料: {原油: 2}, 产物: {精炼油: 2, 氢: 1}, 设施: 0, 时间: 4, Type: 0, 增产: 0});
+    gd.recipe_data.push({_id: 4, 原料: {精炼油: 2}, 产物: {塑料: 1}, 设施: 0, 时间: 3, Type: 0, 增产: 0});
+    const scheme = makeScheme();
+    // 原油视为原矿(外部获取),排除采矿设备干扰
+    const settings = {is_time_unit_minute: true, mineralize_list: {原油: true}};
+    const engine = new CoreEngine(gd, scheme, settings, null);
+    const a = await engine.calculate([{id: '塑料', name: '塑料', count: 60}], gd.recipe_data);
+    const b = await engine.calculate([
+        {id: '塑料', name: '塑料', count: 60},
+        {id: '氢', name: '氢', count: 60},
+    ], gd.recipe_data);
+
+    // 两方案 LP 解相同:精炼均跑 60 次(B 的氢需求恰好被联产吸收,A 多余氢60)
+    assert.ok(Math.abs((a.recipeExecutions['精炼油'] ?? a.recipeExecutions['氢']) - 60) < 1e-6);
+    assert.ok(Math.abs((b.recipeExecutions['精炼油'] ?? b.recipeExecutions['氢']) - 60) < 1e-6);
+    assert.ok(Math.abs(a.surplusByproducts['氢'] - 60) < 1e-6, `A 应多余氢60,实际 ${a.surplusByproducts['氢']}`);
+    assert.ok(!b.surplusByproducts['氢'], 'B 的氢应恰好被消耗');
+
+    // ★ 核心断言:同一物理解 ⇒ 设备表与总耗电完全一致(修复前 A 按"精炼油净产出2"折算
+    //   得 2 台/总耗电低于 B,B 按"氢净产出1"折算得 4 台——设备数随入图顺序翻倍)
+    assert.deepEqual(a.buildingList, b.buildingList);
+    assert.ok(Math.abs(a.totalEnergyCost - b.totalEnergyCost) < 1e-6,
+        `总耗电应一致:A=${a.totalEnergyCost} B=${b.totalEnergyCost}`);
+    assert.ok(Math.abs(a.totalFootprint - b.totalFootprint) < 1e-6,
+        `占地应一致:A=${a.totalFootprint} B=${b.totalFootprint}`);
+
+    // 绝对值:反应4s、制造台倍率1 → 单次执行 4/60 台,60 次 = 4 台(原版真值,非 2 台)
+    assert.ok(Math.abs(a.buildingDetails['精炼油'].设备数量 - 4) < 1e-6,
+        `精炼链设备应为4台,实际 ${a.buildingDetails['精炼油'].设备数量}`);
+    assert.ok(Math.abs(b.buildingDetails['氢'].设备数量 - 4) < 1e-6,
+        `B 精炼链设备应为4台,实际 ${b.buildingDetails['氢'].设备数量}`);
+});
+
 test('端到端:采集配方(空原料单产物)产量计入 resourceUsage', async () => {
     const gd = makeGameData();
     // 原油萃取站式采集配方:空原料→原油×1

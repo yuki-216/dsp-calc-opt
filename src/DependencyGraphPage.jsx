@@ -2,6 +2,7 @@ import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'rea
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter} from 'react-icons/fa';
 import {GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
+import {projectNeedsOnlyEdges} from './dependency-graph-edges.js';
 import './DependencyGraph.css';
 
 const STORAGE_KEY_DELETED = 'dependency_graph_deleted_items';
@@ -714,9 +715,9 @@ function assign_edge_colors(edges) {
 
 /**
  * 依赖图页面组件
- * 功能：显示物品依赖关系、缩放拖拽、右键删除、节点位置持久化、SCC 循环组展示
+ * 功能：显示物品依赖关系（无环投影）、缩放拖拽、右键删除、节点位置持久化
  * 交互：左键拖拽节点/画布、右键删除、鼠标滚轮缩放、悬停高亮上下游
- * 持久化：删除列表、自定义位置、显示模式均保存在 localStorage
+ * 持久化：删除列表、自定义位置保存在 localStorage（显示模式不持久化）
  */
 export function DependencyGraphPage({onBack, needs_list, isActive}) {
     const global_state = useContext(GlobalStateContext);
@@ -859,22 +860,30 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         return build_dependency_graph(game_data, item_data, scheme_data);
     }, [game_data, item_data, scheme_data]);
 
+    // 全部增产剂物品名(仅需求模式识别独立需求节点用)
+    const proliferatorItemNames = useMemo(() => {
+        const names = new Set();
+        for (const d of (game_data.proliferator_data || [])) {
+            if (d?.['增产剂']) names.add(d['增产剂']);
+        }
+        return names;
+    }, [game_data]);
+
     const filtered_graph = useMemo(() => {
-        // 仅需求模式（复用核心计算数据）
+        // 仅需求模式:从引擎二部图 recipes 自建无环投影(不复用引擎 edges——后者含
+        // 物品→电力 / 物品→喷涂增产剂 消耗边,供优化器做真实有环 SCC 分组)。
+        // 此处只保留真实原料边(增产剂内部链边 Mk.III→Mk.II 等保留),电力/增产剂
+        // 作为独立需求节点显示,电力经 电力→燃料 燃料链边出现。
         if (show_needs_only && needs_list && Object.keys(needs_list).length > 0 && engineGraphData) {
-            // 直接复用核心计算的边（过滤已删除物品；核心计算的边含电力边——耗电边 product→电力 与
-            // 燃料边 电力→燃料 两个方向，均不渲染，电力完全不进依赖图）
-            const filtered_edges = engineGraphData.edges.filter(e =>
-                !deleted_items.has(e.from) && !deleted_items.has(e.to)
-                && e.to !== '电力' && e.from !== '电力'
-            );
-            const filtered_items = new Set();
-            filtered_edges.forEach(e => {
-                filtered_items.add(e.from);
-                filtered_items.add(e.to);
+            const {edges, items} = projectNeedsOnlyEdges({
+                recipes: engineGraphData.graph.recipes,
+                recipeData: game_data.recipe_data,
+                needsList: needs_list,
+                deletedItems: deleted_items,
+                proliferatorItemNames,
             });
 
-            return {edges: filtered_edges, items: filtered_items, power_edges: new Set(), sccs: [], proliferator_edges: new Set()};
+            return {edges, items, power_edges: new Set(), sccs: [], proliferator_edges: new Set()};
         }
 
         // 全部配方模式：从全量数据中过滤已删除物品（无电力边、无增产剂边）
@@ -891,7 +900,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         });
 
         return {edges: filtered_edges, items: filtered_items, power_edges: new Set(), sccs: [], proliferator_edges: new Set()};
-    }, [full_graph_data, deleted_items, show_needs_only, needs_list, engineGraphData]);
+    }, [full_graph_data, deleted_items, show_needs_only, needs_list, engineGraphData, proliferatorItemNames, game_data.recipe_data]);
 
     const edge_colors = useMemo(() => {
         return assign_edge_colors(filtered_graph.edges);

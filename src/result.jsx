@@ -11,6 +11,7 @@ import allowed_recipes from '../data/allowed_recipes.json';
 import {FaExternalLinkAlt} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
+import {buildResultRowOrder} from './result-rows.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
@@ -554,12 +555,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
     }
 
-    for (let i in result_dict) {
+    for (const {item: i} of buildResultRowOrder(Object.keys(result_dict), side_products)) {
         // 跳过"电力"——已由置顶电力行处理
         if (i === "电力") continue;
 
         side_products[i] = side_products[i] || {};
-        let total = result_dict[i] + Object.values(side_products[i]).reduce((a, b) => a + b, 0);
+        // 纯联产物无自产净量,产能主数字显示 0,联产量走下方来源括号
+        let own_production = result_dict[i] || 0;
+        let side_sum = Object.values(side_products[i]).reduce((a, b) => a + b, 0);
+        let total = own_production + side_sum;
         if (total < 1e-6) continue;
         let recipe_id = item_data[i][scheme_data.item_recipe_choices[i]];
         // 缓存配方和方案数据，避免重复查找
@@ -571,7 +575,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         if (recipe["Type"] === -2 || (i in mineralize_list) || (settings.hide_mines && Object.keys(recipe["原料"]).length < 1)) {
             continue;
         }
-        let factory_number = get_factory_number(result_dict[i], i);
+        // 联产物无独立设备(设备计入来源配方行),工厂列仅显示 0
+        let building_detail = building_details[i];
+        let factory_number = get_factory_number(own_production, i);
         let from_side_products = Object.entries(side_products[i]).map(([from, amount]) =>
             <div key={from} className="text-nowrap">+{amount.toFixed(fixed_num)} (<ItemIcon item={from} size={is_mobile ? 18 : 26}/>)
             </div>
@@ -599,7 +605,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         </button>
                     }
                     <button className="btn btn-sm btn-outline-secondary ssmall mobile-hide"
-                            onClick={() => openInNewTab(i, get_gross_output(result_dict[i], i))}
+                            onClick={() => openInNewTab(i, get_gross_output(own_production, i) + side_sum)}
                             title="在新窗口计算（视为原矿）">
                         <FaExternalLinkAlt/>
                     </button>
@@ -614,17 +620,22 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </td>
             {/* 分钟毛产出 */}
             <td className="text-center">
-                <RatioAdjustInput value={get_gross_output(result_dict[i], i)}/>
+                <RatioAdjustInput value={get_gross_output(own_production, i)}/>
                 {from_side_products}
             </td>
             {/* 所需工厂*数目 */}
             <td className="text-nowrap">
                 {is_mineralized ||
                     <>
-                        <div className="d-inline-flex align-items-center gap-1">
-                            <ItemIcon item={factory_name} size={is_mobile ? 18 : 30}/>
-                            <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>
-                        </div>
+                        {building_detail &&
+                            <div className="d-inline-flex align-items-center gap-1">
+                                <ItemIcon item={factory_name} size={is_mobile ? 18 : 30}/>
+                                <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>
+                            </div>
+                        }
+                        {!building_detail &&
+                            <RatioAdjustInput value={0} trimZeros={true} ceil={true}/>
+                        }
                     </>
                 }
             </td>
