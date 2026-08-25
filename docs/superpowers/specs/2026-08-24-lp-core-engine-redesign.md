@@ -128,6 +128,10 @@ min Σ_r x_r        (固定内置)
 
 ```
 x_r > 0              → recipeExecutions:键为该配方的"主产物"(产物表中排序第一个物品,与现 itemData 索引约定一致),值为执行次数——保持现有消费方(buildingDetails/result.jsx 表格)按物品键遍历的兼容性;v2 多配方时同一物品键聚合多条配方的次数
+                       productionByItem(2026-08-25 补):主物品净产量 = 执行次数 × 单次净产出(outputs−inputs,含增产修正)。
+                         UI 展示口径(result.jsx 毛产出列/联产来源括号)必须用本字段——旧引擎配方归一化使执行次数恰等于
+                         净产量,LP 原始比例直译后多产物配方两者相差一个单次产出倍数(可燃冰2→石墨烯2+氢1 跑30次:
+                         次数30、产量60;曾因混用导致产能/来源括号显示折半)
 松弛量 s_j > 0 且 j 有配方 → surplusByproducts[j]
 无配方物品缺口        → resourceUsage[j] 正值(外部获取量)
 设备数                → x_r × singleExecBuildNumber(现有公式,dag.js 保留计算)

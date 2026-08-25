@@ -91,6 +91,19 @@ export class CoreEngine {
       recipeExecutions[key] = (recipeExecutions[key] || 0) + xVal;
     }
 
+    // 主物品净产量(UI 展示口径)= 执行次数 × 单次净产出(修正后系数 outputs−inputs,
+    // 已含增产修正)。recipeExecutions 是"执行次数"契约(spec §5);旧引擎配方归一化
+    // 使执行次数恰好等于净产量,LP 原始比例直译后多产物配方两者相差一个单次产出倍数
+    // (如可燃冰2→石墨烯2+氢1 跑30次:次数30、产量60),展示层必须用本字段。
+    const productionByItem = {};
+    for (const [recipeKey, xVal] of execByRecipe) {
+      if (xVal <= ZERO_EPS) continue;
+      const r = this.graph.recipes.get(recipeKey);
+      const netOut = (r.outputs[r.mainItem] || 0) - (r.inputs[r.mainItem] || 0);
+      if (netOut <= 0) continue; // 净产出非正的转换配方无"产量"可言
+      productionByItem[r.mainItem] = (productionByItem[r.mainItem] || 0) + xVal * netOut;
+    }
+
     // 松弛量:用解代入守恒行重算(lhs − rhs),避免依赖求解器对偶值
     // surplus > 0 → surplusByproducts(正值=多余量;含仅以联产物身份出现的物品)
     // surplus < 0 且物品无配方 → resourceUsage 正值(外部获取缺口)
@@ -269,7 +282,7 @@ export class CoreEngine {
     }
 
     return {
-      resourceUsage, surplusByproducts, recipeExecutions,
+      resourceUsage, surplusByproducts, recipeExecutions, productionByItem,
       buildingDetails, buildingList, selfConsumption, byproductSources,
       energyCost, minerEnergyCost, totalEnergyCost,
       footprintDetails, totalFootprint,

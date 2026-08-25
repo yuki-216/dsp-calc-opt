@@ -369,7 +369,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }, [engineCalculate, needs_list]);
 
     // 从新引擎结果中提取数据
-    const result_dict = engineResult?.recipeExecutions || EMPTY_OBJ;
+    // result_dict 用主物品净产量口径(执行次数×单次净产出):表格"毛产出"列与联产
+    // 来源括号展示的是产量。recipeExecutions 是执行次数契约,多产物配方(如可燃冰2→
+    // 石墨烯2+氢1)两者相差一个单次产出倍数,不可混用。
+    const result_dict = engineResult?.productionByItem || EMPTY_OBJ;
     const surplusByproducts = engineResult?.surplusByproducts || EMPTY_OBJ;
     const selfConsumption = engineResult?.selfConsumption || EMPTY_OBJ;
     const byproductSources = engineResult?.byproductSources || EMPTY_OBJ;
@@ -419,13 +422,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     // Dict<item, Dict<from, quantity>> - 使用新引擎的 byproductSources
     const side_products = useMemo(() => {
         const sp = {};
-        // byproductSources[副产物物品] = {来源物品: 每单位净产出的副产物量}
+        // byproductSources[副产物物品] = {来源物品: 每单位主物品净产出的副产物量};
+        // result_dict(productionByItem)同为主物品净产量口径,相乘即副产物总量。
         Object.entries(byproductSources).forEach(([side_product, sources]) => {
             Object.entries(sources).forEach(([source_item, amount]) => {
-                const exec_count = result_dict[source_item] || 0;
-                if (exec_count > 0) {
+                const production = result_dict[source_item] || 0;
+                if (production > 0) {
                     if (!sp[side_product]) sp[side_product] = {};
-                    sp[side_product][source_item] = exec_count * amount;
+                    sp[side_product][source_item] = production * amount;
                 }
             });
         });

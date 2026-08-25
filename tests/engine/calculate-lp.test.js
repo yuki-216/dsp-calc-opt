@@ -74,6 +74,23 @@ test('端到端:联产物抵消——多余副产品进 surplusByproducts(正值
     assert.ok(Math.abs(result.resourceUsage['原油'] - 20) < 1e-6);
 });
 
+test('productionByItem:UI 展示口径=执行次数×单次净产出(多产物配方不折半)', async () => {
+    const gd = makeGameData();
+    // 石墨烯式配方:可燃冰2→石墨烯2+氢1(单次净产2)
+    gd.recipe_data.push({_id: 3, 原料: {可燃冰: 2}, 产物: {石墨烯: 2, 氢: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0});
+    const scheme = makeScheme();
+    // 需求 石墨烯60 → 执行30次(次数口径),净产量60(展示口径),联产氢30全多余
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    const result = await engine.calculate([
+        {id: '石墨烯', name: '石墨烯', count: 60},
+    ], gd.recipe_data);
+
+    assert.equal(result.recipeExecutions['石墨烯'], 30);
+    assert.ok(Math.abs(result.productionByItem['石墨烯'] - 60) < 1e-6,
+        `productionByItem 应为产量口径60,实际 ${result.productionByItem['石墨烯']}`);
+    assert.ok(Math.abs(result.surplusByproducts['氢'] - 30) < 1e-6);
+});
+
 test('主配方优先:氢有净需求时缺口由主配方(采集器)补,禁止为副产扩精炼(z-分摊约束)', async () => {
     const gd = makeGameData();
     // 联产配方3:原油→氢×1+精炼油×2;采集配方5:空原料→氢×1;消耗配方4:氢×2→水×1
