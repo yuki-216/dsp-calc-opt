@@ -8,6 +8,15 @@ import {ItemIcon} from './ui_components.jsx';
 import {getFuelData} from './game_data.jsx';
 import {collectProliferatorChanges, collectProliferatorModeChanges} from './engine/proliferator-changes.js';
 
+// 整数优化方向选项（仅决定中间等级设备的方向；最低级固定紧凑、最高级固定省料）
+// 颜色/顺序对齐增产/加速: 省料↔增产(蓝,前), 紧凑↔加速(橙,后)
+const FACTORY_OPTIMIZE_MODES = [
+    {key: 'economy', label: '省料', className: 'pro-mode-extra-products',
+     tooltip: '尝试所有等级'},
+    {key: 'compact', label: '紧凑', className: 'pro-mode-speedup',
+     tooltip: '仅尝试高1级，失败则回退省料'},
+];
+
 export function Settings() {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
@@ -62,33 +71,6 @@ export function Settings() {
                            onChange={e => change_setting(e, "mining_speed_oil", 'float', 0.01)}/>
                 </td>
                 <td className="ps-2">{"/s（单个油井）"}</td>
-            </tr>
-            <tr>
-                <td>巨星氢面板</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.mining_speed_hydrogen} step={0.10}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_speed_hydrogen", 'float', 0.01)}/>
-                </td>
-                <td className="ps-2">{"/s（星球资源详情）"}</td>
-            </tr>
-            <tr>
-                <td>巨星重氢面板</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.mining_speed_deuterium} step={0.10}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_speed_deuterium", 'float', 0.01)}/>
-                </td>
-                <td className="ps-2">{"/s（星球资源详情）"}</td>
-            </tr>
-            <tr>
-                <td>巨星可燃冰面板</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.mining_speed_gas_hydrate} step={0.10}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_speed_gas_hydrate", 'float', 0.01)}/>
-                </td>
-                <td className="ps-2">{"/s（星球资源详情）"}</td>
             </tr>
             </tbody>
         </table>
@@ -154,18 +136,27 @@ export function Settings() {
                 </td>
                 <td className="ps-2">{settings.is_time_unit_minute ? "/min" : "/sec"}</td>
             </tr>
+            <tr>
+                <td className="fast-tooltip" data-tooltip="最低级强制紧凑，最高级强制省料">中间设备整数建议</td>
+                <td className="ps-2">
+                    <div className="pro-mode-toggle" role="radiogroup" aria-label="中间设备整数建议方向">
+                        {FACTORY_OPTIMIZE_MODES.map(m => (
+                            <div key={m.key}
+                                 className={`fast-tooltip pro-mode-option ${m.className || ''} ${settings.factory_optimize_mode === m.key ? 'pro-mode-active' : ''}`}
+                                 role="radio" aria-checked={settings.factory_optimize_mode === m.key} tabIndex={0}
+                                 data-tooltip={m.tooltip}
+                                 onClick={() => set_settings({factory_optimize_mode: m.key})}
+                                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') set_settings({factory_optimize_mode: m.key}); }}>
+                                {m.label}
+                            </div>
+                        ))}
+                    </div>
+                </td>
+            </tr>
             </tbody>
         </table>
         <table>
             <tbody>
-            <tr>
-                <td>速率单位</td>
-                <td className="ps-2">{settings.is_time_unit_minute ? "个/min" : "个/sec"}</td>
-                <td className="ps-2">
-                    <button onClick={e => change_setting(e, "is_time_unit_minute", 'bool')}>
-                        {settings.is_time_unit_minute ? "转化为秒" : "转化为分"}</button>
-                </td>
-            </tr>
             <tr>
                 <td>精度位数</td>
                 <td className="ps-2">
@@ -284,7 +275,7 @@ export function FuelSelect() {
     );
 }
 
-export function OptimizerControls({needs_list, set_show_ore_quantities, statsApplySignal}) {
+export function OptimizerControls({needs_list, set_show_ore_quantities, statsApplySignal, resultHasCollector, onNavigate}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
@@ -314,6 +305,16 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
         localStorage.setItem('dsp-no-proliferator-weight-percent', noProliferatorPercent);
     }, [noProliferatorPercent]);
     const [showStatsApplied, setShowStatsApplied] = useState(false);
+    // 结果表含轨道采集器时的"去获取精确值"提示(10秒消失)
+    const [showCollectorHint, setShowCollectorHint] = useState(false);
+    useEffect(() => {
+        if (resultHasCollector) {
+            setShowCollectorHint(true);
+            const t = setTimeout(() => setShowCollectorHint(false), 10000);
+            return () => clearTimeout(t);
+        }
+        setShowCollectorHint(false);
+    }, [resultHasCollector]);
     const logContainerRef = useRef(null);
 
     // 切换优化目标时自动调整
@@ -509,6 +510,12 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                 />
                 <span>%</span>
             </label>
+            {showCollectorHint && (
+                <a className="ms-2 small text-nowrap orbital-hint-link" onClick={() => onNavigate?.('seed-viewer')}
+                   title="前往种子查看器的轨道采集器面板，按该星球参数获取精确产量">
+                    去获取轨道采集器精确值
+                </a>
+            )}
             {optimStrategy === 'min_power' && (
                 <small className="text-muted ms-1 mobile-hide" style={{whiteSpace: 'nowrap'}}>💡 最小净热值更精确</small>
             )}

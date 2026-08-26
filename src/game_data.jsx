@@ -487,6 +487,55 @@ export class GlobalState {
     }
 }
 
+// ---- 轨道采集器自耗(官方机制) ----
+// 净采 = 毛采 × (1 − 工作能量/采集能量)。工作能量 30MW = WorkEnergyPerTick 500000 × 0.00006(Vanilla.json:6327);
+// 采集能量 = Σ 接口速率 × 倍率(8) × 采集速度 × 官方原始能量(氢/重氢 9MJ、可燃冰 4.8MJ)。
+const ORBITAL_SPEED = 8;                       // Speed, Vanilla.json:6328
+const ORBITAL_WORK_ENERGY = 30;                // MW
+const GAS_ENERGY = {氢: 9, 重氢: 9, 可燃冰: 4.8}; // MJ/单位(官方原始能量,非燃烧热值)
+
+/**
+ * 轨道采集器自耗效率:eff = max(0, 1 − 30 / 采集能量)。
+ * 采集能量 = 8 × gas_collect_speed × Σ(接口速率 × 能量)。
+ */
+export function getOrbitalCollectorEfficiency(settings) {
+    const speed = settings.gas_collect_speed || 1;
+    const collected = ORBITAL_SPEED * speed * (
+        (settings.mining_speed_hydrogen || 0) * GAS_ENERGY['氢'] +
+        (settings.mining_speed_deuterium || 0) * GAS_ENERGY['重氢'] +
+        (settings.mining_speed_gas_hydrate || 0) * GAS_ENERGY['可燃冰']
+    );
+    if (collected <= 0) return 0;
+    return Math.max(0, 1 - ORBITAL_WORK_ENERGY / collected);
+}
+
+/**
+ * 按显式速率计算单个轨道采集器/单球产量(面板"计算"用,与核心接口口径一致)。
+ * @param {Object} typeRates 该行星产出的 {物品: 速率/s}
+ * @param {number} speed 采集速度倍率(100%=1)
+ * @returns {{eff:number, perSecond:Object, perMinute:Object, perPlanet:Object}}
+ */
+export function computeOrbitalCollectorOutput(typeRates, speed) {
+    const sp = speed || 1;
+    const perSecond = {};
+    let collected = 0;
+    for (const [item, rate] of Object.entries(typeRates || {})) {
+        const gross = (rate || 0) * ORBITAL_SPEED * sp;
+        if (gross <= 0) continue;
+        perSecond[item] = gross;
+        collected += gross * (GAS_ENERGY[item] || 0);
+    }
+    const eff = collected > 0 ? Math.max(0, 1 - ORBITAL_WORK_ENERGY / collected) : 0;
+    const perMinute = {};
+    const perPlanet = {};
+    for (const [item, gross] of Object.entries(perSecond)) {
+        const net = gross * eff;
+        perMinute[item] = net * 60;
+        perPlanet[item] = net * 60 * 40; // 单球 = 单采集器 × 40
+    }
+    return {eff, perSecond, perMinute, perPlanet};
+}
+
 /**
  * 根据建筑类型应用相应的倍率
  * @param {number} output_num - 当前产量
@@ -505,7 +554,8 @@ export function ApplyBuildingMultiplier(output_num, building_name, item, setting
     } else if (building_name === "抽水站") {
         output_num *= settings.mining_speed_multiple;
     } else if (building_name === "轨道采集器") {
-        output_num *= settings.mining_speed_multiple;
+        // 采集器速度用 gas_collect_speed(面板科技%),不再乘 mining_speed_multiple(采矿速度保留给其它设备)
+        output_num *= settings.gas_collect_speed || 1;
         if (item === "氢") {
             output_num *= settings.mining_speed_hydrogen;
         } else if (item === "重氢") {
@@ -513,6 +563,7 @@ export function ApplyBuildingMultiplier(output_num, building_name, item, setting
         } else if (item === "可燃冰") {
             output_num *= settings.mining_speed_gas_hydrate;
         }
+        output_num *= getOrbitalCollectorEfficiency(settings);
     } else if (building_name.endsWith("分馏塔")) {
         output_num *= settings.fractionating_speed;
     }

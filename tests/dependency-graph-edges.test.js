@@ -112,3 +112,17 @@ test('电力作为需求:items 含 电力 且出现 from=电力 的燃料链边'
     assert.ok(result.items.has('电力'));
     assert.ok(result.edges.some(e => e.from === '电力' && e.to === '煤矿'));
 });
+
+test('副产物建普通依赖边:多产物配方每个产物都连向真实原料', () => {
+    const recipes = makeRecipes();
+    // 模拟等离子精炼式多产物配方:精炼油+氢 同源,共用原油
+    recipes.set('5', {recipeId: '5', mainItem: '精炼油', outputs: {精炼油: 2, 氢: 1}, inputs: {原油: 1, 电力: 0.4}});
+    const recipeData = [...RECIPE_DATA, {原料: {原油: 1}, 产物: {精炼油: 2, 氢: 1}}];
+    const result = call({recipes, recipeData});
+    const keys = edgeKeys(result);
+    assert.ok(keys.includes('精炼油->原油'), '主产物依赖边保留');
+    assert.ok(keys.includes('氢->原油'), '副产物氢也建普通依赖边,不孤立');
+    assert.ok(!keys.includes('精炼油->电力'), '电力消耗边仍被过滤');
+    assert.ok(!keys.includes('氢->电力'), '副产物也不连电力消耗边');
+    assert.ok(result.items.has('氢'), '副产物进入节点集');
+});

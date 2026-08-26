@@ -23,9 +23,17 @@ export const FuelSetterContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
     mining_speed_oil: 3.0,
-    mining_speed_hydrogen: 1.0,
-    mining_speed_deuterium: 0.05,
-    mining_speed_gas_hydrate: 0.8,
+    // 3 接口:核心计算轨道采集器的采集速率(氢/重氢/可燃冰),默认取 气巨 的氢/重氢 与 冰巨 的可燃冰
+    mining_speed_hydrogen: 0.9151,
+    mining_speed_deuterium: 0.0443,
+    mining_speed_gas_hydrate: 0.6902,
+    // 轨道采集器:采集速度(科技%,默认100%,10%步进)与 3 类气态行星默认参数(独立维度,各2速率)
+    gas_collect_speed: 1.0,
+    gas_planet_types: {
+        冰巨: {氢: 0.3281, 可燃冰: 0.6902},
+        气巨: {氢: 0.9151, 重氢: 0.0443},
+        高产气巨: {氢: 0.8502, 重氢: 0.1616},
+    },
 
     hide_mines: false,
     covered_veins_small: 6,
@@ -48,6 +56,7 @@ const DEFAULT_SETTINGS = {
     ore_quantities: {}, // {矿名: 可用量}，用于最大瓶颈法优化
     ore_quantity_star_num: 64,
     ore_quantity_mode: 'amount', // 'amount' | 'point'
+    factory_optimize_mode: 'compact', // 整数优化方向(仅中间等级设备): 'compact'(紧凑/向下取整) | 'economy'(省料/向上取整);最低级固定紧凑、最高级固定省料
 };
 export const DefaultSettingsContext = createContext(DEFAULT_SETTINGS);
 
@@ -92,13 +101,16 @@ export function ContextProvider({children}) {
     });
     const [settings, set_settings] = useSetState(() => {
         const saved = safe_parse_json(localStorage.getItem("auto_settings"));
-        let merged = saved ? {...DEFAULT_SETTINGS, ...saved} : DEFAULT_SETTINGS;
+        let merged = saved ? {...DEFAULT_SETTINGS, ...saved} : {...DEFAULT_SETTINGS};
         // 移除不在 DEFAULT_SETTINGS 中的旧字段（如 blue_buff）
         for (const key of Object.keys(merged)) {
             if (!(key in DEFAULT_SETTINGS)) {
                 delete merged[key];
             }
         }
+        // 速率单位固定按分钟(is_time_unit_minute 变常量):删除设置控件后仍强制 true,
+        // 防止用户旧存档中的 is_time_unit_minute:false 经 auto_settings 合并复活。
+        merged.is_time_unit_minute = true;
         return merged;
     });
     const [compact_mode, set_compact_mode] = useState(() => get_compact_mode(window.innerWidth));

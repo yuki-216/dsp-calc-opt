@@ -167,10 +167,12 @@ test('设备数/耗电不随 BFS 入图物品漂移:60塑料 与 60塑料+60氢 
         `占地应一致:A=${a.totalFootprint} B=${b.totalFootprint}`);
 
     // 绝对值:反应4s、制造台倍率1 → 单次执行 4/60 台,60 次 = 4 台(原版真值,非 2 台)
+    // 展示主物品归属(BFS 无关):A 氢多余→归精炼油;B 都消耗→平局取净产出大的精炼油
     assert.ok(Math.abs(a.buildingDetails['精炼油'].设备数量 - 4) < 1e-6,
         `精炼链设备应为4台,实际 ${a.buildingDetails['精炼油'].设备数量}`);
-    assert.ok(Math.abs(b.buildingDetails['氢'].设备数量 - 4) < 1e-6,
-        `B 精炼链设备应为4台,实际 ${b.buildingDetails['氢'].设备数量}`);
+    assert.ok(Math.abs(b.buildingDetails['精炼油'].设备数量 - 4) < 1e-6,
+        `B 精炼链设备应为4台,实际 ${b.buildingDetails['精炼油'].设备数量}`);
+    assert.ok(!b.buildingDetails['氢'], 'B 的氢不再持有精炼链设备');
 });
 
 test('端到端:采集配方(空原料单产物)产量计入 resourceUsage', async () => {
@@ -192,4 +194,24 @@ test('端到端:采集配方(空原料单产物)产量计入 resourceUsage', asy
     // 采集设备进入设备表
     assert.ok(result.buildingDetails['原油']);
     assert.equal(result.buildingDetails['原油'].factoryName, '原油萃取站');
+});
+
+test('需求电力:totalPowerDemand = 总发电量(净需求 + 设备自耗)', async () => {
+    const gd = makeGameData();
+    const scheme = makeScheme();
+    scheme.selected_fuel = '燃料';
+    const engine = new CoreEngine(gd, scheme, {is_time_unit_minute: true}, null);
+    // 齿轮链设备自耗3(齿轮10次×0.1 + 铁块10次×0.2),显式需求电力60
+    // → LP 守恒总发电 = 自耗3 + 净需求60 = 63;燃料配方每次产10电力 → 执行 63/10 = 6.3 次
+    const result = await engine.calculate([
+        {id: '齿轮', name: '齿轮', count: 10},
+        {id: '电力', name: '电力', count: 60},
+    ], gd.recipe_data);
+
+    assert.ok(Math.abs(result.totalEnergyCost - 3) < 1e-6,
+        `设备自耗应仍为3,实际 ${result.totalEnergyCost}`);
+    assert.ok(Math.abs(result.totalPowerDemand - 63) < 1e-6,
+        `总发电量应为63(自耗3+净需求60),实际 ${result.totalPowerDemand}`);
+    assert.ok(Math.abs(result.recipeExecutions['电力'] - 6.3) < 1e-6,
+        `燃料配方应执行6.3次,实际 ${result.recipeExecutions['电力']}`);
 });

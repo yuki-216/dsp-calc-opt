@@ -210,6 +210,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const [show_building_popup, set_show_building_popup] = useState(false);
     const [statsApplySignal, setStatsApplySignal] = useState(0);
     const handleStatsApplied = useCallback(() => setStatsApplySignal(s => s + 1), []);
+    const [resultHasCollector, setResultHasCollector] = useState(false); // 结果表建筑统计是否含轨道采集器(提示用)
     const prev_game_name = useRef(game_info?.game_data?.game_name ?? '');
 
     useEffect(() => {
@@ -276,7 +277,8 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             {/*矿物可用量设置*/}
             {show_ore_quantities && <OreQuantitiesPanel game_info={game_info} settings={settings} set_settings={set_settings} onNavigate={onNavigate} onStatsApplied={handleStatsApplied}/>}
             {/*可选增产剂、策略与自动优化（矿物可用量下、添加需求上）*/}
-            <OptimizerControls needs_list={needs_list} set_show_ore_quantities={set_show_ore_quantities} statsApplySignal={statsApplySignal}/>
+            <OptimizerControls needs_list={needs_list} set_show_ore_quantities={set_show_ore_quantities} statsApplySignal={statsApplySignal}
+                               resultHasCollector={resultHasCollector} onNavigate={onNavigate}/>
             {/*添加需求*/}
             <NeedsList needs_list={needs_list} set_needs_list={set_needs_list}
                        set_show_ore_popup={set_show_ore_popup}
@@ -288,7 +290,8 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
         <div className="app-result-area">
             <Result needs_list={needs_list} set_needs_list={set_needs_list}
                     show_ore_popup={show_ore_popup} set_show_ore_popup={set_show_ore_popup}
-                    show_building_popup={show_building_popup} set_show_building_popup={set_show_building_popup}/>
+                    show_building_popup={show_building_popup} set_show_building_popup={set_show_building_popup}
+                    onCollectorDetected={setResultHasCollector}/>
         </div>
     </div>;
 }

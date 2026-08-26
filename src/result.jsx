@@ -1,7 +1,7 @@
 import {useCallback, useContext, useMemo, useState, useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
-import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext, EngineLogContext} from './contexts';
+import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
 import {DEBUG} from './engine/debug.js';
 import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION, FUEL_DATA_BASE} from './game_data.jsx';
 import {ItemIcon} from './ui_components';
@@ -11,7 +11,8 @@ import allowed_recipes from '../data/allowed_recipes.json';
 import {FaExternalLinkAlt} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
-import {buildResultRowOrder} from './result-rows.js';
+import {buildResultRowOrder, collectDemandedItems} from './result-rows.js';
+import {optimizeFactoryMix, isOptimizableFactoryGroup} from './factory-integer-optimizer.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
@@ -169,6 +170,17 @@ export const pro_mode_class = {
     [3]: "pro-mode-lens"
 }
 
+// 整数优化列图标尺寸：默认与"设备"列一致(30/18)；条目过多超出列宽(120)时自适应缩小
+function mixIconSizeFor(n, isMobile) {
+    const base = isMobile ? 18 : 30;
+    if (n <= 1) return base;
+    const usable = 118;        // 120 列宽扣除边距余量
+    const gap = 6;             // me-1 间距
+    const countW = 12;         // 数量小号文字宽度估算
+    const per = Math.floor((usable - (n - 1) * gap) / n);
+    return Math.max(12, Math.min(base, per - countW));
+}
+
 export function ProModeSelect({recipe_id, choice, onChange}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
@@ -230,7 +242,8 @@ const isEqual = (obj1, obj2) => {
 
     // 比较能源成本
     if (Math.abs(obj1.energyCost - obj2.energyCost) > 1e-6 ||
-        Math.abs(obj1.totalEnergyCost - obj2.totalEnergyCost) > 1e-6) {
+        Math.abs(obj1.totalEnergyCost - obj2.totalEnergyCost) > 1e-6 ||
+        Math.abs((obj1.totalPowerDemand || 0) - (obj2.totalPowerDemand || 0)) > 1e-6) {
         return false;
     }
 
@@ -265,11 +278,10 @@ const isEqual = (obj1, obj2) => {
     return true;
 };
 
-export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore_popup, show_building_popup, set_show_building_popup}) {
+export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore_popup, show_building_popup, set_show_building_popup, onCollectorDetected}) {
     const global_state = useContext(GlobalStateContext);
     const engineCalculate = useContext(EngineCalculateContext);
     const calculationError = useContext(CalculationErrorContext);
-    const engineLogs = useContext(EngineLogContext) || [];
     const set_scheme_data = useContext(SchemeDataSetterContext);
     const set_settings = useContext(SettingsSetterContext);
     const compact_mode = useContext(CompactModeContext);
@@ -377,6 +389,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const surplusByproducts = engineResult?.surplusByproducts || EMPTY_OBJ;
     const selfConsumption = engineResult?.selfConsumption || EMPTY_OBJ;
     const byproductSources = engineResult?.byproductSources || EMPTY_OBJ;
+    const result_graph = engineResult?.graph;
 
     // 用于存储历史值的数组，最多保留两个版本
     const [historyValues, setHistoryValues] = useState([]);
@@ -399,9 +412,18 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     // 从新引擎获取耗电和建筑数据
     // 电力合一：引擎侧 energyCost==totalEnergyCost、minerEnergyCost 恒 0，UI 统一读总耗电
     let total_energy_cost = engineResult?.totalEnergyCost || 0;
+    // 需求电力修复：总电力需求 = 总发电量（净输出需求 + 设备自耗），选燃料时有值；
+    // 未选燃料时退化为设备耗电（本次不展示需求缺口）。
+    let total_power_demand = engineResult?.totalPowerDemand ?? total_energy_cost;
     let building_list = engineResult?.buildingList || {};
     let building_details = engineResult?.buildingDetails || {};
     let total_footprint = engineResult?.totalFootprint || 0;
+
+    // 建筑统计含轨道采集器 → 通知 App 显示"去获取精确值"提示
+    useEffect(() => {
+        const bl = engineResult?.buildingList;
+        onCollectorDetected?.(bl ? Object.prototype.hasOwnProperty.call(bl, '轨道采集器') : false);
+    }, [engineResult?.buildingList, onCollectorDetected]);
 
     function get_factory_number(amount, item) {
         // 从引擎的 buildingDetails 中获取设备数量
@@ -436,6 +458,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         });
         return sp;
     }, [result_dict, byproductSources]);
+
+    // 被需求过的物品集合（顶层需求 ∪ 各已入图配方原料）：联产物只有被需求过才独立成行，
+    // 纯多余联产物不占行，多余量走「多余产物」面板（surplusByproducts 驱动）。
+    const demandedItems = useMemo(() => collectDemandedItems(result_graph), [result_graph]);
 
     function mineralize(item) {
         set_settings(prev => ({mineralize_list: {...prev.mineralize_list, [item]: true}}));
@@ -488,9 +514,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         </span>;
     };
 
-    // 置顶电力行（如果选择了燃料且有电力消耗）
-    if (selectedFuel && selectedFuel !== "无" && total_energy_cost > 0) {
-        const totalEnergy = total_energy_cost;
+    // 置顶电力行（如果选择了燃料且有电力需求）
+    if (selectedFuel && selectedFuel !== "无" && total_power_demand > 0) {
+        const totalEnergy = total_power_demand;
         const fuelRecipe = getFuelRecipe(selectedFuel);
         if (fuelRecipe) {
             const fuelDataList = getFuelData(game_data);
@@ -517,7 +543,6 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     <td>
                         <div className="d-flex align-items-center text-nowrap">
                             <ItemIcon item="电力" tooltip={is_compact} size={mob_icon}/>
-                            <small className="ms-1 item-name-text">电力</small>
                         </div>
                     </td>
                     <td className="text-center">
@@ -531,6 +556,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             </div>
                         )}
                     </td>
+                    {/* 电力行不做混合工厂建议，占位列对齐 */}
+                    <td></td>
                     <td><div className="my-1 px-2 py-1"><Recipe recipe={fuelRecipe} compact={compact_mode}/></div></td>
                     <td>
                         {fuelRecipeIndex >= 0 && (
@@ -555,7 +582,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         }
     }
 
-    for (const {item: i} of buildResultRowOrder(Object.keys(result_dict), side_products)) {
+    for (const {item: i} of buildResultRowOrder(Object.keys(result_dict), side_products, demandedItems)) {
         // 跳过"电力"——已由置顶电力行处理
         if (i === "电力") continue;
 
@@ -583,6 +610,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </div>
         );
         let factory_name = game_data.factory_data[recipe["设施"]][scheme_recipe["建筑"]]["名称"];
+        // 整数优化建议：仅对熔炉/制造台/化工厂计算（纯提示，不改电力/占地）
+        const factoryGroup = game_data.factory_data[recipe["设施"]];
+        const mixSuggestion = (factoryGroup && isOptimizableFactoryGroup(factoryGroup))
+            ? optimizeFactoryMix({c: factory_number, levels: factoryGroup,
+                                  baseIndex: scheme_recipe["建筑"], direction: settings.factory_optimize_mode})
+            : null;
+        // 整数优化列图标尺寸：与"设备"列一致；条目多时按列宽自适应缩小
+        const mixIconSize = mixSuggestion ? mixIconSizeFor(mixSuggestion.mix.length, is_mobile) : 0;
         let is_mineralized = i in mineralize_list;
         let row_class = is_mineralized ? "table-secondary" : "";
 
@@ -611,11 +646,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     </button>
                 </div>
             </td>
-            {/* 目标物品 */}
+            {/* 目标物品（仅图标，名称靠悬停） */}
             <td>
                 <div className="d-flex align-items-center text-nowrap">
                     <ItemIcon item={i} tooltip={is_compact} size={mob_icon}/>
-                    <small className="ms-1 item-name-text">{i}</small>
                 </div>
             </td>
             {/* 分钟毛产出 */}
@@ -638,6 +672,19 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         }
                     </>
                 }
+            </td>
+            {/* 整数优化建议（混合工厂等级凑偶数台，仅提示不改算） */}
+            <td className="text-nowrap">
+                {!is_mineralized && mixSuggestion && (
+                    <span className="fast-tooltip d-inline-flex align-items-center"
+                          data-tooltip={mixSuggestion.type === 'compact' ? '紧凑（省占地）' : '省料（避免浪费）'}>
+                        {mixSuggestion.mix.map(m => [
+                            <ItemIcon key={`mix-i-${m.levelIndex}`} item={factoryGroup[m.levelIndex]['名称']} tooltip={false} size={mixIconSize}/>,
+                            <span key={`mix-c-${m.levelIndex}`} className="me-1 ssmall align-self-end"
+                                  style={{color: mixSuggestion.type === 'compact' ? '#e8943a' : '#3a9de8'}}>{m.count}</span>,
+                        ])}
+                    </span>
+                )}
             </td>
             {/* 所选配方 */}
             <td><RecipeSelect item={i} onChange={change_recipe}
@@ -772,6 +819,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         const currentValues = {
             energyCost: total_energy_cost,
             totalEnergyCost: total_energy_cost,
+            totalPowerDemand: total_power_demand,
             buildingCounts: { ...building_list },
             rawMaterials: {},
             // surplusByproducts 引擎侧已是正值（多余量），直接透传保持口径一致
@@ -809,25 +857,20 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 <strong>计算错误：</strong>{calculationError}
             </div>
         )}
-        {DEBUG && engineLogs.length > 0 && (
-            <details className="m-2 border rounded p-2" style={{fontSize: '0.8rem'}}>
-                <summary>引擎计算日志（共生产品机制等）</summary>
-                <pre className="mb-0" style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>{engineLogs.join('\n')}</pre>
-            </details>
-        )}
         {/* 左侧：结果表格独立滚动区域 */}
         <div className="result-table-scroll">
         <table className="table table-sm align-middle w-auto result-table">
             <thead>
             <tr className="text-center text-nowrap">
                 <th width={60}>操作</th>
-                <th width={140}>物品</th>
+                <th width={40}>物品</th>
                 <th width={130}>产能</th>
-                <th width={110}>工厂</th>
+                <th width={110}>设备</th>
+                <th width={120} className="fast-tooltip" data-tooltip="优化到满足产能的偶数设备">整数建议</th>
                 <th width={300}>配方选取</th>
                 <th width={90}>增产模式</th>
                 <th width={160}>增产剂</th>
-                <th width={170}>工厂类型</th>
+              <th width={170}>设备等级</th>
             </tr>
             </thead>
             <tbody className="table-group-divider">
@@ -861,11 +904,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <div className="d-flex flex-column gap-1">
                             <div className="d-flex align-items-center gap-1 text-nowrap">
                                 <span className="text-muted">总计：</span>
-                                <span className="fast-tooltip" data-tooltip="包含采集设备">
+                                <span className="fast-tooltip" data-tooltip="总发电量=净输出需求+设备自耗">
                                     <ValueWithDifference
-                                        currentValue={total_energy_cost}
-                                        previousValue={historyValues?.[1]?.totalEnergyCost}
-                                        key="total-energy-cost"
+                                        currentValue={total_power_demand}
+                                        previousValue={historyValues?.[1]?.totalPowerDemand}
+                                        key="total-power-demand"
                                     />
                                 </span>
                             </div>
@@ -951,10 +994,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                 <div className="d-flex align-items-center text-nowrap">
                                     <span className="text-muted">总计：</span>
                                     <div className="d-flex flex-column">
-                                        <span>{formatValue(total_energy_cost, fixed_num)}</span>
-                                        {historyValues?.[1]?.totalEnergyCost !== undefined && Math.abs(total_energy_cost - historyValues[1].totalEnergyCost) > 1e-6 && (
-                                            <span style={{fontSize: '0.85em', color: total_energy_cost > historyValues[1].totalEnergyCost ? 'red' : 'green'}}>
-                                                {total_energy_cost > historyValues[1].totalEnergyCost ? '+' : ''}{formatValue(total_energy_cost - historyValues[1].totalEnergyCost, fixed_num)}
+                                        <span>{formatValue(total_power_demand, fixed_num)}</span>
+                                        {historyValues?.[1]?.totalPowerDemand !== undefined && Math.abs(total_power_demand - historyValues[1].totalPowerDemand) > 1e-6 && (
+                                            <span style={{fontSize: '0.85em', color: total_power_demand > historyValues[1].totalPowerDemand ? 'red' : 'green'}}>
+                                                {total_power_demand > historyValues[1].totalPowerDemand ? '+' : ''}{formatValue(total_power_demand - historyValues[1].totalPowerDemand, fixed_num)}
                                             </span>
                                         )}
                                     </div>
@@ -1124,11 +1167,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                 <div className="d-flex flex-column gap-1">
                                     <div className="d-flex align-items-center gap-1 text-nowrap">
                                         <span className="text-muted">总电力：</span>
-                                        <span className="fast-tooltip" data-tooltip="包含采集设备">
+                                        <span className="fast-tooltip" data-tooltip="总发电量=净输出需求+设备自耗">
                                             <ValueWithDifference
-                                                currentValue={total_energy_cost}
-                                                previousValue={historyValues?.[1]?.totalEnergyCost}
-                                                key="total-energy-cost"
+                                                currentValue={total_power_demand}
+                                                previousValue={historyValues?.[1]?.totalPowerDemand}
+                                                key="total-power-demand"
                                             />
                                         </span>
                                         <span className="text-muted">MW</span>

@@ -254,16 +254,45 @@
     padding: 12px;
 }
 
-/* 右侧详情面板 */
-.detail-panel {
+/* 右侧:上半星球详情、下半轨道采集器(两块独立) */
+.result-right {
     width: 400px;
     min-width: 400px;
-    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+}
+.detail-panel {
+    flex: 1 1 50%;
     min-height: 0;
     overflow-y: auto;
     background: var(--bs-card-bg);
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.orbital-panel {
+    flex: 1 1 50%;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: var(--bs-card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.orbital-panel-header {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--bs-body-color);
+}
+.orbital-panel .orbital-result {
+    background: var(--bs-tertiary-bg);
+    border-radius: 4px;
+    padding: 6px 8px;
+    line-height: 1.6;
 }
 
 /* 树节点样式 */
@@ -349,6 +378,15 @@
     margin-left: 4px;
 }
 
+/* 气态行星类型标签（气态巨星/高产气巨/冰巨星） */
+.star-type-tag.gas-tag {
+    color: #7a5cff;
+    font-weight: 600;
+    background: rgba(122, 92, 255, 0.14);
+    border-radius: 3px;
+    padding: 0 3px;
+}
+
 .tree-info {
     font-size: 12px;
     color: var(--bs-secondary-color);
@@ -370,6 +408,12 @@
 .tree-info .tag.special {
     background: var(--bs-primary-bg-subtle);
     color: var(--bs-primary-text-emphasis);
+}
+
+.tree-info .tag.gas-tag {
+    background: rgba(122, 92, 255, 0.16);
+    color: #7a5cff;
+    font-weight: 600;
 }
 
 .tree-children {
@@ -567,6 +611,19 @@
     font-size: 1rem;
     font-weight: 600;
     color: var(--bs-body-color);
+}
+
+/* 轨道采集器面板 */
+.orbital-panel .orbital-result {
+    background: var(--bs-tertiary-bg);
+    border-radius: 4px;
+    padding: 6px 8px;
+    line-height: 1.6;
+}
+.orbital-panel .orbital-interface {
+    border-top: 1px dashed var(--bs-border-color);
+    padding-top: 6px;
+    line-height: 1.8;
 }
 
 .stats-panel-icon {

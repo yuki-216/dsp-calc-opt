@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { VEIN_NAMES, STAR_TYPES, formatAmount, formatOilRate } from './seed_viewer_binding';
+import OrbitalCollectorPanel from './OrbitalCollectorPanel';
 
 // 恒星颜色
 const STAR_COLORS = {
@@ -288,6 +289,8 @@ export default function SeedViewerResult({
                                 <span className="tree-label">{star.name} <span className="star-type-tag">{star.type}</span></span>
                                 <span className="tree-info">
                                     {star.distance.toFixed(1)}LY
+                                    {[...new Set((star.planets || []).filter(p => p.is_gas).map(p => p.type))].map(t =>
+                                        <span key={t} className="tag gas-tag">{t}</span>)}
                                     {rareVeins.map(v => <span key={v} className="tag rare">{v}</span>)}
                                 </span>
                             </div>
@@ -315,7 +318,7 @@ export default function SeedViewerResult({
                                                     <span className="tree-icon planet" style={{ backgroundColor: planet.is_gas ? '#909399' : (PLANET_COLORS[planet.type_id] || '#67c23a') }}>
                                                         {planet.is_gas ? '气' : '星'}
                                                     </span>
-                                                    <span className="tree-label">{planet.name} <span className="star-type-tag">{planet.type}</span></span>
+                                                    <span className="tree-label">{planet.name} <span className={`star-type-tag ${planet.is_gas ? 'gas-tag' : ''}`}>{planet.type}</span></span>
                                                     <span className="tree-info">{tags}</span>
                                                 </div>
                                             </div>
@@ -335,8 +338,12 @@ export default function SeedViewerResult({
             <div className="tree-panel">
                 {renderTree()}
             </div>
-            <div className="detail-panel">
-                {renderDetail()}
+            {/* 右侧:上半星球详情、下半轨道采集器(两块独立) */}
+            <div className="result-right">
+                <div className="detail-panel">
+                    {renderDetail()}
+                </div>
+                <OrbitalCollectorPanel result={data}/>
             </div>
         </div>
     );

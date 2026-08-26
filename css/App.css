@@ -154,10 +154,14 @@
 
 .fast-tooltip:hover::after {
     z-index: 10000;
-    position: fixed;
+    /* 相对 .fast-tooltip(relative) 定位，滚动时跟随元素，避免 fixed 漂移 */
+    position: absolute;
+    top: 100%;
+    left: 0;
     display: block;
     content: attr(data-tooltip);
     width: max-content;
+    max-width: 70vw;
     background-color: #333;
     color: white;
     padding: .15em .4em;
@@ -736,6 +740,16 @@ body > .p-3 {
     background-color: var(--bs-body-bg);
     color: var(--bs-body-color);
     border: 1px solid var(--bs-border-color);
+}
+
+/* 结果表"轨道采集器精确值"提示链接 */
+.orbital-hint-link {
+    color: #7a5cff;
+    cursor: pointer;
+    text-decoration: underline;
+}
+.orbital-hint-link:hover {
+    color: #5a3ce0;
 }
 
 /* Dark theme fixes for mineralized rows and selected buttons */
