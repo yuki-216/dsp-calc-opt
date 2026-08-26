@@ -262,9 +262,9 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                     <span className="compact-hide-text">清空数据缓存</span>
                 </button>
                 <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
-                        onClick={() => set_misc_show(s => !s)} title="采矿参数 & 其他设置">
+                        onClick={() => set_misc_show(s => !s)} title="参数设置">
                     <FaCog/>
-                    <span className="compact-hide-text">采矿参数 & 其他设置</span>
+                    <span className="compact-hide-text">参数设置</span>
                 </button>
                 <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_ore_quantities ? 'btn-primary' : 'btn-outline-secondary'}`}
                         onClick={() => set_show_ore_quantities(s => !s)} title="矿物可用量设置">
@@ -291,7 +291,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             <Result needs_list={needs_list} set_needs_list={set_needs_list}
                     show_ore_popup={show_ore_popup} set_show_ore_popup={set_show_ore_popup}
                     show_building_popup={show_building_popup} set_show_building_popup={set_show_building_popup}
-                    onCollectorDetected={setResultHasCollector}/>
+                    onCollectorDetected={setResultHasCollector} onNavigate={onNavigate}/>
         </div>
     </div>;
 }

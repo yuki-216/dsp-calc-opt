@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
-import { FaSearch, FaSpinner, FaExclamationTriangle, FaChartLine } from 'react-icons/fa';
+import { FaSearch, FaSpinner, FaExclamationTriangle, FaChartLine, FaArrowLeft } from 'react-icons/fa';
 import { doInit, getSeedData, isSeedDataValid, RESOURCE_RATES } from './seed_viewer_binding';
 import { getStats, getStatsConvergence } from './seed_stats_api';
 import { SettingsContext, SettingsSetterContext } from './contexts.jsx';
@@ -333,6 +333,11 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
         <div className="seed-viewer-page">
             {/* 输入面板 */}
             <div className="input-panel">
+                <button className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 mb-2"
+                        onClick={() => onNavigate?.('calculator')}>
+                    <FaArrowLeft/>
+                    <span>返回计算器</span>
+                </button>
                 <h2>种子查看器</h2>
                 <p className="description">
                     查询指定种子的资源分布，查看恒星和行星详情

@@ -131,6 +131,8 @@ export function get_game_data() {
     // 手动添加"电力"图标映射和网格位置（电力不在items数据中，但精灵图中有）
     data.item_icon_name["电力"] = "电力";
     data.item_grid["电力"] = 2601; // 放在空闲位置
+    // 挖矿简化:统一"挖矿机"复用采矿机图标(采矿机/大型采矿机合并显示)
+    data.item_icon_name["挖矿机"] = data.item_icon_name["采矿机"];
 
     //data.recipe_data & data.factory_data
     function get_item_by_id(itemID) {
@@ -494,21 +496,30 @@ const ORBITAL_SPEED = 8;                       // Speed, Vanilla.json:6328
 const ORBITAL_WORK_ENERGY = 30;                // MW
 const GAS_ENERGY = {氢: 9, 重氢: 9, 可燃冰: 4.8}; // MJ/单位(官方原始能量,非燃烧热值)
 
+// ---- 挖矿简化:单位采集耗电基准(kW/个,默认参数算出) ----
+// 采矿机 0.42MW/180 = 2.333; 大型采矿机 2.94×3²=26.46MW/2880 = 9.19; 原油萃取站 0.84MW/150 = 5.6
+export const MINING_PER_UNIT_SMALL = 2.333;
+export const MINING_PER_UNIT_LARGE = 9.19;
+export const OIL_PER_UNIT = 5.6;
+
+/** 挖矿单位采集耗电(MW/(矿/min)) = 滑块线性插值 ÷ 采集速度(科技) */
+export function getMiningPerUnit(settings) {
+    const pct = (settings.mining_power_slider ?? 0) / 100;
+    const perUnit = MINING_PER_UNIT_SMALL + pct * (MINING_PER_UNIT_LARGE - MINING_PER_UNIT_SMALL);
+    const speed = settings.gas_collect_speed || 1;
+    return perUnit / 1000 / speed;
+}
+
+/** 原油萃取站单位采集耗电(MW/(原油/min)) = 5.6 ÷ 采集速度(科技) */
+export function getOilPerUnit(settings) {
+    const speed = settings.gas_collect_speed || 1;
+    return OIL_PER_UNIT / 1000 / speed;
+}
+
 /**
  * 轨道采集器自耗效率:eff = max(0, 1 − 30 / 采集能量)。
  * 采集能量 = 8 × gas_collect_speed × Σ(接口速率 × 能量)。
  */
-export function getOrbitalCollectorEfficiency(settings) {
-    const speed = settings.gas_collect_speed || 1;
-    const collected = ORBITAL_SPEED * speed * (
-        (settings.mining_speed_hydrogen || 0) * GAS_ENERGY['氢'] +
-        (settings.mining_speed_deuterium || 0) * GAS_ENERGY['重氢'] +
-        (settings.mining_speed_gas_hydrate || 0) * GAS_ENERGY['可燃冰']
-    );
-    if (collected <= 0) return 0;
-    return Math.max(0, 1 - ORBITAL_WORK_ENERGY / collected);
-}
-
 /**
  * 按显式速率计算单个轨道采集器/单球产量(面板"计算"用,与核心接口口径一致)。
  * @param {Object} typeRates 该行星产出的 {物品: 速率/s}
@@ -545,25 +556,24 @@ export function computeOrbitalCollectorOutput(typeRates, speed) {
  * @returns {number} 应用倍率后的产量
  */
 export function ApplyBuildingMultiplier(output_num, building_name, item, settings) {
-    if (building_name === "采矿机") {
-        output_num *= settings.mining_speed_multiple * settings.covered_veins_small;
-    } else if (building_name === "大型采矿机") {
-        output_num *= settings.mining_speed_multiple * settings.covered_veins_large * settings.mining_efficiency_large;
-    } else if (building_name === "原油萃取站") {
-        output_num *= settings.mining_speed_multiple * settings.mining_speed_oil;
-    } else if (building_name === "抽水站") {
-        output_num *= settings.mining_speed_multiple;
-    } else if (building_name === "轨道采集器") {
-        // 采集器速度用 gas_collect_speed(面板科技%),不再乘 mining_speed_multiple(采矿速度保留给其它设备)
+    // 挖矿简化:采矿机/大型采矿机统一为"挖矿机"(设备数不展示),吞吐只影响隐藏台数;
+    // 原油萃取站油井固定 2.5/s;抽水站基础产量固定 50/min
+    if (building_name === "采矿机" || building_name === "大型采矿机" || building_name === "挖矿机") {
         output_num *= settings.gas_collect_speed || 1;
+    } else if (building_name === "原油萃取站") {
+        output_num *= 2.5 * (settings.gas_collect_speed || 1);
+    } else if (building_name === "抽水站") {
+        output_num *= 4 * (settings.gas_collect_speed || 1);
+    } else if (building_name === "轨道采集器") {
+        // mining_speed_* 即"单采集器实际产量"(净产出 /min,由面板计算)。
+        // 采集器配方 时间=1s、Speed=8 → 基础 480 次/min,吞吐倍率 = 实际产量/480
         if (item === "氢") {
-            output_num *= settings.mining_speed_hydrogen;
+            output_num *= (settings.mining_speed_hydrogen || 0) / 480;
         } else if (item === "重氢") {
-            output_num *= settings.mining_speed_deuterium;
+            output_num *= (settings.mining_speed_deuterium || 0) / 480;
         } else if (item === "可燃冰") {
-            output_num *= settings.mining_speed_gas_hydrate;
+            output_num *= (settings.mining_speed_gas_hydrate || 0) / 480;
         }
-        output_num *= getOrbitalCollectorEfficiency(settings);
     } else if (building_name.endsWith("分馏塔")) {
         output_num *= settings.fractionating_speed;
     }

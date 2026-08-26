@@ -22,11 +22,10 @@ export const FuelContext = createContext(null);
 export const FuelSetterContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
-    mining_speed_oil: 3.0,
-    // 3 接口:核心计算轨道采集器的采集速率(氢/重氢/可燃冰),默认取 气巨 的氢/重氢 与 冰巨 的可燃冰
-    mining_speed_hydrogen: 0.9151,
-    mining_speed_deuterium: 0.0443,
-    mining_speed_gas_hydrate: 0.6902,
+    // 3 接口:核心计算轨道采集器的"单采集器实际产量"(净产出,单位 /min)
+    mining_speed_hydrogen: 234.26,
+    mining_speed_deuterium: 43.79,
+    mining_speed_gas_hydrate: 76.11,
     // 轨道采集器:采集速度(科技%,默认100%,10%步进)与 3 类气态行星默认参数(独立维度,各2速率)
     gas_collect_speed: 1.0,
     gas_planet_types: {
@@ -35,11 +34,9 @@ const DEFAULT_SETTINGS = {
         高产气巨: {氢: 0.8502, 重氢: 0.1616},
     },
 
-    hide_mines: false,
-    covered_veins_small: 6,
-    covered_veins_large: 16,
-    mining_efficiency_large: 3.0,
-    mining_speed_multiple: 1.0,
+    // 挖矿简化:单位采集耗电滑块(0%=采矿机 2.333, 100%=大型采矿机 9.19 kW/个);
+    // 采集速度(科技,%)与轨道采集器面板共享 gas_collect_speed
+    mining_power_slider: 0,
     fractionating_speed: 30,
 
     is_time_unit_minute: true,

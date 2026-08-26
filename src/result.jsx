@@ -17,6 +17,12 @@ import {optimizeFactoryMix, isOptimizableFactoryGroup} from './factory-integer-o
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
 
+// 挖矿简化:设备数不展示(×?)的建筑;建筑统计里不出现的(挖矿机/原油萃取站);采矿机/大型采矿机 统一显示为 挖矿机
+// 轨道采集器设备数可按单采集器产量折算,设备列正常显示;仅建筑统计汇总值 ×?
+const HIDDEN_DEVICE_BUILDINGS = new Set(['挖矿机', '原油萃取站']);
+const NO_BUILDING_STATS = new Set(['挖矿机', '原油萃取站']);
+const normalizeFactoryName = (name) => (name === '采矿机' || name === '大型采矿机') ? '挖矿机' : name;
+
 // 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
 const PANEL_DISPLAY_EPS = 0.01;
 
@@ -229,9 +235,11 @@ export function FactorySelect({recipe_id, choice, onChange, no_gap, icon_size}) 
     let factory_kind = game_data.recipe_data[recipe_id]["设施"];
     let factory_list = game_data.factory_data[factory_kind];
 
-    let options = factory_list.map((factory_data, idx) => (
-        {value: idx, item_icon: factory_data["名称"]}
-    ));
+    // 挖矿简化:采矿机/大型采矿机合并为"挖矿机"(移除大型采矿机,保留原索引)
+    let options = factory_list
+        .map((factory_data, idx) => ({value: idx, item_icon: factory_data["名称"]}))
+        .filter(o => o.item_icon !== "大型采矿机")
+        .map(o => o.item_icon === "采矿机" ? {...o, item_icon: "挖矿机"} : o);
 
     return <HorizontalMultiButtonSelect choice={choice} options={options} onChange={onChange}
                                         no_gap={no_gap} icon_size={icon_size} rounded={true}/>;
@@ -278,7 +286,7 @@ const isEqual = (obj1, obj2) => {
     return true;
 };
 
-export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore_popup, show_building_popup, set_show_building_popup, onCollectorDetected}) {
+export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore_popup, show_building_popup, set_show_building_popup, onCollectorDetected, onNavigate}) {
     const global_state = useContext(GlobalStateContext);
     const engineCalculate = useContext(EngineCalculateContext);
     const calculationError = useContext(CalculationErrorContext);
@@ -598,8 +606,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         let scheme_recipe = scheme_data.scheme_for_recipe[recipe_id];
         // 纯无中生有物品（Type = -2）始终隐藏
         // 视为原矿的物品始终隐藏
-        // 无原料配方（当 hide_mines 开启时隐藏）
-        if (recipe["Type"] === -2 || (i in mineralize_list) || (settings.hide_mines && Object.keys(recipe["原料"]).length < 1)) {
+        if (recipe["Type"] === -2 || (i in mineralize_list)) {
             continue;
         }
         // 联产物无独立设备(设备计入来源配方行),工厂列仅显示 0
@@ -610,6 +617,11 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </div>
         );
         let factory_name = game_data.factory_data[recipe["设施"]][scheme_recipe["建筑"]]["名称"];
+        // 自动隐藏:无多配方选择 且 无设备计算 的矿物行(交互无意义,信息已充分显示在原矿需求表)
+        const hasMultiRecipe = (allowed_recipes[i]?.length || 1) > 1;
+        if (!hasMultiRecipe && HIDDEN_DEVICE_BUILDINGS.has(normalizeFactoryName(factory_name))) {
+            continue;
+        }
         // 整数优化建议：仅对熔炉/制造台/化工厂计算（纯提示，不改电力/占地）
         const factoryGroup = game_data.factory_data[recipe["设施"]];
         const mixSuggestion = (factoryGroup && isOptimizableFactoryGroup(factoryGroup))
@@ -663,8 +675,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     <>
                         {building_detail &&
                             <div className="d-inline-flex align-items-center gap-1">
-                                <ItemIcon item={factory_name} size={is_mobile ? 18 : 30}/>
-                                <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>
+                                <ItemIcon item={normalizeFactoryName(factory_name)} size={is_mobile ? 18 : 30}/>
+                                {HIDDEN_DEVICE_BUILDINGS.has(normalizeFactoryName(factory_name))
+                                    ? <span className="text-muted" title="设备数不计算(依赖实际矿脉/摆放)，电力按单位采集耗电计">×?</span>
+                                    : <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>}
                             </div>
                         }
                         {!building_detail &&
@@ -705,22 +719,35 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     }
 
     // 建筑统计按名称排序，保持静态顺序便于对比
+    // 挖矿机/原油萃取站 不统计(设备数不计算);轨道采集器显示 ×?(可点击跳种子查看器)
     let building_rows = Object.entries(building_list)
+        .filter(([building]) => !NO_BUILDING_STATS.has(building))
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([building, count]) => (
-        <tr key={building}>
-            <td className="d-flex align-items-center text-nowrap">
-                <ItemIcon item={building} tooltip={false} size={mob_icon}/>
-                <div className="d-flex flex-column ms-1">
-                    <span>{'×'}{formatValue(count, fixed_num)}</span>
-                    {historyValues?.[1]?.buildingCounts?.[building] !== undefined && Math.abs(count - historyValues[1].buildingCounts[building]) > 1e-6 && (
-                        <span style={{fontSize: '0.85em', color: count > historyValues[1].buildingCounts[building] ? 'red' : 'green'}}>
-                            {count > historyValues[1].buildingCounts[building] ? '+' : ''}{formatValue(count - historyValues[1].buildingCounts[building], fixed_num)}
-                        </span>
-                    )}
-                </div>
-            </td>
-        </tr>));
+        .map(([building, count]) => {
+            const isCollector = building === '轨道采集器';
+            // 原生 title:浏览器渲染、不被面板 overflow 裁切(absolute fast-tooltip 会被画幅截半)
+            const collectorTip = '只计算单物品需求不汇总，去获取单采集器精确值';
+            return (
+            <tr key={building}>
+                <td className="d-flex align-items-center text-nowrap">
+                    <ItemIcon item={building} tooltip={false} size={mob_icon}/>
+                    <div className="d-flex flex-column ms-1">
+                        {isCollector ? (
+                            <a className="orbital-hint-link" title={collectorTip}
+                               onClick={() => onNavigate?.('seed-viewer')}>×?</a>
+                        ) : (
+                            <span>{'×'}{formatValue(count, fixed_num)}</span>
+                        )}
+                        {!isCollector && historyValues?.[1]?.buildingCounts?.[building] !== undefined && Math.abs(count - historyValues[1].buildingCounts[building]) > 1e-6 && (
+                            <span style={{fontSize: '0.85em', color: count > historyValues[1].buildingCounts[building] ? 'red' : 'green'}}>
+                                {count > historyValues[1].buildingCounts[building] ? '+' : ''}{formatValue(count - historyValues[1].buildingCounts[building], fixed_num)}
+                            </span>
+                        )}
+                    </div>
+                </td>
+            </tr>
+        );
+    });
 
     // 使用 useMemo 缓存原矿物品集合
     const rawMaterialItems = useMemo(() => {

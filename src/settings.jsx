@@ -17,15 +17,17 @@ const FACTORY_OPTIMIZE_MODES = [
      tooltip: '仅尝试高1级，失败则回退省料'},
 ];
 
+// 分馏传送带选项(数值=带速/min,传给后端 fractionating_speed = 带速/60)
+const BELT_OPTIONS = [
+    {value: 360, item_icon: '传送带'},
+    {value: 720, item_icon: '高速传送带'},
+    {value: 1800, item_icon: '极速传送带'},
+];
+
 export function Settings() {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
     const DEFAULT_SETTINGS = useContext(DefaultSettingsContext);
-
-    let percent_val = {
-        mining_efficiency_large: Math.round(settings.mining_efficiency_large * 100),
-        mining_speed_multiple: Math.round(settings.mining_speed_multiple * 100),
-    }
 
     // 通用设置变更函数
     function change_setting(e, name, type = 'int', minVal = 0) {
@@ -35,161 +37,96 @@ export function Settings() {
         }
 
         const parseFn = type === 'float' ? parseFloat : parseInt;
-        const defaultVal = type === 'percent' ? DEFAULT_SETTINGS[name] * 100 : DEFAULT_SETTINGS[name];
+        const defaultVal = DEFAULT_SETTINGS[name];
         let val = Math.max(parseFn(e.target.value) || defaultVal, minVal);
 
-        if (type === 'percent') {
-            percent_val[name] = val;
-            val = val / 100;
-        } else if (type === 'float') {
+        if (type === 'float') {
             val = Math.round(val * 10000) / 10000; // 输入框最多四位小数
         }
 
         set_settings({[name]: val});
     }
 
-    const fractionating_speed = settings.is_time_unit_minute
-        ? settings.fractionating_speed * 60
-        : settings.fractionating_speed;
+    // 分馏传送带当前值(带速/min)
+    const beltSpeed = Math.round((settings.fractionating_speed || 30) * 60);
 
-    function change_fractionating_speed(e) {
-        let fractionating_speed = parseFloat(e.target.value) || (settings.is_time_unit_minute ? 1800 : 30);
-        if (settings.is_time_unit_minute) {
-            fractionating_speed /= 60;
-        }
-        set_settings({"fractionating_speed": fractionating_speed});
-    }
+    return <div className="d-flex flex-column gap-1 flex-wrap">
+        {/* 行1:精度位数 研究站层数 增产剂自喷涂 限制加速模式 */}
+        <div className="d-flex flex-wrap align-items-center gap-3">
+            <label className="d-flex align-items-center gap-1 text-nowrap">
+                <span>精度位数</span>
+                <input type="number" value={settings.fixed_num} min={0} max={2} step={1} style={{width: '2em'}}
+                       onChange={e => change_setting(e, "fixed_num", 'int', 0)}/>
+            </label>
+            <label className="d-flex align-items-center gap-1 text-nowrap">
+                <span>研究站层数</span>
+                <input type="number" value={settings.stack_research_lab} min={3} max={15} step={1} style={{width: '3em'}}
+                       onChange={e => change_setting(e, "stack_research_lab", 'int', 3)}/>
+            </label>
+            <label className="d-flex align-items-center gap-1 text-nowrap">
+                <input type="checkbox" checked={!!settings.proliferate_itself}
+                       onChange={e => set_settings(prev => ({...prev, proliferate_itself: e.target.checked}))}/>
+                增产剂自喷涂
+            </label>
+            <label className="d-flex align-items-center gap-1 text-nowrap"
+                   title="限制批量预设和自动优化的加速模式选择">
+                <input type="checkbox" checked={!!settings.proliferate_no_accelerate}
+                       onChange={e => set_settings(prev => ({...prev, proliferate_no_accelerate: e.target.checked}))}/>
+                限制加速模式
+            </label>
+        </div>
 
-    return <div style={{display: 'flex', flexWrap: 'wrap'}}>
-        <table>
-            <tbody>
-            <tr>
-                <td>原油面板</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.mining_speed_oil} step={0.10}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_speed_oil", 'float', 0.01)}/>
-                </td>
-                <td className="ps-2">{"/s（单个油井）"}</td>
-            </tr>
-            </tbody>
-        </table>
-        <table>
-            <tbody>
-            <tr>
-                <td>原矿显示</td>
-                <td className="ps-2">{settings.hide_mines ? "隐藏原矿" : "显示原矿"}</td>
-                <td className="ps-2">
-                    <button onClick={e => change_setting(e, "hide_mines", 'bool')}>
-                        {settings.hide_mines ? "显示原矿" : "隐藏原矿"}</button>
-                </td>
-            </tr>
-            <tr>
-                <td>小矿机覆盖矿脉数</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.covered_veins_small} step={1}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "covered_veins_small", 'int', 1)}/>
-                </td>
-            </tr>
-            <tr>
-                <td>大矿机覆盖矿脉数</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.covered_veins_large} step={1}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "covered_veins_large", 'int', 1)}/>
-                </td>
-            </tr>
-            <tr>
-                <td>大矿机开采速度</td>
-                <td className="ps-2">
-                    <input type="number" value={percent_val["mining_efficiency_large"]} step={100}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_efficiency_large", 'percent', 100)}/>
-                </td>
-                <td className="ps-2">{"%"}</td>
-            </tr>
-            <tr>
-                <td>采矿速度</td>
-                <td className="ps-2">
-                    <input type="number" value={percent_val["mining_speed_multiple"]} step={10}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "mining_speed_multiple", 'percent', 100)}/>
-                </td>
-                <td className="ps-2">{"%（科技面板右上）"}</td>
-            </tr>
-            <tr>
-                <td>不计挖矿电力</td>
-                <td className="ps-2">
-                    <label className="d-flex align-items-center gap-1 text-nowrap">
-                        <input type="checkbox" checked={!!settings.exclude_miner_power}
-                               onChange={e => set_settings(prev => ({...prev, exclude_miner_power: e.target.checked}))}/>
-                        不计挖矿电力
-                    </label>
-                </td>
-            </tr>
-            <tr>
-                <td>分馏带速</td>
-                <td className="ps-2">
-                    <input value={fractionating_speed} onChange={change_fractionating_speed}
-                           style={{maxWidth: '5em'}}/>
-                </td>
-                <td className="ps-2">{settings.is_time_unit_minute ? "/min" : "/sec"}</td>
-            </tr>
-            <tr>
-                <td className="fast-tooltip" data-tooltip="最低级强制紧凑，最高级强制省料">中间设备整数建议</td>
-                <td className="ps-2">
-                    <div className="pro-mode-toggle" role="radiogroup" aria-label="中间设备整数建议方向">
-                        {FACTORY_OPTIMIZE_MODES.map(m => (
-                            <div key={m.key}
-                                 className={`fast-tooltip pro-mode-option ${m.className || ''} ${settings.factory_optimize_mode === m.key ? 'pro-mode-active' : ''}`}
-                                 role="radio" aria-checked={settings.factory_optimize_mode === m.key} tabIndex={0}
-                                 data-tooltip={m.tooltip}
-                                 onClick={() => set_settings({factory_optimize_mode: m.key})}
-                                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') set_settings({factory_optimize_mode: m.key}); }}>
-                                {m.label}
-                            </div>
-                        ))}
-                    </div>
-                </td>
-            </tr>
-            </tbody>
-        </table>
-        <table>
-            <tbody>
-            <tr>
-                <td>精度位数</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.fixed_num} step={1} style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "fixed_num", 'int', 0)}/>
-                </td>
-            </tr>
-            <tr>
-                <td>研究站层数</td>
-                <td className="ps-2">
-                    <input type="number" value={settings.stack_research_lab} step={1}
-                           style={{maxWidth: '5em'}}
-                           onChange={e => change_setting(e, "stack_research_lab", 'int', 1)}/>
-                </td>
-            </tr>
-            <tr>
-                <td>增产剂自喷涂</td>
-                <td className="ps-2">{settings.proliferate_itself ? "启用" : "禁用"}</td>
-                <td className="ps-2">
-                    <button onClick={e => change_setting(e, "proliferate_itself", 'bool')}>
-                        {settings.proliferate_itself ? "改为禁用" : "改为启用"}</button>
-                </td>
-            </tr>
-            <tr>
-                <td>限制加速模式</td>
-                <td className="ps-2">{settings.proliferate_no_accelerate ? "仅增产" : "全部"}</td>
-                <td className="ps-2">
-                    <button onClick={e => change_setting(e, "proliferate_no_accelerate", 'bool')}>
-                        {settings.proliferate_no_accelerate ? "改为全部" : "改为仅增产"}</button>
-                </td>
-            </tr>
-            </tbody>
-        </table>
+        {/* 行2:挖矿单位耗电 采集速度 不计挖矿电力 */}
+        <div className="d-flex flex-wrap align-items-center gap-3">
+            <div className="d-flex align-items-center gap-1">
+                <span className="text-nowrap">挖矿单位耗电</span>
+                <input type="range" min={0} max={100} step={1}
+                       value={settings.mining_power_slider || 0}
+                       onChange={e => set_settings({mining_power_slider: Number(e.target.value)})}
+                       title="最左=挖矿机覆盖6矿脉(2.333 kW/个)，最右=大矿机覆盖16矿脉3倍速(9.19 kW/个)"
+                       style={{width: '7em'}}/>
+                <span className="small text-muted">
+                    {(2.333 + ((settings.mining_power_slider || 0) / 100) * (9.19 - 2.333)).toFixed(2)} kW/个
+                </span>
+            </div>
+            <div className="d-flex align-items-center gap-1">
+                <span className="text-nowrap">采集速度</span>
+                <input type="number" value={Math.round((settings.gas_collect_speed || 1) * 100)} step={10} min={100}
+                       style={{width: '4em'}}
+                       onChange={e => set_settings({gas_collect_speed: Math.max(100, parseFloat(e.target.value) || 100) / 100})}/>
+                <span>%</span>
+            </div>
+            <label className="d-flex align-items-center gap-1 text-nowrap">
+                <input type="checkbox" checked={!!settings.exclude_miner_power}
+                       onChange={e => set_settings(prev => ({...prev, exclude_miner_power: e.target.checked}))}/>
+                不计挖矿电力
+            </label>
+        </div>
+
+        {/* 行3:分馏传送带 中间设备整数建议 */}
+        <div className="d-flex flex-wrap align-items-center gap-3">
+            <div className="d-flex align-items-center gap-1 text-nowrap">
+                <span>分馏传送带</span>
+                <HorizontalMultiButtonSelect choice={beltSpeed} options={BELT_OPTIONS}
+                                            onChange={v => set_settings({fractionating_speed: v / 60})}
+                                            no_gap={true} icon_size={22} rounded={true}/>
+            </div>
+            <div className="d-flex align-items-center gap-1 text-nowrap">
+                <span className="fast-tooltip" data-tooltip="最低级强制紧凑，最高级强制省料">中间设备整数建议</span>
+                <div className="pro-mode-toggle" role="radiogroup" aria-label="中间设备整数建议方向">
+                    {FACTORY_OPTIMIZE_MODES.map(m => (
+                        <div key={m.key}
+                             className={`fast-tooltip pro-mode-option ${m.className || ''} ${settings.factory_optimize_mode === m.key ? 'pro-mode-active' : ''}`}
+                             role="radio" aria-checked={settings.factory_optimize_mode === m.key} tabIndex={0}
+                             data-tooltip={m.tooltip}
+                             onClick={() => set_settings({factory_optimize_mode: m.key})}
+                             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') set_settings({factory_optimize_mode: m.key}); }}>
+                            {m.label}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
     </div>;
 }
 
@@ -209,9 +146,11 @@ function FactorySelect({factory, list, icon_size}) {
         }
     }
 
-    const options = list.map((data, idx) => ({
-        value: idx, item_icon: data["名称"]
-    }));
+    // 挖矿简化:采矿机/大型采矿机合并为"挖矿机"(移除大型采矿机,保留原索引)
+    const options = list
+        .map((data, idx) => ({value: idx, item_icon: data["名称"]}))
+        .filter(o => o.item_icon !== "大型采矿机")
+        .map(o => o.item_icon === "采矿机" ? {...o, item_icon: "挖矿机"} : o);
 
     function set_factory(building) {
         // 取本设施类型选中建筑的名称，用于跨设施类型匹配
@@ -579,6 +518,8 @@ export function BatchPresetControls() {
     // TODO rename to [factory_kind]
     Object.keys(game_data.factory_data).forEach(factory => {
         let list = game_data.factory_data[factory];
+        // 挖矿简化:采矿机/大型采矿机 统一为挖矿机,已是单选必选项,批量预设无需提供
+        if (list.some(f => f['名称'] === '采矿机' || f['名称'] === '大型采矿机')) return;
         let used_num = game_data.recipe_data.filter(data => data["设施"] == factory).length;
         //只有可选工厂类型大于等于2，并且这种工厂类型至少被3个配方使用时，才允许批量预设
         if (list.length >= 2 && used_num >= 3) {

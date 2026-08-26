@@ -10,7 +10,7 @@
  *   - 设备功耗作为 '电力' 原料边写入(inputs['电力'] += unitPowerCost)
  */
 
-import { ApplyBuildingMultiplier, buildItemRecipeIndex } from '../game_data.jsx';
+import { ApplyBuildingMultiplier, buildItemRecipeIndex, getMiningPerUnit, getOilPerUnit } from '../game_data.jsx';
 
 /**
  * 从需求出发构建二部图(BFS 可达性)
@@ -175,7 +175,7 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                 const buildingChoice = schemeRecipe?.['建筑'] || Object.keys(factoryData)[0];
                 const factoryInfo = factoryData[buildingChoice];
                 if (factoryInfo) {
-                    const factoryName = factoryInfo['名称'];
+                    let factoryName = factoryInfo['名称'];
                     const factorySpeed = factoryInfo['倍率'] || 1;
                     const factoryPower = factoryInfo['耗能'] || 0;
                     const timeTick = settings?.is_time_unit_minute ? 60 : 1;
@@ -202,13 +202,13 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                         unitPowerCost /= throughputMult;
                     }
 
-                    // 大型采矿机特殊处理:耗电由开采效率决定(数值口径与旧引擎一致:
-                    // 恒定功率按"单次毛产出 × 吞吐倍率"摊到每次执行,不含时间/建筑倍率项)
-                    if (factoryName === '大型采矿机' && settings?.mining_efficiency_large) {
-                        const eff = settings.mining_efficiency_large / 100.0;
-                        const grossFirst = recipe.产物?.[anchorItem] || 0;
-                        unitPowerCost = (eff * eff * (2.94 - 0.168) + 0.168)
-                            / (grossFirst * throughputMult) * timeTick;
+                    // 挖矿简化:采矿机/大型采矿机统一为"挖矿机",用单位采集耗电(滑块)计电,
+                    // 不计设备电力;原油萃取站同样用单位采集耗电(先于旧大型采矿机公式,跳过 bug)
+                    if (factoryName === '采矿机' || factoryName === '大型采矿机' || factoryName === '挖矿机') {
+                        factoryName = '挖矿机';
+                        unitPowerCost = getMiningPerUnit(settings) * (outputsR[anchorItem] || 1);
+                    } else if (factoryName === '原油萃取站') {
+                        unitPowerCost = getOilPerUnit(settings) * (outputsR[anchorItem] || 1);
                     }
                     // 分馏塔特殊处理:分馏速度超过面板值时耗电放大
                     if (factoryName.endsWith('分馏塔') && settings?.fractionating_speed > 30) {
@@ -230,7 +230,7 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                         unitPowerCost,
                         // 额定功率:发电建筑用"发电功率"字段(自身不耗电),其余用"耗能"
                         basePower: factoryInfo['发电功率'] ?? factoryPower,
-                        isMiner: ['采矿机', '大型采矿机', '抽水站', '原油萃取站'].includes(factoryName),
+                        isMiner: ['采矿机', '大型采矿机', '挖矿机', '抽水站', '原油萃取站'].includes(factoryName),
                     };
                 }
             }
