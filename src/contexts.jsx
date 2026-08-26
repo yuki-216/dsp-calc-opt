@@ -37,7 +37,8 @@ const DEFAULT_SETTINGS = {
     // 挖矿简化:单位采集耗电滑块(0%=采矿机 2.333, 100%=大型采矿机 9.19 kW/个);
     // 采集速度(科技,%)与轨道采集器面板共享 gas_collect_speed
     mining_power_slider: 0,
-    fractionating_speed: 30,
+    // 分馏塔带速(每秒过带数) = 带速/min ÷ 60;默认 7200/min = 极速带×4 堆叠
+    fractionating_speed: 120,
 
     is_time_unit_minute: true,
     fixed_num: 2,

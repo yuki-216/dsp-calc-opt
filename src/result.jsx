@@ -1,4 +1,4 @@
-import {useCallback, useContext, useMemo, useState, useEffect, useRef} from 'react';
+import {useCallback, useContext, useMemo, useState, useEffect, useLayoutEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Modal} from 'bootstrap';
 import {CompactModeContext, GlobalStateContext, SchemeDataSetterContext, SettingsSetterContext, EngineCalculateContext, FuelContext, CalculationErrorContext} from './contexts';
@@ -8,7 +8,7 @@ import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components.jsx';
 import allowed_recipes from '../data/allowed_recipes.json';
-import {FaExternalLinkAlt} from 'react-icons/fa';
+import {FaExternalLinkAlt, FaTimes} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
 import {buildResultRowOrder, collectDemandedItems} from './result-rows.js';
@@ -19,9 +19,28 @@ const EMPTY_OBJ = {};
 
 // 挖矿简化:设备数不展示(×?)的建筑;建筑统计里不出现的(挖矿机/原油萃取站);采矿机/大型采矿机 统一显示为 挖矿机
 // 轨道采集器设备数可按单采集器产量折算,设备列正常显示;仅建筑统计汇总值 ×?
-const HIDDEN_DEVICE_BUILDINGS = new Set(['挖矿机', '原油萃取站']);
-const NO_BUILDING_STATS = new Set(['挖矿机', '原油萃取站']);
+// 设备列显示 ×?(设备数不计算):挖矿机/原油萃取站(单位采集耗电计电) + 分馏塔(补氢结构,仅估算电力)
+const HIDDEN_DEVICE_BUILDINGS = new Set(['挖矿机', '原油萃取站', '分馏塔']);
+// 建筑统计忽略:与 HIDDEN_DEVICE_BUILDINGS 一致,分馏塔台数不汇总
+const NO_BUILDING_STATS = new Set(['挖矿机', '原油萃取站', '分馏塔']);
+// 设备列 ×? 的悬浮提示(按建筑区分)
+const DEVICE_HIDDEN_TIPS = {
+    '挖矿机': '设备数不计算(依赖实际矿脉/摆放)，电力按单位采集耗电计',
+    '原油萃取站': '设备数不计算(依赖实际矿脉/摆放)，电力按单位采集耗电计',
+    '分馏塔': '设备依赖补氢结构，仅估算电力',
+};
+// 矿物行整行自动隐藏:无多配方选择 且 无设备计算的矿物(铁矿/铜矿/原油等)
+const MINERAL_AUTO_HIDE_BUILDINGS = new Set(['挖矿机', '原油萃取站']);
 const normalizeFactoryName = (name) => (name === '采矿机' || name === '大型采矿机') ? '挖矿机' : name;
+
+// 精简下拉选项文本:建筑/物品名中的 "Mk.罗马" → "Mk3"(如 制造台Mk.III、增产剂Mk.II)
+const ROMAN_TO_NUM = {I: 1, II: 2, III: 3, IV: 4, V: 5};
+export function mkShort(name) {
+    const m = String(name).match(/Mk\.?\s*([IVX]+)/i);
+    if (!m) return name;
+    const n = ROMAN_TO_NUM[m[1].toUpperCase()];
+    return n ? `Mk${n}` : name;
+}
 
 // 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
 const PANEL_DISPLAY_EPS = 0.01;
@@ -153,6 +172,7 @@ export function RecipeSelect({item, choice, onChange, compact}) {
 
 export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
     const global_state = useContext(GlobalStateContext);
+    const compact_mode = useContext(CompactModeContext);
     let game_data = global_state.game_data;
 
     // 检查配方是否有增产模式选项，如果没有则隐藏增产剂等级选择
@@ -166,6 +186,16 @@ export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
         }
     }
 
+    // 精简模式(非 full):按钮换成下拉选择框;只有"无"一个可选项时不可更改,直接隐藏
+    if (compact_mode !== "full") {
+        if (pro_num_options.length <= 1) return null;
+        return <select className="form-select form-select-sm"
+                       style={{width: '100%', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                       value={choice} onChange={e => onChange(Number(e.target.value))}>
+            {pro_num_options.map(o => <option key={o.value} value={o.value}>{o.label || mkShort(o.item_icon)}</option>)}
+        </select>;
+    }
+
     return <HorizontalMultiButtonSelect choice={choice} options={pro_num_options} onChange={onChange}
                                         icon_size={icon_size} optionType={"proNumSelect"} rounded={true}/>;
 }
@@ -174,17 +204,6 @@ export const pro_mode_class = {
     [1]: "pro-mode-speedup",
     [2]: "pro-mode-extra-products",
     [3]: "pro-mode-lens"
-}
-
-// 整数优化列图标尺寸：默认与"设备"列一致(30/18)；条目过多超出列宽(120)时自适应缩小
-function mixIconSizeFor(n, isMobile) {
-    const base = isMobile ? 18 : 30;
-    if (n <= 1) return base;
-    const usable = 118;        // 120 列宽扣除边距余量
-    const gap = 6;             // me-1 间距
-    const countW = 12;         // 数量小号文字宽度估算
-    const per = Math.floor((usable - (n - 1) * gap) / n);
-    return Math.max(12, Math.min(base, per - countW));
 }
 
 export function ProModeSelect({recipe_id, choice, onChange}) {
@@ -230,6 +249,7 @@ export function ProModeSelect({recipe_id, choice, onChange}) {
 
 export function FactorySelect({recipe_id, choice, onChange, no_gap, icon_size}) {
     const global_state = useContext(GlobalStateContext);
+    const compact_mode = useContext(CompactModeContext);
     let game_data = global_state.game_data;
 
     let factory_kind = game_data.recipe_data[recipe_id]["设施"];
@@ -240,6 +260,17 @@ export function FactorySelect({recipe_id, choice, onChange, no_gap, icon_size}) 
         .map((factory_data, idx) => ({value: idx, item_icon: factory_data["名称"]}))
         .filter(o => o.item_icon !== "大型采矿机")
         .map(o => o.item_icon === "采矿机" ? {...o, item_icon: "挖矿机"} : o);
+
+    // 精简模式(非 full):按钮换成下拉选择框;仅一种建筑可选用时不可更改,直接隐藏。
+    // 选项直接按等级序号显示 Mk1/Mk2/Mk3(不依赖原名是否 Mk 命名,本质即第几级)
+    if (compact_mode !== "full") {
+        if (options.length <= 1) return null;
+        return <select className="form-select form-select-sm"
+                       style={{width: '100%', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                       value={choice} onChange={e => onChange(Number(e.target.value))}>
+            {options.map((o, idx) => <option key={o.value} value={o.value}>Mk{idx + 1}</option>)}
+        </select>;
+    }
 
     return <HorizontalMultiButtonSelect choice={choice} options={options} onChange={onChange}
                                         no_gap={no_gap} icon_size={icon_size} rounded={true}/>;
@@ -296,6 +327,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const selectedFuel = useContext(FuelContext);
     const is_compact = compact_mode !== "full";
     const is_mobile = compact_mode === "mobile";
+    // 更窄(narrow/mobile)时隐藏合并列内的整数建议,改在设备列悬浮提示
+    const hideIntHint = compact_mode === 'narrow' || compact_mode === 'mobile';
     const mob_icon = is_mobile ? 20 : undefined;   // 总结面板/主图标
 
     // Refs for Bootstrap Modal instances
@@ -377,6 +410,25 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     let mineralize_list = settings.mineralize_list;
     // 主引擎计算（Task 4 后 engineCalculate 为 async，改为 useEffect 异步获取）
     const [engineResult, setEngineResult] = useState(null);
+    // 合并「整数建议+配方选取」列宽：逐行测量(整数建议宽+配方内容宽)取最大值，行内整数建议居左、配方居右
+    const [recipeColWidth, setRecipeColWidth] = useState(420);
+    // 绘制前同步测量，避免闪烁；无依赖数组——行内容(配方选择/整数建议/紧凑模式/移动端)变化都会重渲染后重测
+    // (无依赖数组是刻意的;防死循环由"仅宽度变化>1px才setState"保证)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useLayoutEffect(() => {
+        let maxW = 0;
+        document.querySelectorAll('.result-table tbody .recipe-col-cell').forEach(cell => {
+            let w = 0;
+            // 子项 flex-shrink:0 为自然宽，求和即该行所需总宽
+            for (const ch of cell.children) w += ch.offsetWidth;
+            if (w > maxW) maxW = w;
+        });
+        if (maxW > 0) {
+            const next = Math.ceil(maxW + 20); // +20 ≈ td 左右 padding/border 余量
+            // 仅变化>1px 才更新 state，防止每次渲染触发重测死循环
+            setRecipeColWidth(prev => Math.abs(prev - next) > 1 ? next : prev);
+        }
+    });
     useEffect(() => {
         let cancelled = false;
         if (!engineCalculate || !needs_list || Object.keys(needs_list).length === 0) {
@@ -493,7 +545,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     let result_table_rows = [];
 
-    const RatioAdjustInput = ({value, trimZeros, ceil}) => {
+    const RatioAdjustInput = ({value, trimZeros, ceil, noTooltip}) => {
         let disp_value;
         if (ceil) {
             // 进1法，不去尾0
@@ -514,7 +566,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             set_needs_list(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, v * ratio])));
         }
 
-        return <span data-tooltip="等比例调整需求" className="fast-tooltip">
+        return <span data-tooltip={noTooltip ? undefined : "等比例调整需求"} className="fast-tooltip">
             <AutoSizedInput
                 delayed={true}
                 value={disp_value}
@@ -564,9 +616,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             </div>
                         )}
                     </td>
-                    {/* 电力行不做混合工厂建议，占位列对齐 */}
-                    <td></td>
-                    <td><div className="my-1 px-2 py-1"><Recipe recipe={fuelRecipe} compact={compact_mode}/></div></td>
+                    {/* 合并列：电力行不做混合工厂建议(左为空)，燃料配方居右 */}
+                    <td className="text-nowrap">
+                        <div className="recipe-col-cell d-flex justify-content-between">
+                            <div className="d-inline-flex align-items-center" style={{flexShrink: 0}}></div>
+                            <div style={{flexShrink: 0}}>
+                                <div className="my-1 px-2 py-1"><Recipe recipe={fuelRecipe} compact={compact_mode}/></div>
+                            </div>
+                        </div>
+                    </td>
                     <td>
                         {fuelRecipeIndex >= 0 && (
                             <ProModeSelect recipe_id={fuelRecipeIndex} onChange={changeFuelProMode}
@@ -619,7 +677,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         let factory_name = game_data.factory_data[recipe["设施"]][scheme_recipe["建筑"]]["名称"];
         // 自动隐藏:无多配方选择 且 无设备计算 的矿物行(交互无意义,信息已充分显示在原矿需求表)
         const hasMultiRecipe = (allowed_recipes[i]?.length || 1) > 1;
-        if (!hasMultiRecipe && HIDDEN_DEVICE_BUILDINGS.has(normalizeFactoryName(factory_name))) {
+        if (!hasMultiRecipe && MINERAL_AUTO_HIDE_BUILDINGS.has(normalizeFactoryName(factory_name))) {
             continue;
         }
         // 整数优化建议：仅对熔炉/制造台/化工厂计算（纯提示，不改电力/占地）
@@ -628,8 +686,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             ? optimizeFactoryMix({c: factory_number, levels: factoryGroup,
                                   baseIndex: scheme_recipe["建筑"], direction: settings.factory_optimize_mode})
             : null;
-        // 整数优化列图标尺寸：与"设备"列一致；条目多时按列宽自适应缩小
-        const mixIconSize = mixSuggestion ? mixIconSizeFor(mixSuggestion.mix.length, is_mobile) : 0;
+        // 整数优化列图标尺寸：与"设备"列一致(30/18)；合并列宽为动态测量值，无需缩小
+        const mixIconSize = mixSuggestion ? (is_mobile ? 18 : 30) : 0;
+        // 整数建议文本(隐藏图标列时作为设备列悬浮提示)
+        const mixText = mixSuggestion
+            ? `${mixSuggestion.type === 'compact' ? '紧凑' : '省料'}: ${mixSuggestion.mix.map(m => `${m.count}×${factoryGroup[m.levelIndex]['名称']}`).join(' + ')}`
+            : null;
         let is_mineralized = i in mineralize_list;
         let row_class = is_mineralized ? "table-secondary" : "";
 
@@ -642,7 +704,14 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             {/* 操作 */}
             <td>
                 <div className="d-flex gap-1">
-                    {is_mineralized ?
+                    {/* 精简模式(is_compact):视为原矿精简为 × 按钮(未矿化蓝/已矿化红) */}
+                    {is_compact ? (
+                        <button className={`btn btn-sm ssmall mineralize-btn ${is_mineralized ? 'btn-outline-danger' : 'btn-primary'}`}
+                                onClick={() => (is_mineralized ? unmineralize(i) : mineralize(i))}
+                                title={is_mineralized ? '恢复为正常需求' : '视为原矿'}>
+                            <FaTimes/>
+                        </button>
+                    ) : (is_mineralized ?
                         <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
                                 onClick={() => unmineralize(i)}>恢复</button> :
                         <button className="btn btn-sm btn-outline-primary ssmall text-nowrap mineralize-btn"
@@ -650,7 +719,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <div>视为</div>
                             <div>原矿</div>
                         </button>
-                    }
+                    )}
                     <button className="btn btn-sm btn-outline-secondary ssmall mobile-hide"
                             onClick={() => openInNewTab(i, get_gross_output(own_production, i) + side_sum)}
                             title="在新窗口计算（视为原矿）">
@@ -667,18 +736,22 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             {/* 分钟毛产出 */}
             <td className="text-center">
                 <RatioAdjustInput value={get_gross_output(own_production, i)}/>
-                {from_side_products}
+                {/* 精简模式(is_compact)不显示联产物来源括号，腾出宽度 */}
+                {!is_compact && from_side_products}
             </td>
             {/* 所需工厂*数目 */}
             <td className="text-nowrap">
                 {is_mineralized ||
                     <>
                         {building_detail &&
-                            <div className="d-inline-flex align-items-center gap-1">
-                                <ItemIcon item={normalizeFactoryName(factory_name)} size={is_mobile ? 18 : 30}/>
+                            <div className={`d-inline-flex align-items-center gap-1 ${hideIntHint ? 'fast-tooltip' : ''}`}
+                                 data-tooltip={hideIntHint ? mixText : undefined}>
+                                {/* hideIntHint 时禁用子元素 tooltip，让整数建议悬浮生效 */}
+                                <ItemIcon item={normalizeFactoryName(factory_name)} tooltip={hideIntHint ? false : undefined}
+                                          size={is_mobile ? 18 : 30}/>
                                 {HIDDEN_DEVICE_BUILDINGS.has(normalizeFactoryName(factory_name))
-                                    ? <span className="text-muted" title="设备数不计算(依赖实际矿脉/摆放)，电力按单位采集耗电计">×?</span>
-                                    : <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true}/>}
+                                    ? <span className="text-muted" title={DEVICE_HIDDEN_TIPS[normalizeFactoryName(factory_name)]}>×?</span>
+                                    : <RatioAdjustInput value={factory_number} trimZeros={true} ceil={true} noTooltip={hideIntHint}/>}
                             </div>
                         }
                         {!building_detail &&
@@ -687,23 +760,32 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     </>
                 }
             </td>
-            {/* 整数优化建议（混合工厂等级凑偶数台，仅提示不改算） */}
+            {/* 整数建议+配方选取 合并列：列宽=逐行测量(建议宽+配方宽)取最大值，行内整数建议居左、配方居右(space-between) */}
             <td className="text-nowrap">
-                {!is_mineralized && mixSuggestion && (
-                    <span className="fast-tooltip d-inline-flex align-items-center"
-                          data-tooltip={mixSuggestion.type === 'compact' ? '紧凑（省占地）' : '省料（避免浪费）'}>
-                        {mixSuggestion.mix.map(m => [
-                            <ItemIcon key={`mix-i-${m.levelIndex}`} item={factoryGroup[m.levelIndex]['名称']} tooltip={false} size={mixIconSize}/>,
-                            <span key={`mix-c-${m.levelIndex}`} className="me-1 ssmall align-self-end"
-                                  style={{color: mixSuggestion.type === 'compact' ? '#e8943a' : '#3a9de8'}}>{m.count}</span>,
-                        ])}
-                    </span>
-                )}
+                <div className="recipe-col-cell d-flex justify-content-between">
+                    {/* 左：整数优化建议（混合工厂等级凑偶数台，仅提示不改算）；narrow/mobile 隐藏，改设备列悬浮 */}
+                    {!hideIntHint && (
+                        <div className="d-inline-flex align-items-center" style={{flexShrink: 0}}>
+                            {!is_mineralized && mixSuggestion && (
+                                <span className="fast-tooltip d-inline-flex align-items-center"
+                                      data-tooltip={mixSuggestion.type === 'compact' ? '紧凑（省占地）' : '省料（避免浪费）'}>
+                                    {mixSuggestion.mix.map(m => [
+                                        <ItemIcon key={`mix-i-${m.levelIndex}`} item={factoryGroup[m.levelIndex]['名称']} tooltip={false} size={mixIconSize}/>,
+                                        <span key={`mix-c-${m.levelIndex}`} className="me-1 ssmall align-self-end"
+                                              style={{color: mixSuggestion.type === 'compact' ? '#e8943a' : '#3a9de8'}}>{m.count}</span>,
+                                    ])}
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    {/* 右：所选配方 */}
+                    <div style={{flexShrink: 0}}>
+                        <RecipeSelect item={i} onChange={change_recipe}
+                                      choice={scheme_data.item_recipe_choices[i]}
+                                      compact={compact_mode}/>
+                    </div>
+                </div>
             </td>
-            {/* 所选配方 */}
-            <td><RecipeSelect item={i} onChange={change_recipe}
-                              choice={scheme_data.item_recipe_choices[i]}
-                              compact={compact_mode}/></td>
             {/* 所选增产模式 */}
             <td><ProModeSelect recipe_id={recipe_id} onChange={change_pro_mode}
                                choice={scheme_data.scheme_for_recipe[recipe_id]["增产模式"]}/></td>
@@ -893,11 +975,16 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 <th width={40}>物品</th>
                 <th width={130}>产能</th>
                 <th width={110}>设备</th>
-                <th width={120} className="fast-tooltip" data-tooltip="优化到满足产能的偶数设备">整数建议</th>
-                <th width={300}>配方选取</th>
+                {/* 合并「整数建议+配方选取」列：列宽由 JS 动态测量（recipeColWidth），表头左右两段标题 */}
+                <th style={{ width: recipeColWidth }}>
+                    <div className="d-flex justify-content-between text-nowrap">
+                        {!hideIntHint && <span className="fast-tooltip" data-tooltip="优化到满足产能的偶数设备">整数建议</span>}
+                        <span className={hideIntHint ? 'ms-auto' : ''}>配方选取</span>
+                    </div>
+                </th>
                 <th width={90}>增产模式</th>
-                <th width={160}>增产剂</th>
-              <th width={170}>设备等级</th>
+                <th width={160}>{is_compact ? '增产' : '增产剂'}</th>
+              <th width={170}>{is_compact ? '设备' : '设备等级'}</th>
             </tr>
             </thead>
             <tbody className="table-group-divider">
@@ -1089,7 +1176,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 <div className="modal-dialog mw-fit">
                     <div className="modal-content bg-body flex-column" style={{"--bs-bg-opacity": 0.85}}>
                         <div className="modal-header border-secondary">
-                            <h6 className="modal-title">原矿 &amp; 多余产物</h6>
+                            <h6 className="modal-title">原矿化 &amp; 多余产物 &amp; 原矿需求</h6>
                             <button type="button" className="btn-close" data-bs-dismiss="modal"/>
                         </div>
                         <div className="modal-body summary-modal-body">
@@ -1131,23 +1218,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                     </table>
                                 </fieldset>
                             }
-                        </div>
-                    </div>
-                </div>
-            </div>
-            , document.body)}
-
-        {/* Modal B: 原矿输入总需求 + 建筑统计 + 预估电力 */}
-        {createPortal(
-            <div ref={building_modal_ref} className="modal" tabIndex="-1">
-                <div className="modal-dialog mw-fit">
-                    <div className="modal-content bg-body flex-column" style={{"--bs-bg-opacity": 0.85}}>
-                        <div className="modal-header border-secondary">
-                            <h6 className="modal-title">建筑 &amp; 需求</h6>
-                            <button type="button" className="btn-close" data-bs-dismiss="modal"/>
-                        </div>
-                        <div className="modal-body summary-modal-body">
-                            {/* 原矿输入总需求 */}
+                            {/* 原矿输入总需求(从建筑&电力模态移入,属"多余和需求"组) */}
                             {(() => {
                                 const rawMaterials = Object.entries(result_dict)
                                     .filter(([item]) => isRawMaterial(item))
@@ -1179,6 +1250,22 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                     </fieldset>
                                 );
                             })()}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            , document.body)}
+
+        {/* Modal B: 建筑统计 + 预估电力 */}
+        {createPortal(
+            <div ref={building_modal_ref} className="modal" tabIndex="-1">
+                <div className="modal-dialog mw-fit">
+                    <div className="modal-content bg-body flex-column" style={{"--bs-bg-opacity": 0.85}}>
+                        <div className="modal-header border-secondary">
+                            <h6 className="modal-title">建筑统计 &amp; 预估电力</h6>
+                            <button type="button" className="btn-close" data-bs-dismiss="modal"/>
+                        </div>
+                        <div className="modal-body summary-modal-body">
                             {/* 建筑统计 */}
                             {building_rows.length > 0 &&
                                 <fieldset className="w-fit">

@@ -87,7 +87,7 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
             <div className="summary-popup-btn ms-auto d-inline-flex gap-1">
                 <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 summary-popup-btn-item"
                         onClick={() => set_show_ore_popup(s => !s)}
-                        title="原矿化列表 & 多余产物">
+                        title="原矿化列表 & 多余产物 & 原矿需求">
                     <FaGem/>
                 </button>
                 <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 summary-popup-btn-item"

@@ -196,8 +196,8 @@ export function Header({onNavigate, currentPage}) {
 
                 <span className="navbar-text ms-auto small me-3">
                     <a href="https://github.com/yuki-216/dsp-calc-opt" target="_blank" rel="noopener noreferrer"
-                       style={{textDecoration: 'none'}}>
-                        仓库: 若对您有帮助，不妨来点个免费的star吧
+                       className="text-primary text-decoration-underline">
+                        github: 若对您有帮助，不妨来点个免费的star吧
                     </a>
                 </span>
                 <span className="navbar-text small me-3">

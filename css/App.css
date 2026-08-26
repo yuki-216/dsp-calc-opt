@@ -182,6 +182,9 @@ legend {
     all: revert;
 }
 
+.result-table {
+    table-layout: fixed; /* 列宽由 th 固定,宇宙矩阵7项配方不再撑开配方选取列(左移借整数优化列) */
+}
 .result-table tr td {
     padding-left: 0.75em;
 }
@@ -409,11 +412,10 @@ body > .p-3 {
         gap: 0.75rem;
     }
 
-    /* 结果表格列宽压缩 */
-    .result-table th:nth-child(5) { width: 180px; } /* 配方选取 300→180 */
+    /* 结果表格列宽压缩(第5列=合并「整数建议+配方选取」列,宽度由 JS 动态测量,勿覆盖) */
     .result-table th:nth-child(6) { width: 110px; } /* 增产模式 180→110 */
-    .result-table th:nth-child(7) { width: 90px; }  /* 增产剂   160→90  */
-    .result-table th:nth-child(8) { width: 100px; } /* 工厂类型 170→100 */
+    .result-table th:nth-child(7) { width: 60px; }  /* 增产剂   90→60(精简下拉无箭头,表头显示短词"增产") */
+    .result-table th:nth-child(8) { width: 60px; }  /* 设备等级 100→60(与增产剂列一致) */
 
     /* 物品名称列隐藏文字 */
     .result-table .item-name-text {
@@ -455,23 +457,14 @@ body > .p-3 {
 @media (max-width: 1023px) {
     /* 进一步压缩列宽 */
     .result-table th:nth-child(3) { width: 90px; }  /* 产能 130→90 */
-    .result-table th:nth-child(4) { width: 80px; }  /* 工厂 110→80 */
-    .result-table th:nth-child(5) { width: 120px; } /* 配方 180→120 */
+    .result-table th:nth-child(4) { width: 80px; }  /* 设备 110→80 */
     .result-table th:nth-child(6) { width: 90px; }  /* 增产模式 110→90 */
-    .result-table th:nth-child(7) { width: 72px; }  /* 增产剂 90→72 */
-    .result-table th:nth-child(8) { width: 80px; }  /* 工厂类型 100→80 */
+    .result-table th:nth-child(7) { width: 52px; }  /* 增产剂 72→52 */
+    .result-table th:nth-child(8) { width: 52px; }  /* 设备等级 80→52(与增产剂列一致) */
 
     /* 压缩表格单元格内边距 */
     .result-table tr td {
         padding-left: 0.3em;
-    }
-
-    /* 配方选取中只显示最简内容 */
-    .recipe-compact-inputs .recipe-output-section {
-        display: none;
-    }
-    .recipe-compact-inputs .recipe-arrow-section {
-        display: none;
     }
 
     /* 进一步缩小图标 */
@@ -554,10 +547,9 @@ body > .p-3 {
     }
     .result-table th:nth-child(3) { width: 72px; }
     .result-table th:nth-child(4) { width: 60px; }
-    .result-table th:nth-child(5) { width: 90px; }
     .result-table th:nth-child(6) { width: 72px; }
-    .result-table th:nth-child(7) { width: 56px; }
-    .result-table th:nth-child(8) { width: 64px; }
+    .result-table th:nth-child(7) { width: 48px; }
+    .result-table th:nth-child(8) { width: 48px; }
 
     /* 移动端隐藏生产策略/需求列表的文字标签 */
     .storage-label {
@@ -609,10 +601,9 @@ body > .p-3 {
     }
     .result-table th:nth-child(3) { width: 56px; }
     .result-table th:nth-child(4) { width: 48px; }
-    .result-table th:nth-child(5) { width: 70px; }
     .result-table th:nth-child(6) { width: 56px; }
-    .result-table th:nth-child(7) { width: 44px; }
-    .result-table th:nth-child(8) { width: 50px; }
+    .result-table th:nth-child(7) { width: 42px; }
+    .result-table th:nth-child(8) { width: 42px; }
 
     /* ── 需求3：批量预设行整体缩小 ── */
     .batch-setting-container {

@@ -1,7 +1,7 @@
 import {useContext, useState, useCallback, useRef, useEffect} from 'react';
 import {CompactModeContext, DefaultSettingsContext, FuelContext, FuelSetterContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
-import {pro_mode_class} from './result.jsx';
+import {pro_mode_class, mkShort} from './result.jsx';
 import {optimizeProliferatorStrategy} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
@@ -17,12 +17,8 @@ const FACTORY_OPTIMIZE_MODES = [
      tooltip: '仅尝试高1级，失败则回退省料'},
 ];
 
-// 分馏传送带选项(数值=带速/min,传给后端 fractionating_speed = 带速/60)
-const BELT_OPTIONS = [
-    {value: 360, item_icon: '传送带'},
-    {value: 720, item_icon: '高速传送带'},
-    {value: 1800, item_icon: '极速传送带'},
-];
+// 分馏塔带速选项(数值=带速/min):360/720/1800 及各自 2/3/4 倍堆叠叠加,去重后 10 档
+const BELT_SPEEDS = [360, 720, 1080, 1440, 1800, 2160, 2880, 3600, 5400, 7200];
 
 export function Settings() {
     const settings = useContext(SettingsContext);
@@ -47,8 +43,8 @@ export function Settings() {
         set_settings({[name]: val});
     }
 
-    // 分馏传送带当前值(带速/min)
-    const beltSpeed = Math.round((settings.fractionating_speed || 30) * 60);
+    // 分馏塔带速当前值(带速/min)
+    const beltSpeed = Math.round((settings.fractionating_speed || 120) * 60);
 
     return <div className="d-flex flex-column gap-1 flex-wrap">
         {/* 行1:精度位数 研究站层数 增产剂自喷涂 限制加速模式 */}
@@ -103,13 +99,14 @@ export function Settings() {
             </label>
         </div>
 
-        {/* 行3:分馏传送带 中间设备整数建议 */}
+        {/* 行3:分馏塔带速 中间设备整数建议 */}
         <div className="d-flex flex-wrap align-items-center gap-3">
             <div className="d-flex align-items-center gap-1 text-nowrap">
-                <span>分馏传送带</span>
-                <HorizontalMultiButtonSelect choice={beltSpeed} options={BELT_OPTIONS}
-                                            onChange={v => set_settings({fractionating_speed: v / 60})}
-                                            no_gap={true} icon_size={22} rounded={true}/>
+                <span>分馏塔带速</span>
+                <select className="form-select form-select-sm" style={{width: '6em'}} value={beltSpeed}
+                        onChange={e => set_settings({fractionating_speed: Number(e.target.value) / 60})}>
+                    {BELT_SPEEDS.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
             </div>
             <div className="d-flex align-items-center gap-1 text-nowrap">
                 <span className="fast-tooltip" data-tooltip="最低级强制紧凑，最高级强制省料">中间设备整数建议</span>
@@ -168,6 +165,20 @@ function FactorySelect({factory, list, icon_size}) {
             }
             return scheme_data;
         });
+    }
+
+    // 精简模式(非 full):按钮换成下拉选择框(去箭头,前加该设备 Mk1 图标便于辨识);仅一种建筑可选用时不可更改,直接隐藏
+    const compact_mode = useContext(CompactModeContext);
+    if (compact_mode !== "full") {
+        if (options.length <= 1) return null;
+        return <span className="d-inline-flex align-items-center gap-1">
+            <ItemIcon item={options[0].item_icon} size={22}/>
+            <select className="form-select form-select-sm"
+                    style={{width: '4.5em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                    value={cur} onChange={e => set_factory(Number(e.target.value))}>
+                {options.map((o, idx) => <option key={o.value} value={o.value}>Mk{idx + 1}</option>)}
+            </select>
+        </span>;
     }
 
     return <HorizontalMultiButtonSelect choice={cur} options={options}
@@ -589,11 +600,22 @@ export function BatchPresetControls() {
                     </div>
                 ))}
             </div>
-            <div className="d-flex" style={{gap: '2px'}}>
-                <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
-                                             onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
-                                             icon_size={mob_icon} rounded={true}/>
-            </div>
+            {compact_mode !== "full" ? (
+                <span className="d-inline-flex align-items-center gap-1">
+                    <ItemIcon item={proliferate_options[1]?.item_icon} size={22}/>
+                    <select className="form-select form-select-sm"
+                            style={{width: '4.5em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                            value={pro_num} onChange={e => change_pro_num(Number(e.target.value))}>
+                        {proliferate_options.map(o => <option key={o.value} value={o.value}>{o.label || mkShort(o.item_icon)}</option>)}
+                    </select>
+                </span>
+            ) : (
+                <div className="d-flex" style={{gap: '2px'}}>
+                    <HorizontalMultiButtonSelect choice={pro_num} options={proliferate_options}
+                                                 onChange={change_pro_num} no_gap={true} className={"raw-text-selection"}
+                                                 icon_size={mob_icon} rounded={true}/>
+                </div>
+            )}
             {factory_doms}
         </div>
     );
