@@ -48,8 +48,7 @@ export const FUEL_DATA_BASE = [
   { name: "氘核燃料棒", heatValue: 600, device: "微型聚变发电站", restrict: "只能增产" },
   { name: "反物质燃料棒", heatValue: 7200, device: "人造恒星", restrict: "只能加速" },
   { name: "奇异湮灭燃料棒", heatValue: 720000, device: "人造恒星", restrict: "只能加速" },
-  { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" },
-  { name: "精炼油", heatValue: 3.6, device: "火力发电厂", restrict: "只能增产" }
+  { name: "可燃冰", heatValue: 3.84, device: "火力发电厂", restrict: "只能增产" }
 ];
 
 /**

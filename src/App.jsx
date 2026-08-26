@@ -256,21 +256,24 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             {/*燃料选择、清空数据缓存按钮、采矿参数&其他设置是否显示按钮*/}
             <div className="d-flex column-gap-4 row-gap-2 flex-wrap mt-2 align-items-center">
                 <FuelSelect/>
-                <button className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
-                        onClick={clearData} title="清空数据缓存">
-                    <FaTrashAlt/>
-                    <span className="compact-hide-text">清空数据缓存</span>
-                </button>
-                <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
-                        onClick={() => set_misc_show(s => !s)} title="参数设置">
-                    <FaCog/>
-                    <span className="compact-hide-text">参数设置</span>
-                </button>
-                <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_ore_quantities ? 'btn-primary' : 'btn-outline-secondary'}`}
-                        onClick={() => set_show_ore_quantities(s => !s)} title="矿物可用量设置">
-                    <FaMountain/>
-                    <span className="compact-hide-text">矿物可用量</span>
-                </button>
+                {/* 清空缓存/参数设置/矿物可用量:精简模式靠右紧密(同弹出面板按钮) */}
+                <div className="d-inline-flex align-items-center toolbar-btns">
+                    <button className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+                            onClick={clearData} title="清空数据缓存">
+                        <FaTrashAlt/>
+                        <span className="toolbar-btn-text">清空数据缓存</span>
+                    </button>
+                    <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                            onClick={() => set_misc_show(s => !s)} title="参数设置">
+                        <FaCog/>
+                        <span className="toolbar-btn-text">参数设置</span>
+                    </button>
+                    <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_ore_quantities ? 'btn-primary' : 'btn-outline-secondary'}`}
+                            onClick={() => set_show_ore_quantities(s => !s)} title="矿物可用量设置">
+                        <FaMountain/>
+                        <span className="toolbar-btn-text">矿物可用量</span>
+                    </button>
+                </div>
             </div>
             {/*采矿参数&其他设置*/}
             <UserSettings show={misc_show}/>

@@ -387,7 +387,32 @@ body > .p-3 {
 /* ============================================================
    紧凑模式：1024px ~ 1399px
    ============================================================ */
-@media (max-width: 1399px) {
+/* 顶部工具栏图标按钮(清空缓存/参数设置/矿物可用量):全宽保留大间距,精简模式靠右紧密 */
+.toolbar-btns {
+    column-gap: 1.5rem;
+}
+
+/* 顶部工具栏按钮文字:slender 起隐藏(简化图标,compact/semi/mid 仍显示文字) */
+.toolbar-btn-text {
+    display: inline;
+}
+@media (max-width: 1023px) {
+    .toolbar-btn-text {
+        display: none !important;
+    }
+}
+
+/* 自动优化按钮文字:mid 起隐藏(简化图标,full/compact/semi 显示文字) */
+.optim-btn-text {
+    display: inline;
+}
+@media (max-width: 1149px) {
+    .optim-btn-text {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1439px) {
     /* 在中小布局下限制顶部面板高度并允许内部滚动，避免长列表
        （例如需求列表、批量预设、设置）把结果区顶出可视区域。
        使用百分比而非 vh：父级 .app-layout 的高度 = 视口 - header - padding，
@@ -413,7 +438,6 @@ body > .p-3 {
     }
 
     /* 结果表格列宽压缩(第5列=合并「整数建议+配方选取」列,宽度由 JS 动态测量,勿覆盖) */
-    .result-table th:nth-child(6) { width: 110px; } /* 增产模式 180→110 */
     .result-table th:nth-child(7) { width: 60px; }  /* 增产剂   90→60(精简下拉无箭头,表头显示短词"增产") */
     .result-table th:nth-child(8) { width: 60px; }  /* 设备等级 100→60(与增产剂列一致) */
 
@@ -455,10 +479,13 @@ body > .p-3 {
    窄屏模式：768px ~ 1023px
    ============================================================ */
 @media (max-width: 1023px) {
+    /* slender 起:清空缓存/参数设置/矿物可用量 三个图标按钮靠右紧密排列(同弹出面板按钮) */
+    .toolbar-btns {
+        margin-left: auto;
+        column-gap: 0.25rem;
+    }
+
     /* 进一步压缩列宽 */
-    .result-table th:nth-child(3) { width: 90px; }  /* 产能 130→90 */
-    .result-table th:nth-child(4) { width: 80px; }  /* 设备 110→80 */
-    .result-table th:nth-child(6) { width: 90px; }  /* 增产模式 110→90 */
     .result-table th:nth-child(7) { width: 52px; }  /* 增产剂 72→52 */
     .result-table th:nth-child(8) { width: 52px; }  /* 设备等级 80→52(与增产剂列一致) */
 
@@ -473,9 +500,9 @@ body > .p-3 {
         height: 22px !important;
     }
 
-    /* 隐藏右侧总结面板，改为弹出按钮 */
-    .result-summary-scroll {
-        display: none !important;
+    /* slender 起收纳右列(建筑统计+目标值),左列资源仍显示 */
+    .summary-right-col {
+        display: none !important;   /* 覆盖 bootstrap .d-flex 的 !important */
     }
 
     /* 结果表格扩展至全宽 */
@@ -490,10 +517,17 @@ body > .p-3 {
     }
 }
 
+/* narrow/mobile:整面板收纳(左列资源也隐藏),靠弹出按钮查看 */
+@media (max-width: 899px) {
+    .result-summary-scroll {
+        display: none !important;
+    }
+}
+
 /* ============================================================
-   移动端：< 768px
+   移动端：< 720px
    ============================================================ */
-@media (max-width: 767px) {
+@media (max-width: 719px) {
     /* 移动端隐藏元素 */
     .mobile-hide {
         display: none !important;
@@ -537,6 +571,12 @@ body > .p-3 {
         font-size: 0.72em;
     }
 
+    /* 移动端隐藏"批量预设"标题文本 */
+    .batch-title {
+        display: none !important;
+    }
+
+
     /* 移动端表格列宽极限压缩 */
     .result-table th:nth-child(1) { width: 36px; }
     .result-table th:nth-child(2) { width: auto; min-width: 28px; }
@@ -545,9 +585,7 @@ body > .p-3 {
     .result-table tr td {
         padding-left: 0.2em;
     }
-    .result-table th:nth-child(3) { width: 72px; }
-    .result-table th:nth-child(4) { width: 60px; }
-    .result-table th:nth-child(6) { width: 72px; }
+    .result-table th:nth-child(6) { width: 64px; }  /* 增产模式:mobile 收窄匹配按钮宽度(消除右侧空隙) */
     .result-table th:nth-child(7) { width: 48px; }
     .result-table th:nth-child(8) { width: 48px; }
 
@@ -599,9 +637,7 @@ body > .p-3 {
     .result-table tr td {
         padding-left: 0.15em;
     }
-    .result-table th:nth-child(3) { width: 56px; }
-    .result-table th:nth-child(4) { width: 48px; }
-    .result-table th:nth-child(6) { width: 56px; }
+    .result-table th:nth-child(6) { width: 64px; }
     .result-table th:nth-child(7) { width: 42px; }
     .result-table th:nth-child(8) { width: 42px; }
 

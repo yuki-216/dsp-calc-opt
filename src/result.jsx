@@ -41,6 +41,10 @@ export function mkShort(name) {
     const n = ROMAN_TO_NUM[m[1].toUpperCase()];
     return n ? `Mk${n}` : name;
 }
+// 设备等级列下拉:semi 及更窄触发(compact 仍保持按钮)
+const isSemiOrNarrower = (m) => m === 'semi' || m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
+// 增产等级列下拉:mid 及更窄触发(semi/compact 仍保持按钮)
+const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
 
 // 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
 const PANEL_DISPLAY_EPS = 0.01;
@@ -186,8 +190,8 @@ export function ProNumSelect({recipe_id, choice, onChange, icon_size}) {
         }
     }
 
-    // 精简模式(非 full):按钮换成下拉选择框;只有"无"一个可选项时不可更改,直接隐藏
-    if (compact_mode !== "full") {
+    // mid 及更窄:按钮换成下拉选择框;只有"无"一个可选项时不可更改,直接隐藏
+    if (isMidOrNarrower(compact_mode)) {
         if (pro_num_options.length <= 1) return null;
         return <select className="form-select form-select-sm"
                        style={{width: '100%', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
@@ -261,9 +265,9 @@ export function FactorySelect({recipe_id, choice, onChange, no_gap, icon_size}) 
         .filter(o => o.item_icon !== "大型采矿机")
         .map(o => o.item_icon === "采矿机" ? {...o, item_icon: "挖矿机"} : o);
 
-    // 精简模式(非 full):按钮换成下拉选择框;仅一种建筑可选用时不可更改,直接隐藏。
+    // semi 及更窄:按钮换成下拉选择框;仅一种建筑可选用时不可更改,直接隐藏。
     // 选项直接按等级序号显示 Mk1/Mk2/Mk3(不依赖原名是否 Mk 命名,本质即第几级)
-    if (compact_mode !== "full") {
+    if (isSemiOrNarrower(compact_mode)) {
         if (options.length <= 1) return null;
         return <select className="form-select form-select-sm"
                        style={{width: '100%', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
@@ -973,8 +977,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             <tr className="text-center text-nowrap">
                 <th width={60}>操作</th>
                 <th width={40}>物品</th>
-                <th width={130}>产能</th>
-                <th width={110}>设备</th>
+                <th width={90}>产能</th>
+                <th width={80}>设备</th>
                 {/* 合并「整数建议+配方选取」列：列宽由 JS 动态测量（recipeColWidth），表头左右两段标题 */}
                 <th style={{ width: recipeColWidth }}>
                     <div className="d-flex justify-content-between text-nowrap">
@@ -983,8 +987,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                     </div>
                 </th>
                 <th width={90}>增产模式</th>
-                <th width={160}>{is_compact ? '增产' : '增产剂'}</th>
-              <th width={170}>{is_compact ? '设备' : '设备等级'}</th>
+                <th width={160}>{isMidOrNarrower(compact_mode) ? '增产' : '增产剂'}</th>
+              <th width={170}>{isSemiOrNarrower(compact_mode) ? '设备' : '设备等级'}</th>
             </tr>
             </thead>
             <tbody className="table-group-divider">
@@ -1134,8 +1138,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         </fieldset>}
                 </div>
 
-                {/* 右列：建筑统计 + 目标值 */}
-                <div className="d-flex flex-column gap-2">
+                {/* 右列：建筑统计 + 目标值(slender 起 CSS 收纳) */}
+                <div className="d-flex flex-column gap-2 summary-right-col">
                     {building_rows.length > 0 &&
                         <fieldset className="w-fit">
                             <legend><small>建筑统计</small></legend>
@@ -1176,7 +1180,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                 <div className="modal-dialog mw-fit">
                     <div className="modal-content bg-body flex-column" style={{"--bs-bg-opacity": 0.85}}>
                         <div className="modal-header border-secondary">
-                            <h6 className="modal-title">原矿化 &amp; 多余产物 &amp; 原矿需求</h6>
+                            <h6 className="modal-title">原矿化 &amp; 多余产物 &amp; 原矿需求 &amp; 电力 &amp; 占地</h6>
                             <button type="button" className="btn-close" data-bs-dismiss="modal"/>
                         </div>
                         <div className="modal-body summary-modal-body">
@@ -1250,19 +1254,49 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                     </fieldset>
                                 );
                             })()}
+                            {/* 预估电力(左列资源类) */}
+                            {total_power_demand > 0 &&
+                                <fieldset className="w-fit">
+                                    <legend><small>预估电力 (MW)</small></legend>
+                                    <div className="d-flex align-items-center gap-1 text-nowrap">
+                                        <span className="text-muted">总计：</span>
+                                        <span className="fast-tooltip" data-tooltip="总发电量=净输出需求+设备自耗">
+                                            <ValueWithDifference
+                                                currentValue={total_power_demand}
+                                                previousValue={historyValues?.[1]?.totalPowerDemand}
+                                                key="total-power-demand"
+                                            />
+                                        </span>
+                                    </div>
+                                </fieldset>
+                            }
+                            {/* 预估占地(左列资源类) */}
+                            {total_footprint > 0 &&
+                                <fieldset className="w-fit">
+                                    <legend><small>预估占地</small></legend>
+                                    <div className="d-flex flex-column">
+                                        <span>{formatValue(total_footprint, fixed_num)} 格</span>
+                                        {historyValues?.[1]?.totalFootprint !== undefined && Math.abs(total_footprint - historyValues[1].totalFootprint) > 1e-6 && (
+                                            <span style={{fontSize: '0.85em', color: total_footprint > historyValues[1].totalFootprint ? 'red' : 'green'}}>
+                                                {total_footprint > historyValues[1].totalFootprint ? '+' : ''}{formatValue(total_footprint - historyValues[1].totalFootprint, fixed_num)} 格
+                                            </span>
+                                        )}
+                                    </div>
+                                </fieldset>
+                            }
                         </div>
                     </div>
                 </div>
             </div>
             , document.body)}
 
-        {/* Modal B: 建筑统计 + 预估电力 */}
+        {/* Modal B: 建筑统计 + 其余目标值 */}
         {createPortal(
             <div ref={building_modal_ref} className="modal" tabIndex="-1">
                 <div className="modal-dialog mw-fit">
                     <div className="modal-content bg-body flex-column" style={{"--bs-bg-opacity": 0.85}}>
                         <div className="modal-header border-secondary">
-                            <h6 className="modal-title">建筑统计 &amp; 预估电力</h6>
+                            <h6 className="modal-title">建筑统计 &amp; 其余目标值</h6>
                             <button type="button" className="btn-close" data-bs-dismiss="modal"/>
                         </div>
                         <div className="modal-body summary-modal-body">
@@ -1274,24 +1308,29 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                         <tbody>{building_rows}</tbody>
                                     </table>
                                 </fieldset>}
-                        </div>
-                        {/* 预估电力 — 固定在底部 */}
-                        {building_rows.length > 0 &&
-                            <div className="modal-footer border-secondary justify-content-start">
-                                <div className="d-flex flex-column gap-1">
-                                    <div className="d-flex align-items-center gap-1 text-nowrap">
-                                        <span className="text-muted">总电力：</span>
-                                        <span className="fast-tooltip" data-tooltip="总发电量=净输出需求+设备自耗">
-                                            <ValueWithDifference
-                                                currentValue={total_power_demand}
-                                                previousValue={historyValues?.[1]?.totalPowerDemand}
-                                                key="total-power-demand"
-                                            />
-                                        </span>
-                                        <span className="text-muted">MW</span>
+                            {/* 其余目标值(右列) */}
+                            {rareWeightInfo && (
+                                <fieldset className="w-fit">
+                                    <legend><small>其余目标值</small></legend>
+                                    <div className="d-flex flex-column">
+                                        <span>珍稀权重</span>
+                                        <span>{formatRareWeightValue(rareWeightInfo.objective)}</span>
+                                        {rareWeightDelta != null && Math.abs(rareWeightDelta) > 1e-9 && (
+                                            <span style={{fontSize: '0.85em', color: rareWeightDelta > 0 ? 'red' : 'green'}}>
+                                                {rareWeightDelta > 0 ? '+' : ''}{formatValue(rareWeightDelta, fixed_num)}
+                                            </span>
+                                        )}
+                                        <span>净热值（GJ）</span>
+                                        <span>{formatValue(netHeat / 1000, fixed_num)}</span>
+                                        {netHeatDelta != null && Math.abs(netHeatDelta / 1000) > 1e-9 && (
+                                            <span style={{fontSize: '0.85em', color: netHeatDelta > 0 ? 'red' : 'green'}}>
+                                                {netHeatDelta > 0 ? '+' : ''}{formatValue(netHeatDelta / 1000, fixed_num)}
+                                            </span>
+                                        )}
                                     </div>
-                                </div>
-                            </div>}
+                                </fieldset>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

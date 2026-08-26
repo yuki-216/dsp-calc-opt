@@ -58,11 +58,14 @@ const DEFAULT_SETTINGS = {
 };
 export const DefaultSettingsContext = createContext(DEFAULT_SETTINGS);
 
-// "full" >= 1400px | "compact" 1024-1399px | "narrow" 768-1023px | "mobile" < 768px
+// 基于整个视口宽度(window.innerWidth):full≥1440 | compact 1350-1439 | semi 1150-1349(设备等级列下拉) | mid 1024-1149(增产等级列下拉) | slender 900-1023(整数建议悬浮+右列收纳) | narrow 720-899 | mobile<720
 function get_compact_mode(width) {
-    if (width >= 1400) return "full";
-    if (width >= 1024) return "compact";
-    if (width >= 768) return "narrow";
+    if (width >= 1440) return "full";
+    if (width >= 1350) return "compact";
+    if (width >= 1150) return "semi";   // compact 与 mid 之间:设备等级列改下拉
+    if (width >= 1024) return "mid";    // 增产等级列改下拉
+    if (width >= 900) return "slender"; // mid 与 narrow 之间:整数建议→设备列悬浮 + 右面板收纳
+    if (width >= 720) return "narrow";
     return "mobile";
 }
 
@@ -114,9 +117,13 @@ export function ContextProvider({children}) {
     const [compact_mode, set_compact_mode] = useState(() => get_compact_mode(window.innerWidth));
 
     useEffect(() => {
-        const mql_full = window.matchMedia("(min-width: 1400px)");
-        const mql_compact = window.matchMedia("(min-width: 1024px)");
-        const mql_narrow = window.matchMedia("(min-width: 768px)");
+        // 监听必须与 get_compact_mode 的断点一一对应,否则边界移动不会被及时触发
+        const mql_full = window.matchMedia("(min-width: 1440px)");
+        const mql_compact = window.matchMedia("(min-width: 1350px)");
+        const mql_semi = window.matchMedia("(min-width: 1150px)");
+        const mql_mid = window.matchMedia("(min-width: 1024px)");
+        const mql_slender = window.matchMedia("(min-width: 900px)");
+        const mql_narrow = window.matchMedia("(min-width: 720px)");
 
         function on_resize() {
             set_compact_mode(get_compact_mode(window.innerWidth));
@@ -124,10 +131,16 @@ export function ContextProvider({children}) {
 
         mql_full.addEventListener("change", on_resize);
         mql_compact.addEventListener("change", on_resize);
+        mql_semi.addEventListener("change", on_resize);
+        mql_mid.addEventListener("change", on_resize);
+        mql_slender.addEventListener("change", on_resize);
         mql_narrow.addEventListener("change", on_resize);
         return () => {
             mql_full.removeEventListener("change", on_resize);
             mql_compact.removeEventListener("change", on_resize);
+            mql_semi.removeEventListener("change", on_resize);
+            mql_mid.removeEventListener("change", on_resize);
+            mql_slender.removeEventListener("change", on_resize);
             mql_narrow.removeEventListener("change", on_resize);
         };
     }, []);

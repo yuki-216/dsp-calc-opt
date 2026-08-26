@@ -1,6 +1,6 @@
 import {useContext, useRef, useState} from 'react';
 import {FaTrash, FaPlusCircle, FaGem, FaIndustry} from 'react-icons/fa';
-import {GlobalStateContext} from './contexts';
+import {CompactModeContext, GlobalStateContext} from './contexts';
 import {ItemIcon} from './ui_components';
 import {ItemSelect} from './item_select';
 
@@ -44,6 +44,7 @@ function NeedItem({item, count, set_needs_list}) {
 
 export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_show_building_popup}) {
     const global_state = useContext(GlobalStateContext);
+    const compact_mode = useContext(CompactModeContext);
     const count_ref = useRef(60);
     let item_data = global_state.item_data;
     let needs_doms = Object.entries(needs_list).map(([item, count]) => {
@@ -85,14 +86,17 @@ export function NeedsList({needs_list, set_needs_list, set_show_ore_popup, set_s
 
             {/* 弹出面板按钮（narrow/mobile 下显示，compact/full 下 CSS 隐藏） */}
             <div className="summary-popup-btn ms-auto d-inline-flex gap-1">
+                {/* slender 时左列仍显示在面板,不渲染左按钮(内联 style 会被 bootstrap .d-inline-flex !important 覆盖) */}
+                {compact_mode !== 'slender' &&
                 <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 summary-popup-btn-item"
                         onClick={() => set_show_ore_popup(s => !s)}
-                        title="原矿化列表 & 多余产物 & 原矿需求">
+                        title="左列:原矿化列表 & 多余产物 & 原矿需求 & 预估电力 & 占地">
                     <FaGem/>
                 </button>
+                }
                 <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 summary-popup-btn-item"
                         onClick={() => set_show_building_popup(s => !s)}
-                        title="建筑统计 & 预估电力">
+                        title="右列:建筑统计 & 其余目标值">
                     <FaIndustry/>
                 </button>
             </div>

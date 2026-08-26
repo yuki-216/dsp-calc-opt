@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { VEIN_NAMES, STAR_TYPES, formatAmount, formatOilRate } from './seed_viewer_binding';
+import { CompactModeContext } from './contexts.jsx';
 import OrbitalCollectorPanel from './OrbitalCollectorPanel';
 
 // 恒星颜色
@@ -29,6 +30,9 @@ export default function SeedViewerResult({
 }) {
     const [expandedStars, setExpandedStars] = useState(new Set());
     const [selectedItem, setSelectedItem] = useState(null);
+    // mobile:隐藏星球树与轨道采集器(轨道采集器移到 SeedViewerPage 致谢位置)
+    const compact_mode = useContext(CompactModeContext);
+    const is_mobile = compact_mode === 'mobile';
 
     // 切换恒星展开状态
     const toggleStar = (starIndex) => {
@@ -335,15 +339,19 @@ export default function SeedViewerResult({
 
     return (
         <div className="result-panel">
-            <div className="tree-panel">
-                {renderTree()}
-            </div>
-            {/* 右侧:上半星球详情、下半轨道采集器(两块独立) */}
-            <div className="result-right">
-                <div className="detail-panel">
-                    {renderDetail()}
+            {!is_mobile && (
+                <div className="tree-panel">
+                    {renderTree()}
                 </div>
-                <OrbitalCollectorPanel result={data}/>
+            )}
+            {/* 右侧:上半星球详情、下半轨道采集器(两块独立);mobile 星球树/天体详情/轨道采集器全隐藏(轨道采集器移到 SeedViewerPage 致谢位置) */}
+            <div className="result-right">
+                {!is_mobile && (
+                    <div className="detail-panel">
+                        {renderDetail()}
+                    </div>
+                )}
+                {!is_mobile && <OrbitalCollectorPanel result={data}/>}
             </div>
         </div>
     );

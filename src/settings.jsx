@@ -19,11 +19,22 @@ const FACTORY_OPTIMIZE_MODES = [
 
 // 分馏塔带速选项(数值=带速/min):360/720/1800 及各自 2/3/4 倍堆叠叠加,去重后 10 档
 const BELT_SPEEDS = [360, 720, 1080, 1440, 1800, 2160, 2880, 3600, 5400, 7200];
+// 设备等级下拉:semi 及更窄触发(compact 仍保持按钮),与结果表一致
+const isSemiOrNarrower = (m) => m === 'semi' || m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
+// 增产等级下拉:mid 及更窄触发,与结果表一致
+const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
 
 export function Settings() {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
     const DEFAULT_SETTINGS = useContext(DefaultSettingsContext);
+    const compact_mode = useContext(CompactModeContext);
+    const is_mobile = compact_mode === "mobile";
+    // 优化策略(与 OptimizerControls 一致,从 localStorage 读)用于珍稀实用性修正的显示条件
+    const optimStrategy = (() => {
+        const saved = localStorage.getItem('dsp-optim-strategy');
+        return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_rare_weight');
+    })();
 
     // 通用设置变更函数
     function change_setting(e, name, type = 'int', minVal = 0) {
@@ -124,6 +135,27 @@ export function Settings() {
                 </div>
             </div>
         </div>
+        {/* 行4(mobile 专用):增产剂自由等级 珍稀实用性修正(从优化器区移入) */}
+        {is_mobile && (
+            <div className="d-flex flex-wrap align-items-center gap-3">
+                <button
+                    className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                    onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
+                    title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
+                >
+                    增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
+                </button>
+                {optimStrategy === 'min_rare_weight' && (
+                    <button
+                        className={`btn btn-sm ${settings.rare_ore_practicality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                        onClick={() => set_settings({ rare_ore_practicality: !settings.rare_ore_practicality })}
+                        title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）"
+                    >
+                        珍稀实用性修正:{settings.rare_ore_practicality ? '开' : '关'}
+                    </button>
+                )}
+            </div>
+        )}
     </div>;
 }
 
@@ -167,14 +199,14 @@ function FactorySelect({factory, list, icon_size}) {
         });
     }
 
-    // 精简模式(非 full):按钮换成下拉选择框(去箭头,前加该设备 Mk1 图标便于辨识);仅一种建筑可选用时不可更改,直接隐藏
+    // semi 及更窄:按钮换成下拉选择框(去箭头,前加该设备 Mk1 图标便于辨识);仅一种建筑可选用时不可更改,直接隐藏
     const compact_mode = useContext(CompactModeContext);
-    if (compact_mode !== "full") {
+    if (isSemiOrNarrower(compact_mode)) {
         if (options.length <= 1) return null;
         return <span className="d-inline-flex align-items-center gap-1">
             <ItemIcon item={options[0].item_icon} size={22}/>
             <select className="form-select form-select-sm"
-                    style={{width: '4.5em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                    style={{width: '4em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
                     value={cur} onChange={e => set_factory(Number(e.target.value))}>
                 {options.map((o, idx) => <option key={o.value} value={o.value}>Mk{idx + 1}</option>)}
             </select>
@@ -408,7 +440,7 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                 title={isOptimizing ? '优化进行中...' : `自动优化增产策略（${optimStrategy === 'min_rare_weight' ? '珍稀权重' : optimStrategy === 'min_net_heat' ? '最小净热值' : optimStrategy === 'min_footprint' ? '最小占地' : '最小化总耗电'}）`}
             >
                 <FaMagic/>
-                <span className="compact-hide-text">
+                <span className="optim-btn-text">
                     {isOptimizing ? `优化中 ${optimProgress.current}/${optimProgress.total}` : '自动优化'}
                 </span>
             </button>
@@ -427,15 +459,18 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                     </div>;
                 })}
             </div>
-            <button
-                className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
-                disabled={isOptimizing}
-                title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
-            >
-                增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
-            </button>
-            {optimStrategy === 'min_rare_weight' && (
+            {/* 增产剂自由等级/珍稀实用性修正:mobile 移到设置面板最后一行 */}
+            {!is_mobile && (
+                <button
+                    className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                    onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
+                    disabled={isOptimizing}
+                    title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
+                >
+                    增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
+                </button>
+            )}
+            {!is_mobile && optimStrategy === 'min_rare_weight' && (
                 <button
                     className={`btn btn-sm ${settings.rare_ore_practicality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
                     onClick={() => set_settings({ rare_ore_practicality: !settings.rare_ore_practicality })}
@@ -590,7 +625,7 @@ export function BatchPresetControls() {
 
     return (
         <div className="mt-3 d-inline-flex flex-wrap column-gap-3 row-gap-2 align-items-center batch-setting-container">
-            <small className="fw-bold">批量预设</small>
+            <small className="fw-bold batch-title">批量预设</small>
             <div className="d-flex pro-mode-toggle">
                 {promode_options.map(({value, label, className}) => (
                     <div key={value}
@@ -600,11 +635,11 @@ export function BatchPresetControls() {
                     </div>
                 ))}
             </div>
-            {compact_mode !== "full" ? (
+            {isMidOrNarrower(compact_mode) ? (
                 <span className="d-inline-flex align-items-center gap-1">
                     <ItemIcon item={proliferate_options[1]?.item_icon} size={22}/>
                     <select className="form-select form-select-sm"
-                            style={{width: '4.5em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                            style={{width: '4em', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
                             value={pro_num} onChange={e => change_pro_num(Number(e.target.value))}>
                         {proliferate_options.map(o => <option key={o.value} value={o.value}>{o.label || mkShort(o.item_icon)}</option>)}
                     </select>
