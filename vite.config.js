@@ -275,8 +275,12 @@ export default defineConfig(({mode}) => ({
                         },
                     },
                     {
+                        // 雪碧图 png 用 StaleWhileRevalidate 而非 CacheFirst:坐标 JSON 已随
+                        // import.meta.glob(eager) 打包进 JS,随版本更新;若 png 用 CacheFirst(365天
+                        // 不主动更新),新版本发布后 png 与 JS 内坐标不同步 → 图标张冠李戴。
+                        // SWR 返回缓存的同时后台更新,使 png 逐步跟随新版本。
                         urlPattern: /\/icon\/.*\.(png|webp)$/i,
-                        handler: 'CacheFirst',
+                        handler: 'StaleWhileRevalidate',
                         options: {
                             cacheName: 'sprite-cache',
                             expiration: {

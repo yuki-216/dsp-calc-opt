@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.12.2 - 2026-08-28
+
+### 修复
+- 图标张冠李戴（清空缓存后 / 发布新版本后）：雪碧图 png 用 `CacheFirst`（365 天不主动更新）而坐标 JSON 已随 `import.meta.glob` 打包进 JS 随版本更新，两者不同步导致图标错位。修复：
+  - "清空缓存"同时清理 Service Worker 的 Cache Storage 并触发 SW 更新，不再只清 `localStorage`；
+  - 雪碧图缓存策略 `CacheFirst` → `StaleWhileRevalidate`，png 后台跟随新版本与坐标同步。
+
 ## 0.12.1 - 2026-08-28
 
 ### 修复

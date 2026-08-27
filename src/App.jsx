@@ -254,9 +254,25 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
         }
     }, [game_info, set_needs_list]);
 
-    function clearData() {
+    async function clearData() {
         if (!confirm(`即将清空所有保存的生产策略、需求列表等数据，初始化整个计算器，是否继续`)) {
             return;// 用户取消保存
+        }
+        // 清空 Service Worker 的 Cache Storage(而不仅是 localStorage):
+        // 雪碧图 png 走 CacheFirst、坐标 json 走 StaleWhileRevalidate,更新策略不同步,
+        // 只清 localStorage 后 reload 会让二者命中不同版本的旧缓存 → 图标张冠李戴(Ctrl+F5 才恢复)
+        if ('caches' in window) {
+            try {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(key => caches.delete(key)));
+            } catch { /* 忽略清理失败 */ }
+        }
+        // 请求 Service Worker 更新,确保下次加载拿到新版本资源
+        if ('serviceWorker' in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) await reg.update();
+            } catch { /* 忽略 */ }
         }
         localStorage.clear();
         window.location.reload();
