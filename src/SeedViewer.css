@@ -81,7 +81,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px;
+    padding: 8px;
     background: var(--bs-primary);
     color: white;
     border: none;
@@ -164,7 +164,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 10px;
+    padding: 7px;
     background: var(--bs-secondary-bg);
     color: var(--bs-body-color);
     border: 1px solid var(--bs-border-color);
@@ -569,6 +569,9 @@
 }
 
 .detail-info {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 16px;
     font-size: 13px;
     color: var(--bs-secondary-color);
     line-height: 1.8;
@@ -648,7 +651,7 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    padding: 8px;
+    padding: 6px;
     border: 1px solid var(--bs-border-color);
     border-radius: 6px;
     background: var(--bs-secondary-bg);
@@ -842,6 +845,29 @@
 }
 
 /* 响应式设计 */
+/* 种子查看页:<1450px 星球树隐藏标签(气态类型/稀有矿等,距离保留) */
+@media (max-width: 1449px) {
+    .tree-panel .tag {
+        display: none;
+    }
+}
+
+/* 种子查看页:<1125px 星球树移到星球详情上方,上下平分高度 */
+@media (max-width: 1124px) {
+    .result-panel {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .tree-panel {
+        flex: 1 1 50%;
+    }
+    .result-right {
+        width: 100%;
+        min-width: 0;
+        flex: 1 1 50%;
+    }
+}
+
 @media (max-width: 1200px) {
     .vein-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

@@ -28,8 +28,6 @@ export function Settings() {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
     const DEFAULT_SETTINGS = useContext(DefaultSettingsContext);
-    const compact_mode = useContext(CompactModeContext);
-    const is_mobile = compact_mode === "mobile";
     // 优化策略(与 OptimizerControls 一致,从 localStorage 读)用于珍稀实用性修正的显示条件
     const optimStrategy = (() => {
         const saved = localStorage.getItem('dsp-optim-strategy');
@@ -58,7 +56,7 @@ export function Settings() {
     const beltSpeed = Math.round((settings.fractionating_speed || 120) * 60);
 
     return <div className="d-flex flex-column gap-1 flex-wrap">
-        {/* 行1:精度位数 研究站层数 增产剂自喷涂 限制加速模式 */}
+        {/* 行1:精度位数 研究站层数 增产剂自喷涂 */}
         <div className="d-flex flex-wrap align-items-center gap-3">
             <label className="d-flex align-items-center gap-1 text-nowrap">
                 <span>精度位数</span>
@@ -74,12 +72,6 @@ export function Settings() {
                 <input type="checkbox" checked={!!settings.proliferate_itself}
                        onChange={e => set_settings(prev => ({...prev, proliferate_itself: e.target.checked}))}/>
                 增产剂自喷涂
-            </label>
-            <label className="d-flex align-items-center gap-1 text-nowrap"
-                   title="限制批量预设和自动优化的加速模式选择">
-                <input type="checkbox" checked={!!settings.proliferate_no_accelerate}
-                       onChange={e => set_settings(prev => ({...prev, proliferate_no_accelerate: e.target.checked}))}/>
-                限制加速模式
             </label>
         </div>
 
@@ -135,27 +127,29 @@ export function Settings() {
                 </div>
             </div>
         </div>
-        {/* 行4(mobile 专用):增产剂自由等级 珍稀实用性修正(从优化器区移入) */}
-        {is_mobile && (
-            <div className="d-flex flex-wrap align-items-center gap-3">
-                <button
-                    className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                    onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
-                    title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
-                >
-                    增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
-                </button>
-                {optimStrategy === 'min_rare_weight' && (
-                    <button
-                        className={`btn btn-sm ${settings.rare_ore_practicality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                        onClick={() => set_settings({ rare_ore_practicality: !settings.rare_ore_practicality })}
-                        title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）"
-                    >
-                        珍稀实用性修正:{settings.rare_ore_practicality ? '开' : '关'}
-                    </button>
-                )}
-            </div>
-        )}
+        {/* 行4:增产剂自由等级 珍稀实用性修正 限制加速模式(全局,样式同增产剂自喷涂) */}
+        <div className="d-flex flex-wrap align-items-center gap-3">
+            <label className="d-flex align-items-center gap-1 text-nowrap"
+                   title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）">
+                <input type="checkbox" checked={!!settings.proliferate_flexible_levels}
+                       onChange={e => set_settings(prev => ({...prev, proliferate_flexible_levels: e.target.checked}))}/>
+                增产剂自由等级
+            </label>
+            {optimStrategy === 'min_rare_weight' && (
+                <label className="d-flex align-items-center gap-1 text-nowrap"
+                       title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）">
+                    <input type="checkbox" checked={!!settings.rare_ore_practicality}
+                           onChange={e => set_settings(prev => ({...prev, rare_ore_practicality: e.target.checked}))}/>
+                    珍稀实用性修正
+                </label>
+            )}
+            <label className="d-flex align-items-center gap-1 text-nowrap"
+                   title="限制批量预设和自动优化的加速模式选择">
+                <input type="checkbox" checked={!!settings.proliferate_no_accelerate}
+                       onChange={e => set_settings(prev => ({...prev, proliferate_no_accelerate: e.target.checked}))}/>
+                限制加速模式
+            </label>
+        </div>
     </div>;
 }
 
@@ -459,27 +453,7 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
                     </div>;
                 })}
             </div>
-            {/* 增产剂自由等级/珍稀实用性修正:mobile 移到设置面板最后一行 */}
-            {!is_mobile && (
-                <button
-                    className={`btn btn-sm ${settings.proliferate_flexible_levels ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                    onClick={() => set_settings({ proliferate_flexible_levels: !settings.proliferate_flexible_levels })}
-                    disabled={isOptimizing}
-                    title="自动优化时，生产增产剂 Mk.I/II/III 的配方可自由选择各级增产剂（≤最高等级），不受可选增产剂限制（各级增产剂本就在产线上，无混用顾虑）"
-                >
-                    增产剂自由等级:{settings.proliferate_flexible_levels ? '开' : '关'}
-                </button>
-            )}
-            {!is_mobile && optimStrategy === 'min_rare_weight' && (
-                <button
-                    className={`btn btn-sm ${settings.rare_ore_practicality ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-                    onClick={() => set_settings({ rare_ore_practicality: !settings.rare_ore_practicality })}
-                    disabled={isOptimizing}
-                    title="将刺笋结晶/金伯利矿石/分形硅石的稀缺度按可替代普通矿折算（替代比例95%）"
-                >
-                    珍稀实用性修正:{settings.rare_ore_practicality ? '开' : '关'}
-                </button>
-            )}
+            {/* 增产剂自由等级/珍稀实用性修正已移入设置面板第四行 */}
             <label className="d-inline-flex align-items-center gap-1 small text-nowrap" title="增产剂带来的目标改善低于此比例时，保留无增产剂方案">
                 <span>无增产剂加权</span>
                 <input

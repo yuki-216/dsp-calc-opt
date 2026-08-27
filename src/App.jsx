@@ -212,6 +212,13 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const handleStatsApplied = useCallback(() => setStatsApplySignal(s => s + 1), []);
     const [resultHasCollector, setResultHasCollector] = useState(false); // 结果表建筑统计是否含轨道采集器(提示用)
     const prev_game_name = useRef(game_info?.game_data?.game_name ?? '');
+    // 调试:输出当前页面宽度(随窗口/缩放变化)
+    const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+    useEffect(() => {
+        const onResize = () => setViewportWidth(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
 
     useEffect(() => {
         // 初始化时加载默认游戏数据
@@ -256,17 +263,19 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
             {/*燃料选择、清空数据缓存按钮、采矿参数&其他设置是否显示按钮*/}
             <div className="d-flex column-gap-4 row-gap-2 flex-wrap mt-2 align-items-center">
                 <FuelSelect/>
+                {/* 调试:当前页面宽度 */}
+                <span className="small text-muted" title="当前页面宽度(调试)">宽:{viewportWidth}px</span>
                 {/* 清空缓存/参数设置/矿物可用量:精简模式靠右紧密(同弹出面板按钮) */}
                 <div className="d-inline-flex align-items-center toolbar-btns">
                     <button className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
                             onClick={clearData} title="清空数据缓存">
                         <FaTrashAlt/>
-                        <span className="toolbar-btn-text">清空数据缓存</span>
+                        <span className="toolbar-btn-text">清空缓存</span>
                     </button>
                     <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                             onClick={() => set_misc_show(s => !s)} title="参数设置">
                         <FaCog/>
-                        <span className="toolbar-btn-text">参数设置</span>
+                        <span className="toolbar-btn-text">设置</span>
                     </button>
                     <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_ore_quantities ? 'btn-primary' : 'btn-outline-secondary'}`}
                             onClick={() => set_show_ore_quantities(s => !s)} title="矿物可用量设置">

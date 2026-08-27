@@ -1,7 +1,6 @@
 import { useState, useContext } from 'react';
 import { VEIN_NAMES, STAR_TYPES, formatAmount, formatOilRate } from './seed_viewer_binding';
 import { CompactModeContext } from './contexts.jsx';
-import OrbitalCollectorPanel from './OrbitalCollectorPanel';
 
 // 恒星颜色
 const STAR_COLORS = {
@@ -183,9 +182,9 @@ export default function SeedViewerResult({
                 <div className="detail-section">
                     <h4>其他信息</h4>
                     <div className="detail-info">
-                        戴森球半径: {star.dyson_radius.toFixed(0)} m<br />
-                        戴森球亮度: {star.dyson_lumino.toFixed(3)}<br />
-                        距离: {star.distance.toFixed(2)} LY
+                        <div className="detail-info-item">戴森球半径: {star.dyson_radius.toFixed(0)} m</div>
+                        <div className="detail-info-item">戴森球亮度: {star.dyson_lumino.toFixed(3)}</div>
+                        <div className="detail-info-item">距离: {star.distance.toFixed(2)} LY</div>
                     </div>
                 </div>
             </div>
@@ -216,18 +215,24 @@ export default function SeedViewerResult({
                     <div className="detail-info">
                         {planet.is_gas ? (
                             <>
-                                轨道半径: {planet.radius.toFixed(2)} AU<br />
-                                自转轴倾角: {planet.obliquity.toFixed(1)}°
+                                <div className="detail-info-item">轨道半径: {planet.radius.toFixed(2)} AU</div>
+                                <div className="detail-info-item">自转轴倾角: {planet.obliquity.toFixed(1)}°</div>
                             </>
                         ) : (
                             <>
-                                风能利用率: {planet.wind.toFixed(2)}<br />
-                                光能利用率: {planet.lumino.toFixed(2)}<br />
-                                陆地率: {(planet.land_percent * 100).toFixed(1)}%<br />
-                                轨道半径: {planet.radius.toFixed(2)} AU<br />
-                                自转轴倾角: {planet.obliquity.toFixed(1)}°<br />
-                                原始戴森球等级: {planet.raw_dsp_degree.toFixed(3)}<br />
-                                增强戴森球等级: {planet.enhance_dsp_degree.toFixed(3)}
+                                <div className="detail-info-item">风能利用率: {planet.wind.toFixed(2)}</div>
+                                <div className="detail-info-item">光能利用率: {planet.lumino.toFixed(2)}</div>
+                                <div className="detail-info-item">陆地率: {(planet.land_percent * 100).toFixed(1)}%</div>
+                                <div className="detail-info-item">轨道半径: {planet.radius.toFixed(2)} AU</div>
+                                <div className="detail-info-item">自转轴倾角: {planet.obliquity.toFixed(1)}°</div>
+                                <div className="detail-info-item"
+                                     title="仅戴森球壳层时,行星接收戴森球射线的覆盖角度(0°=被完全包裹/全包,90°=完全外露)">
+                                    原始射线接收角度: {planet.raw_dsp_degree.toFixed(3)}°
+                                </div>
+                                <div className="detail-info-item"
+                                     title="计入戴森云(电离层)增强后,行星接收戴森球射线的覆盖角度(≤0°=全接收)">
+                                    增强射线接收角度: {planet.enhance_dsp_degree.toFixed(3)}°
+                                </div>
                             </>
                         )}
                     </div>
@@ -344,14 +349,26 @@ export default function SeedViewerResult({
                     {renderTree()}
                 </div>
             )}
-            {/* 右侧:上半星球详情、下半轨道采集器(两块独立);mobile 星球树/天体详情/轨道采集器全隐藏(轨道采集器移到 SeedViewerPage 致谢位置) */}
+            {/* 右侧:星球详情(mobile 隐藏;轨道采集器已移到 SeedViewerPage 左面板) */}
             <div className="result-right">
                 {!is_mobile && (
                     <div className="detail-panel">
                         {renderDetail()}
                     </div>
                 )}
-                {!is_mobile && <OrbitalCollectorPanel result={data}/>}
+                {/* 致谢:右下角,星球详情面板下方 */}
+                <div className="source-info">
+                    <h4>致谢</h4>
+                    <p>
+                        本功能基于开源项目
+                        <a href="https://github.com/botany233/dsp_search_seed" target="_blank" rel="noopener noreferrer">
+                            「戴森球计划种子搜索&查看器」
+                        </a>
+                        移植集成
+                    </p>
+                    <p>源项目支持种子条件搜索和筛选</p>
+                    <p className="source-license">License: GPLv3</p>
+                </div>
             </div>
         </div>
     );

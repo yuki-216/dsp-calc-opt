@@ -213,6 +213,7 @@ export const pro_mode_class = {
 export function ProModeSelect({recipe_id, choice, onChange}) {
     const global_state = useContext(GlobalStateContext);
     const set_scheme_data = useContext(SchemeDataSetterContext);
+    const compact_mode = useContext(CompactModeContext);
     let game_data = global_state.game_data;
     let recipe_prolif = game_data.recipe_data[recipe_id]["增产"];
     // 固定顺序：增产、加速、透镜（与批量预设一致）
@@ -237,6 +238,16 @@ export function ProModeSelect({recipe_id, choice, onChange}) {
     }, [effectiveChoice, choice, recipe_id, set_scheme_data]);
 
     if (options.length === 0) return null;
+
+    // 窄档(slender,原 narrow 语义):增产模式按钮改为下拉框(同增产等级列样式)
+    if (compact_mode === 'slender') {
+        return <select className="form-select form-select-sm"
+                       style={{width: '100%', padding: '0.1rem 0.4rem', fontSize: '0.85em', appearance: 'none', backgroundImage: 'none'}}
+                       value={effectiveChoice ?? ''}
+                       onChange={e => onChange(Number(e.target.value))}>
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>;
+    }
 
     const isSingle = options.length === 1;
 
@@ -986,8 +997,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <span className={hideIntHint ? 'ms-auto' : ''}>配方选取</span>
                     </div>
                 </th>
-                <th width={90}>增产模式</th>
-                <th width={160}>{isMidOrNarrower(compact_mode) ? '增产' : '增产剂'}</th>
+                <th width={90}>增产</th>
+                <th width={160}>{isMidOrNarrower(compact_mode) ? '等级' : '增产剂'}</th>
               <th width={170}>{isSemiOrNarrower(compact_mode) ? '设备' : '设备等级'}</th>
             </tr>
             </thead>

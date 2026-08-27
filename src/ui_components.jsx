@@ -151,14 +151,14 @@ export function Header({onNavigate, currentPage}) {
     }
 
     return (
-        <Navbar className="px-3 text-nowrap" bg="body-tertiary" expand="lg">
+        <Navbar className="px-3 text-nowrap" bg="body-tertiary">
             <Navbar.Brand href="#" className="d-inline-flex align-items-baseline"
                           onClick={(e) => { e.preventDefault(); onNavigate && onNavigate('calculator'); }}>
                 <FaReact className="me-2 align-self-center"/>
                 <span className="me-1">戴森球计划量化计算器</span>
                 <span className="text-muted ssmall">v{version}</span>
             </Navbar.Brand>
-            <Navbar.Toggle aria-controls="navbarNav"/>
+            {/* 无 expand/toggle:导航栏始终展开,无汉堡菜单 */}
             <Navbar.Collapse id="navbarNav">
                 <Nav>
                     <Nav.Link
@@ -194,16 +194,17 @@ export function Header({onNavigate, currentPage}) {
                     </OverlayTrigger>
                 </Nav>
 
-                <span className="navbar-text ms-auto small me-3">
+                <span className="navbar-text ms-auto small me-3 header-github">
                     <a href="https://github.com/yuki-216/dsp-calc-opt" target="_blank" rel="noopener noreferrer"
                        className="text-primary text-decoration-underline">
                         github: 若对您有帮助，不妨来点个免费的star吧
                     </a>
                 </span>
-                <span className="navbar-text small me-3">
+                <span className="navbar-text small me-3 header-version">
                     游戏版本 v{vanilla_game_version}
                 </span>
-                <Nav>
+                {/* ms-auto:主题切换永远居右(不依赖 github/版本号是否隐藏) */}
+                <Nav className="ms-auto">
                     <Nav.Link
                         href="#"
                         className="d-flex align-items-center"

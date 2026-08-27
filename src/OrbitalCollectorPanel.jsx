@@ -105,7 +105,7 @@ export default function OrbitalCollectorPanel({result}) {
                         <option value="" disabled>选择真实气态行星…</option>
                         {gasPlanets.map(p => (
                             <option key={p.id} value={p.id}>
-                                {p.star} · {p.name}（{p.type}，{p.dist.toFixed(1)}LY）
+                                {p.name}（{p.type}，{p.dist.toFixed(1)}LY）
                             </option>
                         ))}
                     </select>

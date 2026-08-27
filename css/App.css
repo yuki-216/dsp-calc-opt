@@ -387,9 +387,12 @@ body > .p-3 {
 /* ============================================================
    紧凑模式：1024px ~ 1399px
    ============================================================ */
-/* 顶部工具栏图标按钮(清空缓存/参数设置/矿物可用量):全宽保留大间距,精简模式靠右紧密 */
+/* 顶部工具栏图标按钮(清空缓存/参数设置/矿物可用量):紧凑内边距与间距,精简模式靠右紧密 */
 .toolbar-btns {
-    column-gap: 1.5rem;
+    column-gap: 0.75rem;
+}
+.toolbar-btns .btn {
+    padding: 0.15rem 0.35rem;
 }
 
 /* 顶部工具栏按钮文字:slender 起隐藏(简化图标,compact/semi/mid 仍显示文字) */
@@ -408,6 +411,18 @@ body > .p-3 {
 }
 @media (max-width: 1149px) {
     .optim-btn-text {
+        display: none !important;
+    }
+}
+
+/* 顶部导航栏:窄屏隐藏次要信息(版本号 <1119px,github <996px) */
+@media (max-width: 1118px) {
+    .header-version {
+        display: none !important;
+    }
+}
+@media (max-width: 995px) {
+    .header-github {
         display: none !important;
     }
 }
@@ -486,6 +501,7 @@ body > .p-3 {
     }
 
     /* 进一步压缩列宽 */
+    .result-table th:nth-child(6) { width: 52px; }  /* 增产模式:slender 起对齐增产列宽度(两列下拉同宽) */
     .result-table th:nth-child(7) { width: 52px; }  /* 增产剂 72→52 */
     .result-table th:nth-child(8) { width: 52px; }  /* 设备等级 80→52(与增产剂列一致) */
 
@@ -505,10 +521,9 @@ body > .p-3 {
         display: none !important;   /* 覆盖 bootstrap .d-flex 的 !important */
     }
 
-    /* 结果表格扩展至全宽 */
-    .result-table-scroll {
-        flex: 1 1 auto;
-        width: 100%;
+    /* slender 起结果表与左列面板紧贴(gap 0.75→0.25rem) */
+    .result-container {
+        gap: 0.25rem;
     }
 
     /* 显示弹出面板按钮 */

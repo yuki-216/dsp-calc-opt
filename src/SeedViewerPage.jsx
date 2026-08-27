@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useContext } from 'react';
 import { FaSearch, FaSpinner, FaExclamationTriangle, FaChartLine, FaArrowLeft } from 'react-icons/fa';
 import { doInit, getSeedData, isSeedDataValid, RESOURCE_RATES } from './seed_viewer_binding';
 import { getStats, getStatsConvergence } from './seed_stats_api';
-import { SettingsContext, SettingsSetterContext, CompactModeContext } from './contexts.jsx';
+import { SettingsContext, SettingsSetterContext } from './contexts.jsx';
 import { buildOreQuantities } from './ore_stats_binding';
 import SeedViewerResult from './SeedViewerResult';
 import SeedStatsPanel from './SeedStatsPanel';
@@ -42,8 +42,6 @@ const CACHE_KEY = 'seed-viewer-cache';
 export default function SeedViewerPage({ onNavigate, isActive }) {
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
-    const compact_mode = useContext(CompactModeContext);
-    const is_mobile = compact_mode === 'mobile';
     // 状态管理
     const [seedId, setSeedId] = useState(() => {
         try {
@@ -462,26 +460,11 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
                     </div>
                 )}
 
-                {/* 源项目信息(mobile 隐藏致谢,轨道采集器面板移到此处) */}
-                {is_mobile ? (
-                    result && <OrbitalCollectorPanel result={result}/>
-                ) : (
-                    <div className="source-info">
-                        <h4>致谢</h4>
-                        <p>
-                            本功能基于开源项目
-                            <a href="https://github.com/botany233/dsp_search_seed" target="_blank" rel="noopener noreferrer">
-                                「戴森球计划种子搜索&查看器」
-                            </a>
-                            移植集成
-                        </p>
-                        <p>源项目支持种子条件搜索和筛选</p>
-                        <p className="source-license">License: GPLv3</p>
-                    </div>
-                )}
+                {/* 轨道采集器面板(从右结果面板移到左面板) */}
+                {result && <OrbitalCollectorPanel result={result}/>}
             </div>
 
-            {/* 结果面板 */}
+            {/* 结果面板(致谢在 SeedViewerResult 右下角) */}
             {viewMode === 'stats' ? (
                 <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {statsLoading ? (
