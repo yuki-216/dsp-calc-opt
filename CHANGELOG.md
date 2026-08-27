@@ -1,17 +1,21 @@
 # 更新日志
 
-## 未发布
+## 0.12.0 - 2026-08-27
 
 ### 新增
 - 支持「创世之书」mod：顶部导航栏游戏版本旁新增数据源切换下拉（原版 ↔ 创世之书，选择持久化到 localStorage）；数据文件与图标通过 `npm run download:genesisbook` 从 dsp-calc 拉取；方案/需求按数据源独立存取，切回原版自动恢复。
 - 创世之书判定：**引入新机制**（负熵翻倍配方、新配方类别 Type 9/10/11/16、移除分馏塔重构重氢链路、新发电/采集/矩阵/武器体系）；数据格式与原版一致，计算引擎无需改动即可整网 LP 配平。
+- LP 求解失败回退机制：计算失败时弹窗提示，并自动回退到上次成功计算的配方选择，避免卡在计算失败状态。
 
 ### 修复
 - 顶部导航栏 github 链接与游戏版本号未与主题切换按钮居右紧贴（右簇各自 ms-auto 平分剩余空间）——合并为单一右对齐容器整体贴右。
 - 参数设置面板打开时设置按钮未变为实心样式——className 随面板开关切换 `btn-primary`/`btn-outline-primary`。
+- 切换创世之书无效（点击后立即回原版）：react-bootstrap 2.x `DropdownItem` 不接收 `onSelect` prop（经 `SelectableContext` 从 `Dropdown` 触发、依赖 `eventKey`）——`onSelect` 改设在 `Dropdown` 上 + Item 用 `eventKey`。
+- 创世之书 LP 无可行解：物品默认配方选到闭环合成配方（氧↔水互需，无外部输入），allowed_recipes 生成改为「无中生有（直接获取）配方优先」并重新生成创世之书版。
 
 ### 变更
 - allowed_recipes 按数据源拆分（`allowed_recipes_Vanilla`/`allowed_recipes_GenesisBook`），生成脚本参数化（`npm run generate:recipes[:genesisbook]`）；图标组件按当前数据源回退链渲染（mod 雪碧图未命中回退原版）。
+- 创世之书下增产剂仅保留「增产剂」一级：Mk.I/Mk.II 物品在 mod 中不存在，`proliferator_data` 对应字段置 null 使设置/结果表/依赖图的等级选项自动隐藏，切换数据源时过滤无效增殖等级。
 
 ## 0.11.0 - 2026-08-27
 
