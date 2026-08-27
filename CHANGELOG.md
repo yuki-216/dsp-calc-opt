@@ -3,7 +3,7 @@
 ## Unreleased - 2026-08-27
 
 ### 变更
-- 移除 narrow/mobile 档位,手机强制桌面版:viewport 按物理像素宽度(390×3≈1170px)设置,手机走桌面档且可自由缩放;断点收敛为 full/compact/semi/mid/slender 五档,<900px 兜底 slender;删除窄屏「整面板收纳」与移动端极简 CSS;`is_mobile`/`hideIntHint` 相关分支自动失效(整数建议不再悬浮、设置行4不再单独显示等)。
+- 移除 narrow/mobile 档位,手机强制桌面版:viewport 对齐电脑模式固定 ~980px(桌面版站点典型宽度),手机直接打开与开电脑模式一致(slender 档)且可自由缩放;断点收敛为 full/compact/semi/mid/slender 五档,<900px 兜底 slender;删除窄屏「整面板收纳」与移动端极简 CSS;`is_mobile`/`hideIntHint` 相关分支自动失效(整数建议不再悬浮、设置行4不再单独显示等)。
 
 ## 0.10.0 - 2026-08-27
 

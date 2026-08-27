@@ -5,13 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <script>
-        // 手机(小屏+高DPR)强制桌面等效宽度:CSS 视口=物理像素宽度 → 走桌面档,用户可缩放
+        // 手机(小屏+高DPR)对齐电脑模式:viewport 固定 ~980px(桌面版站点典型宽度)→ 与开电脑模式一致(slender 档),用户可缩放
         (function () {
             var dpr = window.devicePixelRatio || 1;
-            var w = screen.width * dpr;                 // 物理像素宽度(如 390×3≈1170)
-            if (screen.width < 600 && dpr > 1 && w > 900) {
+            if (screen.width < 600 && dpr > 1) {
                 var vp = document.querySelector('meta[name="viewport"]');
-                vp.setAttribute('content', 'width=' + Math.round(w) + ', user-scalable=yes');
+                vp.setAttribute('content', 'width=980, user-scalable=yes');
             }
         })();
     </script>
