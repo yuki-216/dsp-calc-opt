@@ -4,6 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script>
+        // 手机(小屏+高DPR)强制桌面等效宽度:CSS 视口=物理像素宽度 → 走桌面档,用户可缩放
+        (function () {
+            var dpr = window.devicePixelRatio || 1;
+            var w = screen.width * dpr;                 // 物理像素宽度(如 390×3≈1170)
+            if (screen.width < 600 && dpr > 1 && w > 900) {
+                var vp = document.querySelector('meta[name="viewport"]');
+                vp.setAttribute('content', 'width=' + Math.round(w) + ', user-scalable=yes');
+            }
+        })();
+    </script>
     <meta name="theme-color" content="#212529"/>
     <meta name="description" content="戴森球计划生产线量化计算工具"/>
     <link rel="icon" href="/favicon.ico"/>

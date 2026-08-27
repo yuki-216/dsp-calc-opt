@@ -62,11 +62,9 @@ export const DefaultSettingsContext = createContext(DEFAULT_SETTINGS);
 function get_compact_mode(width) {
     if (width >= 1440) return "full";
     if (width >= 1350) return "compact";
-    if (width >= 1150) return "semi";   // compact 与 mid 之间:设备等级列改下拉
+    if (width >= 1150) return "semi";   // 设备等级列改下拉
     if (width >= 1024) return "mid";    // 增产等级列改下拉
-    if (width >= 900) return "slender"; // mid 与 narrow 之间:整数建议→设备列悬浮 + 右面板收纳
-    if (width >= 720) return "narrow";
-    return "mobile";
+    return "slender";                   // 原 slender(900-1023)保留;窄窗(<900)也走它,不再有 narrow/mobile
 }
 
 export const CompactModeContext = createContext("full");
@@ -123,7 +121,6 @@ export function ContextProvider({children}) {
         const mql_semi = window.matchMedia("(min-width: 1150px)");
         const mql_mid = window.matchMedia("(min-width: 1024px)");
         const mql_slender = window.matchMedia("(min-width: 900px)");
-        const mql_narrow = window.matchMedia("(min-width: 720px)");
 
         function on_resize() {
             set_compact_mode(get_compact_mode(window.innerWidth));
@@ -134,14 +131,12 @@ export function ContextProvider({children}) {
         mql_semi.addEventListener("change", on_resize);
         mql_mid.addEventListener("change", on_resize);
         mql_slender.addEventListener("change", on_resize);
-        mql_narrow.addEventListener("change", on_resize);
         return () => {
             mql_full.removeEventListener("change", on_resize);
             mql_compact.removeEventListener("change", on_resize);
             mql_semi.removeEventListener("change", on_resize);
             mql_mid.removeEventListener("change", on_resize);
             mql_slender.removeEventListener("change", on_resize);
-            mql_narrow.removeEventListener("change", on_resize);
         };
     }, []);
 
