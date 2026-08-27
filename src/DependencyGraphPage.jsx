@@ -2,6 +2,7 @@ import {useContext, useEffect, useMemo, useRef, useState, useCallback} from 'rea
 import {FaArrowLeft, FaHome, FaUndo, FaList, FaFilter} from 'react-icons/fa';
 import {GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
+import {Recipe} from './recipe.jsx';
 import {projectNeedsOnlyEdges} from './dependency-graph-edges.js';
 import './DependencyGraph.css';
 
@@ -1349,6 +1350,19 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                     <span>返回计算器</span>
                 </button>
                 <h5>戴森球计划 - 依赖图</h5>
+                {/* 菜单栏中间:悬浮物品时显示其主配方图片(原料图标×数量 → 产物图标×数量+时间) */}
+                <div className="flex-grow-1 d-flex justify-content-center align-items-center overflow-hidden">
+                    {tooltip && (() => {
+                        const choice = scheme_data.item_recipe_choices?.[tooltip] || 1;
+                        const recipe_index = item_data[tooltip]?.[choice];
+                        const recipe = recipe_index !== undefined ? game_data.recipe_data[recipe_index] : null;
+                        return recipe ? (
+                            <span className="d-inline-flex align-items-center text-nowrap">
+                                <Recipe recipe={recipe} compact="full"/>
+                            </span>
+                        ) : null;
+                    })()}
+                </div>
                 <div className="graph-legend-inline">
                     <div className="graph-legend-item-inline"
                          onMouseEnter={() => handle_legend_hover('source')}
