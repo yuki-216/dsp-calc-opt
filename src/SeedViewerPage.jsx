@@ -460,8 +460,8 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
                     </div>
                 )}
 
-                {/* 轨道采集器面板(从右结果面板移到左面板) */}
-                {result && <OrbitalCollectorPanel result={result}/>}
+                {/* 轨道采集器面板(始终显示,无星区数据时仅默认预设;选择真实气态行星需有结果) */}
+                <OrbitalCollectorPanel result={result}/>
             </div>
 
             {/* 结果面板(致谢在 SeedViewerResult 右下角) */}
