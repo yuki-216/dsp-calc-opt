@@ -2,8 +2,11 @@ import {useCallback, useContext, useEffect, useMemo, useRef, useState} from 'rea
 import {
     GameInfoContext,
     SettingsContext,
-    SettingsSetterContext
+    SettingsSetterContext,
+    CalculationFailureContext,
+    CalculationFailureDismissContext
 } from './contexts.jsx';
+import {Modal, Button} from 'react-bootstrap';
 import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {Settings, BatchPresetControls, OptimizerControls, FuelSelect} from './settings.jsx';
@@ -22,6 +25,37 @@ function UserSettings({show}) {
             <Settings/>
         </fieldset>
     </div>;
+}
+
+/** LP 求解失败弹窗:提示错误并说明已回退配方选择 */
+function CalcFailureModal() {
+    const calcFailure = useContext(CalculationFailureContext);
+    const dismiss = useContext(CalculationFailureDismissContext);
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+        if (calcFailure) setShow(true);
+    }, [calcFailure]);
+
+    const handleClose = () => {
+        setShow(false);
+        dismiss();
+    };
+
+    return (
+        <Modal show={show} onHide={handleClose} centered>
+            <Modal.Header closeButton>
+                <Modal.Title>计算失败</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <p><strong>LP 求解失败：</strong>{calcFailure}</p>
+                <p className="text-muted mb-0">已自动回退到上次成功的配方选择。请调整需求或配方后重试。</p>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="primary" onClick={handleClose}>知道了</Button>
+            </Modal.Footer>
+        </Modal>
+    );
 }
 
 function formatAvailableValue(item, value, mode = 'amount') {
@@ -277,5 +311,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                     show_building_popup={show_building_popup} set_show_building_popup={set_show_building_popup}
                     onCollectorDetected={setResultHasCollector} onNavigate={onNavigate}/>
         </div>
+        {/* LP 求解失败弹窗 */}
+        <CalcFailureModal/>
     </div>;
 }

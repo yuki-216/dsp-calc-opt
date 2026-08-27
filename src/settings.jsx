@@ -442,14 +442,16 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
             <div className="d-flex" style={{gap: '2px'}}>
                 {[1, 2, 3].map(level => {
                     const pro_data = game_data.proliferator_data[level];
+                    // 数据源无此等级增产剂(如创世之书无 Mk.I/Mk.II)时不显示按钮
+                    if (!pro_data?.增产剂) return null;
                     const is_selected = allowed_levels.includes(level);
                     return <div key={level}
                                 className={`py-1 px-1 d-flex align-items-center cursor-pointer small border rounded
                                     ${is_selected ? 'bg-selected' : 'bg-unselected'}`}
                                 onClick={() => toggle_level(level)}
-                                title={`${pro_data?.增产剂 || 'MK' + level} ${is_selected ? '(已选)' : '(未选)'}`}
+                                title={`${pro_data.增产剂} ${is_selected ? '(已选)' : '(未选)'}`}
                     >
-                        {pro_data?.增产剂 && <ItemIcon item={pro_data.增产剂} size={mob_icon || 32}/>}
+                        <ItemIcon item={pro_data.增产剂} size={mob_icon || 32}/>
                     </div>;
                 })}
             </div>

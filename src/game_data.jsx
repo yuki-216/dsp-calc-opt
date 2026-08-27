@@ -294,8 +294,11 @@ export function get_game_data(dataSourceName = "Vanilla") {
             "耗电倍率": proliferator_effect[3].耗电倍率,
         }
     ]
-    // 创世之书特有:Mk.III 改名为"增产剂"(对齐 dsp-calc,mod 中只有一种增产剂)
+    // 创世之书特有:mod 中只有一种增产剂——Mk.III 改名"增产剂";Mk.I/Mk.II 物品不存在,
+    // "增产剂"字段置 null,使 result/settings 的等级选项按 `增产剂 != null` 自动隐藏
     if (src.name === "GenesisBook") {
+        data.proliferator_data[1].增产剂 = null;
+        data.proliferator_data[2].增产剂 = null;
         data.proliferator_data[3].增产剂 = "增产剂";
     }
 

@@ -31,6 +31,17 @@ data.recipes.forEach((recipe, recipeIndex) => {
     });
 });
 
+// 无中生有配方(空输入→直接获取)优先:init_scheme_data 默认选 allowed 首个配方,
+// 若默认选中"需原料的合成配方"且其原料链形成闭环/断点(如创世之书氧↔水互需),LP 会无可行解。
+// 对齐原版手工调整思路(硅石默认"直接获取"而非石矿配方):有"直接获取"优先直接获取。
+for (const itemName of Object.keys(allowed)) {
+    allowed[itemName].sort((a, b) => {
+        const aFree = data.recipes[a].Items.length === 0 ? 0 : 1;
+        const bFree = data.recipes[b].Items.length === 0 ? 0 : 1;
+        return (aFree - bFree) || (a - b); // a-b 保持原始(recipes 序)相对顺序
+    });
+}
+
 const outPath = path.join(__dirname, '../data', outFileName);
 fs.writeFileSync(outPath, JSON.stringify(allowed, null, 2), 'utf8');
 console.log(`已生成 ${outPath}`);

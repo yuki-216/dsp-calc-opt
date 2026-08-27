@@ -222,14 +222,16 @@ export function Header({onNavigate, currentPage}) {
                     <span className="navbar-text small header-version">
                         游戏版本 v{gameVersion}
                     </span>
-                    <Dropdown align="end" className="header-mod-switch">
+                    {/* onSelect 必须设在 Dropdown 上(react-bootstrap 2.x 的 DropdownItem 不接收 onSelect prop,
+                        它经 SelectableContext 从 Dropdown 触发,且依赖 Item 的 eventKey)——否则点击只关闭菜单不切换 */}
+                    <Dropdown align="end" className="header-mod-switch"
+                              onSelect={(eventKey) => switchSource(eventKey)}>
                         <Dropdown.Toggle variant="outline-secondary" size="sm">
                             {GAME_DATA_SOURCES[gameName]?.display ?? gameName}
                         </Dropdown.Toggle>
                         <Dropdown.Menu>
                             {Object.entries(GAME_DATA_SOURCES).map(([key, s]) => (
-                                <Dropdown.Item key={key} active={gameName === key}
-                                               onSelect={() => switchSource(key)}>
+                                <Dropdown.Item key={key} eventKey={key} active={gameName === key}>
                                     {s.display}
                                 </Dropdown.Item>
                             ))}

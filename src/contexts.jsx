@@ -1,4 +1,4 @@
-import {createContext, useEffect, useState, useMemo, useCallback} from 'react';
+import {createContext, useEffect, useState, useMemo, useCallback, useRef} from 'react';
 import {GameInfo, GlobalState} from './game_data';
 import {init_scheme_data} from './scheme_data';
 import {get_game_data, GAME_DATA_SOURCES} from "./game_data.jsx";
@@ -17,6 +17,9 @@ export const GameInfoContext = createContext(null);
 export const EngineGraphDataContext = createContext(null);
 export const EngineCalculateContext = createContext(null);
 export const CalculationErrorContext = createContext(null);
+/** LP 求解失败弹窗消息(非 null 时显示),关闭用 CalculationFailureDismissContext */
+export const CalculationFailureContext = createContext(null);
+export const CalculationFailureDismissContext = createContext(null);
 export const EngineLogContext = createContext(null);
 export const FuelContext = createContext(null);
 export const FuelSetterContext = createContext(null);
@@ -178,6 +181,8 @@ export function ContextProvider({children}) {
     const [engineGraphData, setEngineGraphData] = useState(null);
     const [calculationError, setCalculationError] = useState(null);
     const [engineLogs, setEngineLogs] = useState([]);
+    const [calcFailure, setCalcFailure] = useState(null);  // LP 求解失败弹窗消息(非 null 显示)
+    const lastGoodSchemeRef = useRef(null);  // 上次成功计算的方案快照(失败回退用)
 
     // 主引擎计算函数（Task 4 后 calculate 为 async，此处改为异步等待）
     const engineCalculate = useMemo(() => {
@@ -203,6 +208,8 @@ export function ContextProvider({children}) {
                     false,
                     onLog
                 );
+                // 记录本次成功的方案快照(下次求解失败时回退用)
+                lastGoodSchemeRef.current = structuredClone(scheme_data);
                 if (DEBUG) setTimeout(() => setEngineLogs(runLogs), 0);
                 // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
                 setTimeout(() => setCalculationError(null), 0);
@@ -218,10 +225,15 @@ export function ContextProvider({children}) {
                 return result;
             } catch (e) {
                 setTimeout(() => setCalculationError(e.message), 0);
+                // LP 求解失败:弹窗提示 + 回退到上次成功的配方选择,避免卡在计算失败
+                setCalcFailure(e.message);
+                if (lastGoodSchemeRef.current) {
+                    set_scheme_data(structuredClone(lastGoodSchemeRef.current));
+                }
                 return null;
             }
         };
-    }, [engine, game_info]);
+    }, [engine, game_info, scheme_data]);
 
     // 燃料选择状态（从 scheme_data 中读取）
     const selected_fuel = scheme_data.selected_fuel || "无";
@@ -248,8 +260,20 @@ export function ContextProvider({children}) {
         try {
             localStorage.setItem('game_source', game_data.game_name);
         } catch { /* 持久化失败可忽略 */ }
-        // 数据源相关设置(矿物可用量/原矿化列表)基于原版矿名,切换后清空避免错配
-        set_settings({ore_quantities: {}, mineralize_list: []});
+        // 数据源相关设置(矿物可用量/原矿化列表)基于原版矿名,切换后清空避免错配;
+        // 增产剂等级过滤为当前数据源存在的等级(如创世之书仅"增产剂",移除 Mk.I/Mk.II)
+        const validLevels = game_data.proliferator_data
+            .map((d, i) => (d?.增产剂 ? i : -1))
+            .filter(i => i > 0);
+        set_settings(prev => {
+            const filtered = (prev.proliferate_allowed_levels || [3]).filter(l => validLevels.includes(l));
+            return {
+                ...prev,
+                proliferate_allowed_levels: filtered.length ? filtered : [Math.max(...validLevels, 3)],
+                ore_quantities: {},
+                mineralize_list: [],
+            };
+        });
     }, [set_settings]);
 
     return <CompactModeContext.Provider value={compact_mode}>
@@ -257,6 +281,8 @@ export function ContextProvider({children}) {
             <GlobalStateContext.Provider value={global_state}>
                 <EngineCalculateContext.Provider value={engineCalculate}>
                     <CalculationErrorContext.Provider value={calculationError}>
+                        <CalculationFailureContext.Provider value={calcFailure}>
+                        <CalculationFailureDismissContext.Provider value={() => setCalcFailure(null)}>
                         <EngineLogContext.Provider value={engineLogs}>
                         <EngineGraphDataContext.Provider value={engineGraphData}>
                             <GameInfoSetterContext.Provider value={set_game_data}>
@@ -274,6 +300,8 @@ export function ContextProvider({children}) {
                             </GameInfoSetterContext.Provider>
                         </EngineGraphDataContext.Provider>
                         </EngineLogContext.Provider>
+                        </CalculationFailureDismissContext.Provider>
+                        </CalculationFailureContext.Provider>
                     </CalculationErrorContext.Provider>
                 </EngineCalculateContext.Provider>
             </GlobalStateContext.Provider>
