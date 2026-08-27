@@ -64,8 +64,8 @@ function get_compact_mode(width) {
     if (width >= 1350) return "compact";
     if (width >= 1150) return "semi";   // 设备等级列改下拉
     if (width >= 1024) return "mid";    // 增产等级列改下拉
-    if (width >= 750) return "slender"; // 右列收纳(750-1023)
-    return "narrow";                    // <750:整数建议列简化 + 顶部三图标简化
+    if (width >= 820) return "slender"; // 右列收纳(820-1023)
+    return "narrow";                    // <820:整数建议列简化 + 顶部三图标简化
 }
 
 export const CompactModeContext = createContext("full");
@@ -121,7 +121,7 @@ export function ContextProvider({children}) {
         const mql_compact = window.matchMedia("(min-width: 1350px)");
         const mql_semi = window.matchMedia("(min-width: 1150px)");
         const mql_mid = window.matchMedia("(min-width: 1024px)");
-        const mql_slender = window.matchMedia("(min-width: 750px)");
+        const mql_slender = window.matchMedia("(min-width: 820px)");
 
         function on_resize() {
             set_compact_mode(get_compact_mode(window.innerWidth));

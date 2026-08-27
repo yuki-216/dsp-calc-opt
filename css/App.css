@@ -399,8 +399,8 @@ body > .p-3 {
 .toolbar-btn-text {
     display: inline;
 }
-/* narrow(<750)起:清空缓存/设置/矿物可用量 隐藏文字并靠右紧密 */
-@media (max-width: 749px) {
+/* narrow(<820)起:清空缓存/设置/矿物可用量 隐藏文字并靠右紧密 */
+@media (max-width: 819px) {
     .toolbar-btn-text {
         display: none !important;
     }
