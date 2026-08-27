@@ -108,14 +108,30 @@ const data_indices = Object.fromEntries(
             [module.replace(/^\.\.\/data\/(.+)\.json/, "$1"), data]
         ))
 
-export const vanilla_game_version = "0.10.31.24710";
+/** 数据源注册表：name=数据文件basename，display=UI显示名，version=游戏/mod版本 */
+export const GAME_DATA_SOURCES = {
+    Vanilla:     {name: "Vanilla",     data_file: "Vanilla",     version: "0.10.31.24710", display: "原版"},
+    GenesisBook: {name: "GenesisBook", data_file: "GenesisBook", version: "3.0.14",          display: "创世之书"},
+};
+
+export const vanilla_game_version = GAME_DATA_SOURCES.Vanilla.version;
 export const default_game_data = get_game_data();
 
-export function get_game_data() {
+export function get_game_data(dataSourceName = "Vanilla") {
+    const src = GAME_DATA_SOURCES[dataSourceName] ?? GAME_DATA_SOURCES.Vanilla;
     let data = {};
-    let json_data = data_indices["Vanilla"];
+    let json_data = structuredClone(data_indices[src.data_file]);
+    // 创世之书特有:增产剂 Mk.III 改名为"增产剂"(对齐 dsp-calc:mod 中只有一种增产剂)
+    if (src.name === "GenesisBook") {
+        for (const item of json_data.items) {
+            if (item.Name === "增产剂 Mk.III") {
+                item.Name = "增产剂";
+            }
+        }
+    }
     //将json转换为需要的数据结构
-    data.game_name = "Vanilla";
+    data.game_name = src.name;
+    data.game_version = src.version;
     data.item_grid = {};
     data.item_icon_name = {};
     data.recipe_data = [];
@@ -278,6 +294,10 @@ export function get_game_data() {
             "耗电倍率": proliferator_effect[3].耗电倍率,
         }
     ]
+    // 创世之书特有:Mk.III 改名为"增产剂"(对齐 dsp-calc,mod 中只有一种增产剂)
+    if (src.name === "GenesisBook") {
+        data.proliferator_data[3].增产剂 = "增产剂";
+    }
 
     // 添加燃料配方（使用 getFuelData 获取包含增产剂的完整列表）
     const allFuels = getFuelData(data);
@@ -311,9 +331,9 @@ export function get_game_data() {
  * @param {string} fuelName - 燃料名称
  * @returns {Object|null} 燃料配方对象，未找到返回 null
  */
-export function getFuelRecipe(fuelName) {
+export function getFuelRecipe(fuelName, game_data = default_game_data) {
     if (!fuelName || fuelName === "无") return null;
-    return default_game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === fuelName) || null;
+    return game_data.recipe_data.find(r => r.isFuelRecipe && r.fuelName === fuelName) || null;
 }
 
 /**

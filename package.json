@@ -13,7 +13,9 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "test": "node --test \"tests/**/*.test.js\"",
     "preview": "vite preview",
-    "generate:recipes": "node scripts/generate_allowed_recipes.cjs"
+    "generate:recipes": "node scripts/generate_allowed_recipes.cjs Vanilla.json allowed_recipes_Vanilla.json",
+    "generate:recipes:genesisbook": "node scripts/generate_allowed_recipes.cjs GenesisBook.json allowed_recipes_GenesisBook.json",
+    "download:genesisbook": "node scripts/download_genesisbook.cjs"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",

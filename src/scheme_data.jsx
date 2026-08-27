@@ -2,7 +2,21 @@ import {useContext, useEffect, useState} from 'react';
 import {GameInfoContext, GlobalStateContext, SchemeDataSetterContext} from './contexts.jsx';
 import {FaRegSave, FaRegFolderOpen, FaTrash} from 'react-icons/fa';
 import {build_item_data} from './game_data.jsx';
-import allowed_recipes from '../data/allowed_recipes.json';
+
+/** 各数据源的 allowed_recipes（物品名→recipe_data 索引数组），按数据源名取用 */
+const allowed_modules = import.meta.glob('../data/allowed_recipes_*.json', {
+    import: 'default',
+    eager: true,
+});
+const allowed_by_source = Object.fromEntries(
+    Object.entries(allowed_modules)
+        .map(([module, data]) => [module.replace(/^.*allowed_recipes_([^.]+)\.json$/, '$1'), data])
+);
+
+/** 获取指定数据源(game_name)的 allowed_recipes 映射 */
+export function getAllowedRecipes(game_name) {
+    return allowed_by_source[game_name] || {};
+}
 
 const DEFAULT_SCHEME_DATA = {
     "item_recipe_choices": {"氢": 1},
@@ -13,6 +27,7 @@ const DEFAULT_SCHEME_DATA = {
 export function init_scheme_data(game_data) {
     let scheme_data = structuredClone(DEFAULT_SCHEME_DATA);
     let item_data = build_item_data(game_data.recipe_data);
+    const allowed_recipes = getAllowedRecipes(game_data.game_name);
     scheme_data.item_recipe_choices = {};
     scheme_data.scheme_for_recipe = [];
     scheme_data.selected_fuel = "无";

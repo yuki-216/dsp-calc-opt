@@ -1,7 +1,7 @@
 import {createContext, useEffect, useState, useMemo, useCallback} from 'react';
 import {GameInfo, GlobalState} from './game_data';
 import {init_scheme_data} from './scheme_data';
-import {default_game_data} from "./game_data.jsx";
+import {get_game_data, GAME_DATA_SOURCES} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
 import {DEBUG} from './engine/debug.js'; // 初始化 __DEBUG 全局开关并导出 DEBUG 标志
@@ -78,14 +78,24 @@ export function safe_parse_json(str) {
     }
 }
 
+/** 读取上次选择的数据源(localStorage game_source),非法/缺失时回退原版 */
+function getInitialSourceName() {
+    try {
+        const saved = localStorage.getItem('game_source');
+        if (saved && GAME_DATA_SOURCES[saved]) return saved;
+    } catch { /* localStorage 不可用时默认原版 */ }
+    return 'Vanilla';
+}
+
 export function ContextProvider({children}) {
-    const [game_info, set_game_info] = useState(new GameInfo(default_game_data));
+    const [initialGameData] = useState(() => get_game_data(getInitialSourceName()));
+    const [game_info, set_game_info] = useState(() => new GameInfo(initialGameData));
     const [scheme_data, set_scheme_data] = useState(() => {
-        const game_name = default_game_data.game_name;
+        const game_name = initialGameData.game_name;
         const all = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
         const saved = all[game_name];
         if (saved && saved.scheme_for_recipe &&
-            saved.scheme_for_recipe.length === default_game_data.recipe_data.length) {
+            saved.scheme_for_recipe.length === initialGameData.recipe_data.length) {
             // 兼容旧数据：将增产点数转换为增产剂等级
             for (const recipe of saved.scheme_for_recipe) {
                 if (recipe['增产点数'] !== undefined && recipe['增产剂等级'] === undefined) {
@@ -97,7 +107,7 @@ export function ContextProvider({children}) {
             delete saved.cost_weight;
             return saved;
         }
-        return init_scheme_data(default_game_data);
+        return init_scheme_data(initialGameData);
     });
     const [settings, set_settings] = useSetState(() => {
         const saved = safe_parse_json(localStorage.getItem("auto_settings"));
@@ -226,9 +236,21 @@ export function ContextProvider({children}) {
         });
     }, [set_scheme_data]);
 
-    function set_game_data(game_data) {
+    /** 切换数据源(或初始化):重建 GameInfo + 恢复/初始化该源方案 + 持久化选择 + 清空源相关设置 */
+    const set_game_data = useCallback((game_data) => {
         set_game_info(new GameInfo(game_data));
-    }
+        const all = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
+        const saved = all[game_data.game_name];
+        set_scheme_data(saved && saved.scheme_for_recipe &&
+            saved.scheme_for_recipe.length === game_data.recipe_data.length
+            ? saved
+            : init_scheme_data(game_data));
+        try {
+            localStorage.setItem('game_source', game_data.game_name);
+        } catch { /* 持久化失败可忽略 */ }
+        // 数据源相关设置(矿物可用量/原矿化列表)基于原版矿名,切换后清空避免错配
+        set_settings({ore_quantities: {}, mineralize_list: []});
+    }, [set_settings]);
 
     return <CompactModeContext.Provider value={compact_mode}>
         <GameInfoContext.Provider value={game_info}>

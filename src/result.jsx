@@ -7,7 +7,7 @@ import {getFuelRecipe, getFuelData, DEVICE_POWER_CONSUMPTION, FUEL_DATA_BASE} fr
 import {ItemIcon} from './ui_components';
 import {HorizontalMultiButtonSelect, Recipe} from './recipe';
 import {AutoSizedInput} from './ui_components.jsx';
-import allowed_recipes from '../data/allowed_recipes.json';
+import {getAllowedRecipes} from './scheme_data';
 import {FaExternalLinkAlt, FaTimes} from 'react-icons/fa';
 import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
@@ -122,6 +122,8 @@ export function RecipeSelect({item, choice, onChange, compact}) {
 
     let game_data = global_state.game_data;
     let item_data = global_state.item_data;
+    // 按当前数据源取 allowed_recipes（切换 mod 后配方索引不同，须用对应数据源的映射）
+    const allowed_recipes = getAllowedRecipes(game_data.game_name);
 
     // 根据 allowed_recipes 决定可选配方及顺序（useMemo 稳定引用，避免 effect 依赖数组每次渲染变化）
     const filtered_indices = useMemo(() => {
@@ -142,7 +144,7 @@ export function RecipeSelect({item, choice, onChange, compact}) {
             }
         }
         return filtered_indices;
-    }, [item_data, item]);
+    }, [item_data, item, allowed_recipes]);
 
     // 校验：如果缓存的 choice 不在 allowed_recipes 允许范围内，自动重置
     useEffect(() => {
@@ -592,7 +594,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     // 置顶电力行（如果选择了燃料且有电力需求）
     if (selectedFuel && selectedFuel !== "无" && total_power_demand > 0) {
         const totalEnergy = total_power_demand;
-        const fuelRecipe = getFuelRecipe(selectedFuel);
+        const fuelRecipe = getFuelRecipe(selectedFuel, game_data);
         if (fuelRecipe) {
             const fuelDataList = getFuelData(game_data);
             const fuelData = fuelDataList.find(f => f.name === selectedFuel);
@@ -691,7 +693,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
         );
         let factory_name = game_data.factory_data[recipe["设施"]][scheme_recipe["建筑"]]["名称"];
         // 自动隐藏:无多配方选择 且 无设备计算 的矿物行(交互无意义,信息已充分显示在原矿需求表)
-        const hasMultiRecipe = (allowed_recipes[i]?.length || 1) > 1;
+        const hasMultiRecipe = (getAllowedRecipes(game_data.game_name)[i]?.length || 1) > 1;
         if (!hasMultiRecipe && MINERAL_AUTO_HIDE_BUILDINGS.has(normalizeFactoryName(factory_name))) {
             continue;
         }

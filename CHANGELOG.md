@@ -1,5 +1,18 @@
 # 更新日志
 
+## 未发布
+
+### 新增
+- 支持「创世之书」mod：顶部导航栏游戏版本旁新增数据源切换下拉（原版 ↔ 创世之书，选择持久化到 localStorage）；数据文件与图标通过 `npm run download:genesisbook` 从 dsp-calc 拉取；方案/需求按数据源独立存取，切回原版自动恢复。
+- 创世之书判定：**引入新机制**（负熵翻倍配方、新配方类别 Type 9/10/11/16、移除分馏塔重构重氢链路、新发电/采集/矩阵/武器体系）；数据格式与原版一致，计算引擎无需改动即可整网 LP 配平。
+
+### 修复
+- 顶部导航栏 github 链接与游戏版本号未与主题切换按钮居右紧贴（右簇各自 ms-auto 平分剩余空间）——合并为单一右对齐容器整体贴右。
+- 参数设置面板打开时设置按钮未变为实心样式——className 随面板开关切换 `btn-primary`/`btn-outline-primary`。
+
+### 变更
+- allowed_recipes 按数据源拆分（`allowed_recipes_Vanilla`/`allowed_recipes_GenesisBook`），生成脚本参数化（`npm run generate:recipes[:genesisbook]`）；图标组件按当前数据源回退链渲染（mod 雪碧图未命中回退原版）。
+
 ## 0.11.0 - 2026-08-27
 
 ### 变更

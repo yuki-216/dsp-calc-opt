@@ -1,8 +1,9 @@
 import {createContext, useContext, useState, useEffect} from 'react';
-import {Nav, Navbar, OverlayTrigger, Tooltip} from 'react-bootstrap';
+import {Dropdown, Nav, Navbar, OverlayTrigger, Tooltip} from 'react-bootstrap';
 import {FaMoon, FaProjectDiagram, FaQq, FaReact, FaSearch, FaSun} from 'react-icons/fa';
 import {useRegisterSW} from 'virtual:pwa-register/react';
-import {default_game_data, vanilla_game_version} from './game_data';
+import {GAME_DATA_SOURCES, get_game_data} from './game_data';
+import {GameInfoContext, GameInfoSetterContext} from './contexts.jsx';
 
 // ========== ThemeContext ==========
 
@@ -69,26 +70,33 @@ export function IconStyles() {
     return <style>{styles}</style>;
 }
 
-function Icon({icon, size}) {
+function Icon({icon, size, mod}) {
     let style = null;
-    try {
-        const {x, y, height, total_width, total_height} = image_indices["Vanilla"][icon];
-        const scale = size / height;
+    let usedMod = null;
+    // 回退链:先在当前数据源(mod)雪碧图找,未命中回退 Vanilla
+    // (mod 数据中共享物品沿用原版拉丁 IconName,如 iron-plate,只在原版雪碧图;新增物品用中文 IconName 命中 mod 雪碧图)
+    for (const m of [mod, 'Vanilla']) {
+        try {
+            const {x, y, height, total_width, total_height} = image_indices[m][icon];
+            const scale = size / height;
 
-        const tw = total_width * scale, th = total_height * scale;
-        const bgx = -x * scale, bgy = -y * scale;
+            const tw = total_width * scale, th = total_height * scale;
+            const bgx = -x * scale, bgy = -y * scale;
 
-        style = {
-            width: size, height: size,
-            backgroundPosition: `${bgx}px ${bgy}px`,
-            backgroundSize: `${tw}px ${th}px`,
-        };
-    } catch {
-        style = null;
+            style = {
+                width: size, height: size,
+                backgroundPosition: `${bgx}px ${bgy}px`,
+                backgroundSize: `${tw}px ${th}px`,
+            };
+            usedMod = m;
+            break;
+        } catch {
+            style = null;
+        }
     }
 
     if (style) {
-        return <div className="icon-Vanilla" style={style}/>;
+        return <div className={`icon-${usedMod}`} style={style}/>;
     }
     return <span
         style={{
@@ -101,16 +109,15 @@ function Icon({icon, size}) {
     >? {icon}</span>;
 }
 
-function get_icon_by_item(item) {
-    return default_game_data.item_icon_name[item];
-}
-
 export function ItemIcon({item, size, tooltip}) {
     size = size || 40;
 
-    const icon = get_icon_by_item(item);
+    const game_info = useContext(GameInfoContext);
+    const game_data = game_info?.game_data;
+    const icon = game_data?.item_icon_name?.[item];
+    const mod = game_data?.game_name ?? 'Vanilla';
 
-    let img = <Icon icon={icon} size={size}/>;
+    let img = <Icon icon={icon} size={size} mod={mod}/>;
 
     tooltip = tooltip === undefined ? true : tooltip;
     if (tooltip) {
@@ -129,12 +136,22 @@ export function ItemIcon({item, size, tooltip}) {
 export function Header({onNavigate, currentPage}) {
     const version = import.meta.env.VITE_APP_VERSION;
     const {theme, toggleTheme} = useTheme();
+    const game_info = useContext(GameInfoContext);
+    const set_game_data = useContext(GameInfoSetterContext);
+    const gameVersion = game_info?.game_data?.game_version ?? '?';
+    const gameName = game_info?.game_data?.game_name ?? 'Vanilla';
     const renderTooltip = (props) => (
         <Tooltip id="qq-tooltip" {...props}>
             QQ:1610241445<br/>
             QQ群:暂无
         </Tooltip>
     );
+
+    // 数据源(mod)切换
+    function switchSource(name) {
+        if (name === gameName) return;
+        set_game_data(get_game_data(name));
+    }
 
     function handle_dependency_graph(e) {
         e.preventDefault();
@@ -194,26 +211,41 @@ export function Header({onNavigate, currentPage}) {
                     </OverlayTrigger>
                 </Nav>
 
-                <span className="navbar-text ms-auto small me-3 header-github">
-                    <a href="https://github.com/yuki-216/dsp-calc-opt" target="_blank" rel="noopener noreferrer"
-                       className="text-primary text-decoration-underline">
-                        github: 若对您有帮助，不妨来点个免费的star吧
-                    </a>
-                </span>
-                <span className="navbar-text small me-3 header-version">
-                    游戏版本 v{vanilla_game_version}
-                </span>
-                {/* ms-auto:主题切换永远居右(不依赖 github/版本号是否隐藏) */}
-                <Nav className="ms-auto">
-                    <Nav.Link
-                        href="#"
-                        className="d-flex align-items-center"
-                        onClick={toggleTheme}
-                        title={theme === 'light' ? '切换到深色主题' : '切换到浅色主题'}
-                    >
-                        {theme === 'light' ? <FaMoon/> : <FaSun/>}
-                    </Nav.Link>
-                </Nav>
+                {/* 右簇:github/版本+mod切换/主题,整体 ms-auto 推到最右并紧贴(github/版本不再各自 ms-auto) */}
+                <div className="ms-auto d-inline-flex align-items-center gap-2">
+                    <span className="navbar-text small header-github">
+                        <a href="https://github.com/yuki-216/dsp-calc-opt" target="_blank" rel="noopener noreferrer"
+                           className="text-primary text-decoration-underline">
+                            github: 若对您有帮助，不妨来点个免费的star吧
+                        </a>
+                    </span>
+                    <span className="navbar-text small header-version">
+                        游戏版本 v{gameVersion}
+                    </span>
+                    <Dropdown align="end" className="header-mod-switch">
+                        <Dropdown.Toggle variant="outline-secondary" size="sm">
+                            {GAME_DATA_SOURCES[gameName]?.display ?? gameName}
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu>
+                            {Object.entries(GAME_DATA_SOURCES).map(([key, s]) => (
+                                <Dropdown.Item key={key} active={gameName === key}
+                                               onSelect={() => switchSource(key)}>
+                                    {s.display}
+                                </Dropdown.Item>
+                            ))}
+                        </Dropdown.Menu>
+                    </Dropdown>
+                    <Nav className="align-items-center">
+                        <Nav.Link
+                            href="#"
+                            className="d-flex align-items-center"
+                            onClick={toggleTheme}
+                            title={theme === 'light' ? '切换到深色主题' : '切换到浅色主题'}
+                        >
+                            {theme === 'light' ? <FaMoon/> : <FaSun/>}
+                        </Nav.Link>
+                    </Nav>
+                </div>
             </Navbar.Collapse>
         </Navbar>
     );

@@ -1,17 +1,12 @@
 import {useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {
     GameInfoContext,
-    GameInfoSetterContext,
-    SchemeDataSetterContext,
     SettingsContext,
-    SettingsSetterContext,
-    safe_parse_json
+    SettingsSetterContext
 } from './contexts.jsx';
 import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
-import {init_scheme_data} from './scheme_data.jsx';
 import {Settings, BatchPresetControls, OptimizerControls, FuelSelect} from './settings.jsx';
-import {default_game_data} from "./game_data.jsx";
 import {ItemIcon} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
 import {formatAmount} from './seed_viewer_binding';
@@ -200,8 +195,6 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onSt
 
 export default function App({needs_list, set_needs_list, newTabData, onNavigate}) {
     const game_info = useContext(GameInfoContext);
-    const set_game_data = useContext(GameInfoSetterContext);
-    const set_scheme_data = useContext(SchemeDataSetterContext);
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
     const [misc_show, set_misc_show] = useState(false);
@@ -212,19 +205,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const handleStatsApplied = useCallback(() => setStatsApplySignal(s => s + 1), []);
     const [resultHasCollector, setResultHasCollector] = useState(false); // 结果表建筑统计是否含轨道采集器(提示用)
     const prev_game_name = useRef(game_info?.game_data?.game_name ?? '');
-
-    useEffect(() => {
-        // 初始化时加载默认游戏数据
-        set_game_data(default_game_data);
-        const all_schemes = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
-        const saved_scheme = all_schemes[default_game_data.game_name];
-        if (saved_scheme && saved_scheme.scheme_for_recipe &&
-            saved_scheme.scheme_for_recipe.length === default_game_data.recipe_data.length) {
-            set_scheme_data(saved_scheme);
-        } else {
-            set_scheme_data(init_scheme_data(default_game_data));
-        }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // 注:游戏数据初始化由 ContextProvider 惰性完成(set_game_data 负责数据源切换),此处不再重复初始化
 
     // 处理新标签页数据：清空原矿化列表（新页面不继承原页面的原矿表）
     useEffect(() => {
@@ -263,7 +244,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                         <FaTrashAlt/>
                         <span className="toolbar-btn-text">清空缓存</span>
                     </button>
-                    <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                    <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${misc_show ? 'btn-primary' : 'btn-outline-primary'}`}
                             onClick={() => set_misc_show(s => !s)} title="参数设置">
                         <FaCog/>
                         <span className="toolbar-btn-text">设置</span>
