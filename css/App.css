@@ -399,9 +399,14 @@ body > .p-3 {
 .toolbar-btn-text {
     display: inline;
 }
-@media (max-width: 1023px) {
+/* narrow(<750)起:清空缓存/设置/矿物可用量 隐藏文字并靠右紧密 */
+@media (max-width: 749px) {
     .toolbar-btn-text {
         display: none !important;
+    }
+    .toolbar-btns {
+        margin-left: auto;
+        column-gap: 0.25rem;
     }
 }
 
@@ -494,12 +499,6 @@ body > .p-3 {
    窄屏模式：768px ~ 1023px
    ============================================================ */
 @media (max-width: 1023px) {
-    /* slender 起:清空缓存/参数设置/矿物可用量 三个图标按钮靠右紧密排列(同弹出面板按钮) */
-    .toolbar-btns {
-        margin-left: auto;
-        column-gap: 0.25rem;
-    }
-
     /* 进一步压缩列宽 */
     .result-table th:nth-child(6) { width: 52px; }  /* 增产模式:slender 起对齐增产列宽度(两列下拉同宽) */
     .result-table th:nth-child(7) { width: 52px; }  /* 增产剂 72→52 */

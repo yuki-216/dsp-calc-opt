@@ -343,7 +343,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const is_compact = compact_mode !== "full";
     const is_mobile = compact_mode === "mobile";
     // 更窄(narrow/mobile)时隐藏合并列内的整数建议,改在设备列悬浮提示
-    const hideIntHint = compact_mode === 'narrow' || compact_mode === 'mobile';
+    const hideIntHint = compact_mode === 'narrow';
     const mob_icon = is_mobile ? 20 : undefined;   // 总结面板/主图标
 
     // Refs for Bootstrap Modal instances
