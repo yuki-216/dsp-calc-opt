@@ -743,7 +743,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "logistic-drone": {
+  "lighthouse": {
     "x": 7440,
     "y": 0,
     "width": 80,
@@ -751,7 +751,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "logistic-station": {
+  "logistic-drone": {
     "x": 7520,
     "y": 0,
     "width": 80,
@@ -759,7 +759,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "logistic-vessel": {
+  "logistic-station": {
     "x": 7600,
     "y": 0,
     "width": 80,
@@ -767,7 +767,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "mag-turbine": {
+  "logistic-vessel": {
     "x": 7680,
     "y": 0,
     "width": 80,
@@ -775,7 +775,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "magnet": {
+  "mag-turbine": {
     "x": 7760,
     "y": 0,
     "width": 80,
@@ -783,7 +783,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "magnetism-wire": {
+  "magnet": {
     "x": 7840,
     "y": 0,
     "width": 80,
@@ -791,7 +791,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "memory": {
+  "magnetism-wire": {
     "x": 7920,
     "y": 0,
     "width": 80,
@@ -799,7 +799,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "micro-component": {
+  "memory": {
     "x": 8000,
     "y": 0,
     "width": 80,
@@ -807,7 +807,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "mining-drill-mk2": {
+  "micro-component": {
     "x": 8080,
     "y": 0,
     "width": 80,
@@ -815,7 +815,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "mining-drill": {
+  "mining-drill-mk2": {
     "x": 8160,
     "y": 0,
     "width": 80,
@@ -823,7 +823,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "missile-graviton": {
+  "mining-drill": {
     "x": 8240,
     "y": 0,
     "width": 80,
@@ -831,7 +831,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "missile-supersonic": {
+  "missile-graviton": {
     "x": 8320,
     "y": 0,
     "width": 80,
@@ -839,7 +839,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "missile": {
+  "missile-supersonic": {
     "x": 8400,
     "y": 0,
     "width": 80,
@@ -847,7 +847,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "monitor": {
+  "missile": {
     "x": 8480,
     "y": 0,
     "width": 80,
@@ -855,7 +855,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "mono-mag-ore": {
+  "monitor": {
     "x": 8560,
     "y": 0,
     "width": 80,
@@ -863,7 +863,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "nanotube-lv2": {
+  "mono-mag-ore": {
     "x": 8640,
     "y": 0,
     "width": 80,
@@ -871,7 +871,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "nanotube": {
+  "nanotube-lv2": {
     "x": 8720,
     "y": 0,
     "width": 80,
@@ -879,7 +879,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "negentropy": {
+  "nanotube": {
     "x": 8800,
     "y": 0,
     "width": 80,
@@ -887,7 +887,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "oil-extractor": {
+  "negentropy": {
     "x": 8880,
     "y": 0,
     "width": 80,
@@ -895,7 +895,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "oil-refinery": {
+  "oil-extractor": {
     "x": 8960,
     "y": 0,
     "width": 80,
@@ -903,7 +903,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "oil": {
+  "oil-refinery": {
     "x": 9040,
     "y": 0,
     "width": 80,
@@ -911,7 +911,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "orbital-collector": {
+  "oil": {
     "x": 9120,
     "y": 0,
     "width": 80,
@@ -919,7 +919,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "orbital-substation": {
+  "orbital-collector": {
     "x": 9200,
     "y": 0,
     "width": 80,
@@ -927,7 +927,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "partical-capacitor-lv2": {
+  "orbital-substation": {
     "x": 9280,
     "y": 0,
     "width": 80,
@@ -935,7 +935,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "partical-capacitor": {
+  "partical-capacitor-lv2": {
     "x": 9360,
     "y": 0,
     "width": 80,
@@ -943,7 +943,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "particle-explosive": {
+  "partical-capacitor": {
     "x": 9440,
     "y": 0,
     "width": 80,
@@ -951,7 +951,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "particle-wide-band": {
+  "particle-explosive": {
     "x": 9520,
     "y": 0,
     "width": 80,
@@ -959,7 +959,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "photo-shifter-lv2": {
+  "particle-wide-band": {
     "x": 9600,
     "y": 0,
     "width": 80,
@@ -967,7 +967,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "photo-shifter": {
+  "photo-shifter-lv2": {
     "x": 9680,
     "y": 0,
     "width": 80,
@@ -975,7 +975,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "photon-capacitor-full": {
+  "photo-shifter": {
     "x": 9760,
     "y": 0,
     "width": 80,
@@ -983,7 +983,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "photon-formula": {
+  "photon-capacitor-full": {
     "x": 9840,
     "y": 0,
     "width": 80,
@@ -991,7 +991,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "piler": {
+  "photon-formula": {
     "x": 9920,
     "y": 0,
     "width": 80,
@@ -999,7 +999,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "plane-filter": {
+  "piler": {
     "x": 10000,
     "y": 0,
     "width": 80,
@@ -1007,7 +1007,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "plant-fuel": {
+  "plane-filter": {
     "x": 10080,
     "y": 0,
     "width": 80,
@@ -1015,7 +1015,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "plasma-generator": {
+  "plant-fuel": {
     "x": 10160,
     "y": 0,
     "width": 80,
@@ -1023,7 +1023,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "plasma-refining": {
+  "plasma-generator": {
     "x": 10240,
     "y": 0,
     "width": 80,
@@ -1031,7 +1031,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "plastic": {
+  "plasma-refining": {
     "x": 10320,
     "y": 0,
     "width": 80,
@@ -1039,7 +1039,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "prism": {
+  "plastic": {
     "x": 10400,
     "y": 0,
     "width": 80,
@@ -1047,7 +1047,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "processor": {
+  "prism": {
     "x": 10480,
     "y": 0,
     "width": 80,
@@ -1055,7 +1055,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "quantum-processor": {
+  "processor": {
     "x": 10560,
     "y": 0,
     "width": 80,
@@ -1063,7 +1063,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "ray-receiver": {
+  "quantum-processor": {
     "x": 10640,
     "y": 0,
     "width": 80,
@@ -1071,7 +1071,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "reassembler": {
+  "ray-receiver": {
     "x": 10720,
     "y": 0,
     "width": 80,
@@ -1079,7 +1079,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "refined-oil": {
+  "reassembler": {
     "x": 10800,
     "y": 0,
     "width": 80,
@@ -1087,7 +1087,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "reforming-refine": {
+  "refined-oil": {
     "x": 10880,
     "y": 0,
     "width": 80,
@@ -1095,7 +1095,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "rocket": {
+  "reforming-refine": {
     "x": 10960,
     "y": 0,
     "width": 80,
@@ -1103,7 +1103,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "silicium-high-purity-lv2": {
+  "rocket": {
     "x": 11040,
     "y": 0,
     "width": 80,
@@ -1111,7 +1111,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "silicium-high-purity": {
+  "silicium-high-purity-lv2": {
     "x": 11120,
     "y": 0,
     "width": 80,
@@ -1119,7 +1119,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "silicium-ore": {
+  "silicium-high-purity": {
     "x": 11200,
     "y": 0,
     "width": 80,
@@ -1127,7 +1127,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "silicium-single-crystal": {
+  "silicium-ore": {
     "x": 11280,
     "y": 0,
     "width": 80,
@@ -1135,7 +1135,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "silicon-neuron": {
+  "silicium-single-crystal": {
     "x": 11360,
     "y": 0,
     "width": 80,
@@ -1143,7 +1143,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "smelter-2": {
+  "silicon-neuron": {
     "x": 11440,
     "y": 0,
     "width": 80,
@@ -1151,7 +1151,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "smelter-3": {
+  "smelter-2": {
     "x": 11520,
     "y": 0,
     "width": 80,
@@ -1159,7 +1159,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "smelter": {
+  "smelter-3": {
     "x": 11600,
     "y": 0,
     "width": 80,
@@ -1167,7 +1167,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "soil-pile": {
+  "smelter": {
     "x": 11680,
     "y": 0,
     "width": 80,
@@ -1175,7 +1175,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "solar-collector": {
+  "soil-pile": {
     "x": 11760,
     "y": 0,
     "width": 80,
@@ -1183,7 +1183,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "solar-panel": {
+  "solar-collector": {
     "x": 11840,
     "y": 0,
     "width": 80,
@@ -1191,7 +1191,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "space-warper-lv2": {
+  "solar-panel": {
     "x": 11920,
     "y": 0,
     "width": 80,
@@ -1199,7 +1199,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "space-warper": {
+  "space-warper-lv2": {
     "x": 12000,
     "y": 0,
     "width": 80,
@@ -1207,7 +1207,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "splitter-4dir": {
+  "space-warper": {
     "x": 12080,
     "y": 0,
     "width": 80,
@@ -1215,7 +1215,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "spray-coater": {
+  "splitter-4dir": {
     "x": 12160,
     "y": 0,
     "width": 80,
@@ -1223,7 +1223,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "steel-plate": {
+  "spray-coater": {
     "x": 12240,
     "y": 0,
     "width": 80,
@@ -1231,7 +1231,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "stone-brick": {
+  "steel-plate": {
     "x": 12320,
     "y": 0,
     "width": 80,
@@ -1239,7 +1239,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "stone-ore": {
+  "stone-brick": {
     "x": 12400,
     "y": 0,
     "width": 80,
@@ -1247,7 +1247,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "storage-1": {
+  "stone-ore": {
     "x": 12480,
     "y": 0,
     "width": 80,
@@ -1255,7 +1255,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "storage-2": {
+  "storage-1": {
     "x": 12560,
     "y": 0,
     "width": 80,
@@ -1263,7 +1263,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "storage-tank": {
+  "storage-2": {
     "x": 12640,
     "y": 0,
     "width": 80,
@@ -1271,7 +1271,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "strange-matter-generator": {
+  "storage-tank": {
     "x": 12720,
     "y": 0,
     "width": 80,
@@ -1279,7 +1279,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "sulphuric-acid": {
+  "strange-matter-generator": {
     "x": 12800,
     "y": 0,
     "width": 80,
@@ -1287,7 +1287,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "t-matrix": {
+  "sulphuric-acid": {
     "x": 12880,
     "y": 0,
     "width": 80,
@@ -1295,7 +1295,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "terrain-tool": {
+  "t-matrix": {
     "x": 12960,
     "y": 0,
     "width": 80,
@@ -1303,7 +1303,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "tesla-coil": {
+  "terrain-tool": {
     "x": 13040,
     "y": 0,
     "width": 80,
@@ -1311,7 +1311,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "titan-crystal": {
+  "tesla-coil": {
     "x": 13120,
     "y": 0,
     "width": 80,
@@ -1319,7 +1319,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "titan-glass": {
+  "titan-crystal": {
     "x": 13200,
     "y": 0,
     "width": 80,
@@ -1327,7 +1327,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "titanium-alloy": {
+  "titan-glass": {
     "x": 13280,
     "y": 0,
     "width": 80,
@@ -1335,7 +1335,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "titanium-ore": {
+  "titanium-alloy": {
     "x": 13360,
     "y": 0,
     "width": 80,
@@ -1343,7 +1343,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "titanium-plate": {
+  "titanium-ore": {
     "x": 13440,
     "y": 0,
     "width": 80,
@@ -1351,7 +1351,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-cannon": {
+  "titanium-plate": {
     "x": 13520,
     "y": 0,
     "width": 80,
@@ -1359,7 +1359,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-disturb": {
+  "turret-cannon": {
     "x": 13600,
     "y": 0,
     "width": 80,
@@ -1367,7 +1367,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-gauss": {
+  "turret-disturb": {
     "x": 13680,
     "y": 0,
     "width": 80,
@@ -1375,7 +1375,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-laser": {
+  "turret-gauss": {
     "x": 13760,
     "y": 0,
     "width": 80,
@@ -1383,7 +1383,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-missile": {
+  "turret-laser": {
     "x": 13840,
     "y": 0,
     "width": 80,
@@ -1391,7 +1391,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-plasma-ground": {
+  "turret-missile": {
     "x": 13920,
     "y": 0,
     "width": 80,
@@ -1399,7 +1399,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-plasma": {
+  "turret-plasma-ground": {
     "x": 14000,
     "y": 0,
     "width": 80,
@@ -1407,7 +1407,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-shield": {
+  "turret-plasma": {
     "x": 14080,
     "y": 0,
     "width": 80,
@@ -1415,7 +1415,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "turret-signal": {
+  "turret-shield": {
     "x": 14160,
     "y": 0,
     "width": 80,
@@ -1423,7 +1423,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "u-matrix": {
+  "turret-signal": {
     "x": 14240,
     "y": 0,
     "width": 80,
@@ -1431,7 +1431,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "vertical-launching-silo": {
+  "u-matrix": {
     "x": 0,
     "y": 80,
     "width": 80,
@@ -1439,7 +1439,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "virtual-energy-fuel": {
+  "vertical-launching-silo": {
     "x": 80,
     "y": 80,
     "width": 80,
@@ -1447,7 +1447,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "virtual-particle": {
+  "virtual-energy-fuel": {
     "x": 160,
     "y": 80,
     "width": 80,
@@ -1455,7 +1455,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "warship-laser": {
+  "virtual-particle": {
     "x": 240,
     "y": 80,
     "width": 80,
@@ -1463,7 +1463,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "warship-plasma": {
+  "warship-laser": {
     "x": 320,
     "y": 80,
     "width": 80,
@@ -1471,7 +1471,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "water-pump": {
+  "warship-plasma": {
     "x": 400,
     "y": 80,
     "width": 80,
@@ -1479,7 +1479,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "water": {
+  "water-pump": {
     "x": 480,
     "y": 80,
     "width": 80,
@@ -1487,7 +1487,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "wind-turbine": {
+  "water": {
     "x": 560,
     "y": 80,
     "width": 80,
@@ -1495,7 +1495,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "wood": {
+  "wind-turbine": {
     "x": 640,
     "y": 80,
     "width": 80,
@@ -1503,7 +1503,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "伊卡洛斯": {
+  "wood": {
     "x": 720,
     "y": 80,
     "width": 80,
@@ -1511,7 +1511,7 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "巨构星际组装厂": {
+  "伊卡洛斯": {
     "x": 800,
     "y": 80,
     "width": 80,
@@ -1519,8 +1519,16 @@
     "total_width": 14320,
     "total_height": 1104
   },
-  "电力": {
+  "巨构星际组装厂": {
     "x": 880,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "total_width": 14320,
+    "total_height": 1104
+  },
+  "电力": {
+    "x": 960,
     "y": 80,
     "width": 1024,
     "height": 1024,
@@ -1528,7 +1536,7 @@
     "total_height": 1104
   },
   "矩阵上传": {
-    "x": 1904,
+    "x": 1984,
     "y": 80,
     "width": 80,
     "height": 80,
@@ -1536,7 +1544,7 @@
     "total_height": 1104
   },
   "行星基地": {
-    "x": 1984,
+    "x": 2064,
     "y": 80,
     "width": 80,
     "height": 80,

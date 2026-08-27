@@ -58,11 +58,11 @@ test('电力生产链保留:电力→煤矿(燃料配方真实原料边)', () =>
     assert.ok(edgeKeys(call()).includes('电力->煤矿'));
 });
 
-test('独立需求节点:items 含 电力 与 增产剂', () => {
+test('电力与增产剂作为生产链节点出现(有生产边时)', () => {
     const result = call();
-    assert.ok(result.items.has('电力'));
-    assert.ok(result.items.has('增产剂 Mk.III'));
-    assert.ok(result.items.has('增产剂 Mk.II'));
+    assert.ok(result.items.has('电力'));          // 燃料配方 电力→煤矿 的产物
+    assert.ok(result.items.has('增产剂 Mk.III')); // Mk.III 配方产物
+    assert.ok(result.items.has('增产剂 Mk.II'));  // Mk.II 配方产物
 });
 
 test('needs 强制入节点:空 recipes 时孤立需求仍显示', () => {
@@ -83,12 +83,12 @@ test('deleted 过滤:删除煤矿后去掉相关边与节点', () => {
     assert.ok(result.items.has('电力'), '电力节点本身不应被误删');
 });
 
-test('无燃料配方:电力作为孤立节点保留,无 from=电力 的边', () => {
+test('无燃料配方:电力不作为独立需求节点(不再自动增加电力需求)', () => {
     const recipes = makeRecipes();
     recipes.delete('2'); // 移除燃料配方
     const result = call({recipes});
-    assert.ok(result.items.has('电力'), '无燃料时电力仍作为独立需求节点显示');
-    assert.ok(!result.edges.some(e => e.from === '电力'), '无燃料链则无 电力→X 边');
+    assert.ok(!result.items.has('电力'), '无燃料配方时电力不应作为独立需求节点出现');
+    assert.ok(!result.edges.some(e => e.from === '电力' || e.to === '电力'), '无燃料链则无电力相关边');
 });
 
 test('无电力消耗:电力不出现', () => {

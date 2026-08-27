@@ -1,4 +1,4 @@
-# 戴森球计划量化计算器 v0.12.0
+# 戴森球计划量化计算器 v0.12.1
 
 基于 [dsp-calc](https://github.com/DSPCalculator/dsp-calc) 开源项目进行功能修剪和新增。
 
@@ -118,6 +118,7 @@ npx serve dist
 ## 文档
 
 - [代码分析文档](docs/code-analysis.md)
+- [添加 Mod 指南](docs/添加mod指南.md)
 - [依赖图模块文档](docs/dependency_graph.md)
 - [增产策略优化算法详解](docs/增产策略优化算法详解.md)
 

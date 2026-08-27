@@ -1,6 +1,6 @@
 # 代码分析
 
-本文档以当前代码为准，说明项目的主要模块、数据流和公开部署/本地调试边界。
+本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.12.0`。
 
 ## 1. 项目定位
 
@@ -8,6 +8,7 @@
 
 1. 生产线计算：根据需求、配方和设置，计算原料、建筑、电力、占地和副产物。
 2. 种子查看与统计：查询戴森球计划的星区资源，并用统计均值辅助填写矿物可用量。
+3. 多游戏数据源：除原版外支持切换 mod 数据（如创世之书 GenesisBook），数据源由顶部导航栏下拉切换。
 
 公开版是静态网站，默认不依赖 Python 后端。单个种子查询由浏览器 WASM Worker 完成，统计结果由
 `public/stats.json` 提供。本地 FastAPI 后端仍保留，用于个人调试种子查询和运行全量统计。
@@ -16,16 +17,19 @@
 
 ```text
 src/main.jsx
-└── App.jsx
-    └── ContextProvider
-        ├── 主计算器页面
-        │   ├── 需求/方案/设置状态
-        │   ├── CoreEngine
-        │   └── 计算结果与优化器
-        └── SeedViewerPage.jsx
-            ├── 单种子查询
-            ├── SeedStatsPanel
-            └── SeedStatsResult
+└── RootApp
+    └── ThemeProvider
+        └── ContextProvider（全局状态：游戏数据/设置/方案/引擎）
+            ├── Header（导航栏：导航链接 / 数据源切换下拉 / 主题切换）
+            ├── 主计算器页面 App.jsx
+            │   ├── 需求/方案/设置状态
+            │   ├── CoreEngine（LP 配平，HiGHS WASM）
+            │   ├── 结果表 result.jsx（含整数建议/原矿化/原矿总需求）
+            │   └── 依赖图 DependencyGraphPage.jsx
+            └── SeedViewerPage.jsx
+                ├── 单种子查询
+                ├── SeedStatsPanel
+                └── SeedStatsResult
 
 公开查询：SeedViewerPage → seed_viewer_binding → seed_query_service
        → seed_query_browser → seed_query_worker → search_seed.wasm
@@ -35,160 +39,148 @@ src/main.jsx
 公开统计：seed_stats_api → public/stats.json
 ```
 
-## 3. 主生产线计算器
+## 3. 游戏数据源与 mod 机制
 
-### 3.1 状态和页面
+### 3.1 数据文件
 
-- `src/App.jsx`：应用页面切换、主题和主布局。
-- `src/contexts.jsx`：游戏数据、设置、方案和计算引擎的 React Context。
-- `src/settings.jsx`：采矿参数、矿量/矿点模式、统计均值应用后的设置。
-- `src/needs_list.jsx`、`src/scheme_data.jsx`：需求列表和生产方案持久化。
-- `src/result.jsx`：生产结果展示。
+数据以 `data/<数据源名>.json` 存放，格式与原版一致：
 
-### 3.2 CoreEngine
+- `data/Vanilla.json`：原版（物品 + 配方，结构见 `src/game_data.jsx` 头部注释）
+- `data/GenesisBook.json`：创世之书 mod（由 `npm run download:genesisbook` 从 dsp-calc 拉取）
+
+`src/game_data.jsx` 用 `import.meta.glob('../data/*.json')` 预加载所有数据文件，`data_indices` 的
+键为文件名 basename。图标同理：`src/ui_components.jsx` 用 `import.meta.glob('../icon/*.json')` 加载
+各数据源的雪碧图坐标，`icon/<源名>.png` 由 vite 插件 `get_sprite_plugins`（`vite.config.js`）从
+`icon/<源名>/*.png` 生成并输出到 `public/icon/`。
+
+### 3.2 数据源注册与切换
+
+- 注册表：`src/game_data.jsx` 的 `GAME_DATA_SOURCES`（`{name, data_file, version, display}`）。
+- 转换：`get_game_data(dataSourceName)` 把 JSON 转换成内部结构（`item_grid`/`item_icon_name`/
+  `recipe_data`/`factory_data`/`proliferator_data`），并合成燃料配方与发电建筑。`src/contexts.jsx`
+  用 `getInitialSourceName()` 从 localStorage `game_source` 恢复上次选择。
+- 切换：Header 下拉 → `switchSource(name)` → `set_game_data(get_game_data(name))`。`set_game_data`
+  （`contexts.jsx`）一次性完成：重建 `GameInfo`、恢复/初始化该源的方案（`init_scheme_data`）、
+  持久化 `game_source`、过滤无效增殖等级、清空源相关设置（矿物可用量/原矿化）。
+- 方案独立：`scheme_data` 按 `game_name` 在 localStorage `auto_scheme` 分 key 存取；需求列表在
+  `game_name` 变化时清空（`App.jsx` 的 effect）。
+- 配方偏好：`data/allowed_recipes_<源名>.json` 记录每个物品的可选配方索引（`getAllowedRecipes`，
+  `src/scheme_data.jsx`）。生成脚本 `scripts/generate_allowed_recipes.cjs` 参数化运行；注意
+  **Vanilla 版本含手工调整（如硅石默认"直接获取"），勿重新生成覆盖**。
+
+### 3.3 引擎的数据无关性
+
+`CoreEngine` 只接收 `game_data` 参数，是数据无关的——mod 数据格式与原版一致即可直接计算。
+引擎仅特判 `recipe.Type === -2`（无中生有，设备数为 0）；其余配方类型走通用路径。mod 新增的
+配方类别（Type 9/10/11/16 等）无需引擎改动。
+
+## 4. 主生产线计算器
+
+### 4.1 状态和页面
+
+- `src/main.jsx`：`RootApp`，页面切换、needs_list 状态。
+- `src/contexts.jsx`：游戏数据、设置、方案和计算引擎的 React Context（`GameInfoContext`/
+  `SettingsContext`/`SchemeDataSetterContext`/`EngineCalculateContext`/`CalculationErrorContext`/
+  `CalculationFailureContext`/`EngineGraphDataContext`/`FuelContext` 等）。
+- `src/App.jsx`：主页面，设置面板、原矿化、矿物可用量、批量预设。
+- `src/settings.jsx`：采矿参数、矿量/矿点模式、增产剂/自动优化设置、批量预设。
+- `src/needs_list.jsx`、`src/item_select.jsx`：需求列表（物品选择器）。
+- `src/scheme_data.jsx`：生产方案初始化、按数据源的 `allowed_recipes`、方案持久化。
+- `src/result.jsx`：生产结果展示（结果表、原矿输入总需求、副产物、历史差值）。
+
+### 4.2 CoreEngine（LP 配平）
 
 核心代码位于 `src/engine/`：
 
-- `dag.js`：从需求出发 BFS 构建物品依赖图。
-- `graph-utils.js`：Tarjan 算法识别强连通分量（SCC）。
-- `unit-cost.js`：展开直接成本，循环组通过矩阵求逆求解。
-- `matrix.js`：矩阵运算。
-- `proliferator-optimizer.js`：按目标优化各物品的增产/加速方案。
-- `index.js`：创建和调用 `CoreEngine`，汇总资源、建筑、电力和占地。
+- `bipartite-graph.js`：BFS 构建二部图（配方节点 + 物品守恒），附加电力/增产剂喷涂输入，计算设备数/耗电。
+- `lp-model.js`：构建 LP 模型——配方执行次数为变量、物品守恒为约束，目标 `min Σx + Σslack`；
+  `noRecipeItems`（含被原矿化物品）加 slack 变量表示"外部获取缺口"。
+- `lp-solver.js`：HiGHS WASM 求解。
+- `index.js`：`CoreEngine`，编排并映射结果（`productionByItem`/`resourceUsage`/`surplusByproducts`/
+  `recipeExecutions`/`graph`/`totalFootprint` 等）。
+- `proliferator-optimizer.js`：按目标（最小电力/珍稀权重/净热值/占地）优化各物品增产/加速方案。
+- `rare-ore-practicality.js`：珍稀矿实用性修正。
+- `graph-utils.js`：图工具（SCC 等，供优化器分组）。
+- `debug.js`：`window.__DEBUG` 调试开关。
 
 计算流程：
 
 ```text
 需求
-  → BFS 构建依赖图
-  → Tarjan SCC 分组
-  → 按 SCC 逆拓扑顺序展开成本
-  → 循环组矩阵求逆
-  → 汇总矿物、配方、建筑、电力和占地
+  → BFS 构建二部图（含电力/增产剂附加输入）
+  → 构建 LP（配方次数变量、物品守恒约束、slack 松弛）
+  → HiGHS WASM 求解（min Σx + Σslack）
+  → 结果映射：生产量/外部输入/副产物/设备/电力/占地
 ```
 
-依赖图的 DAG 排序主要服务于可视化布局；实际循环计算以 SCC 为边界，不把循环错误地当成普通树结构。
+失败处理：LP 求解失败（如无可行解）时，`engineCalculate` 捕获异常，触发全局弹窗
+（`CalcFailureModal`，`App.jsx`）并自动回退到上次成功计算的配方方案（`lastGoodSchemeRef`）。
 
-## 4. 种子查询
+### 4.3 整数优化与设备利用率
 
-### 4.1 查询模式
+`src/factory-integer-optimizer.js` 提供"整数优化建议"（混合工厂等级凑偶数台，纯前端提示）。
+`src/result.jsx` 计算设备利用率（需求产能 ÷ 建议组合总产能）并显示在悬浮信息中。
 
-`src/seed_query_mode.js` 保存查询模式，合法值为：
+### 4.4 原矿化
 
-- `browser`：默认模式，使用浏览器 WASM。
-- `backend`：使用本地 FastAPI。
-- `auto`：优先尝试后端，失败后回退浏览器 WASM。
+被原矿化的物品（`settings.mineralize_list`）不再通过生产链生产——引擎把其加入 `noRecipeItems`，
+用 slack 变量满足需求，外部输入量进入 `resourceUsage`。结果表"原矿输入总需求"读取
+`resourceUsage` 显示需要外部输入多少；被原矿化物品不参与矿物可用量/瓶颈（`OreQuantitiesPanel`）。
 
-模式保存于 localStorage 的 `seed-query-mode`。控制台可调用：
+## 5. 依赖图
 
-```js
-setSeedQueryMode('browser')
-setSeedQueryMode('backend')
-setSeedQueryMode('auto')
-resetSeedQueryMode()
-```
+`src/DependencyGraphPage.jsx` + `src/dependency-graph-edges.js`：
 
-`src/seed_query_service.js` 是统一适配层，页面不需要知道当前查询来自 WASM 还是后端。
+- 全部配方模式：`build_dependency_graph` 遍历各物品所选配方，建"产物→真实原料"边（`recipe.原料`，
+  不含电力/增产剂）。
+- 仅需求模式：`projectNeedsOnlyEdges` 从引擎二部图投影无环生产边，同样排除电力/增产剂依赖边，
+  不把电力/增产剂作为独立需求节点；用户显式需求物品保留。
+- 使用增产剂（增产剂等级>0）的物品节点用玫红背景区分（图例"增产"项）。
 
-### 4.2 浏览器 WASM 路径
+## 6. 种子查询
 
-- `src/seed_query_browser.js`：创建并复用 Module Worker，管理请求 ID 和 Promise。
-- `src/seed_query_worker.js`：动态加载 `public/search_seed.js` 和 `public/search_seed.wasm`，在 Worker 中调用 C++ 导出函数。
-- `src/seed_viewer_binding.js`：把 WASM 的 camelCase 数据转换成页面使用的 snake_case 数据结构。
-- `public/search_seed.js`、`public/search_seed.wasm`：公开版实际加载的查询引擎。
+### 6.1 查询模式
 
-Worker 通过页面的 `baseURI` 计算资源根路径，因此支持 GitHub Pages 的项目子路径，而不是把资源固定到域名根目录。
+`src/seed_query_mode.js` 保存查询模式，合法值为 `browser`（默认，浏览器 WASM）/ `backend` /
+`auto`。模式存于 localStorage `seed-query-mode`，控制台可调用 `setSeedQueryMode` 等。
+`src/seed_query_service.js` 是统一适配层。
 
-### 4.3 C++ 构建
+### 6.2 浏览器 WASM 路径
 
-源代码位于 `dsp_search_seed/cpp_source_code/`，主要入口为 `wasm_api.cpp`。OpenCL 在浏览器构建中由
-`wasm_opencl_stub.cpp` 提供 CPU 兼容实现。构建脚本是 `scripts/build_seed_wasm.cjs`：
+`src/seed_query_browser.js` 管理 Module Worker；`src/seed_query_worker.js` 动态加载
+`public/search_seed.js`/`.wasm`；`src/seed_viewer_binding.js` 转换 camelCase→snake_case。
+Worker 通过页面 `baseURI` 计算资源根路径，支持 GitHub Pages 子路径。
 
-```bash
-set GLM_ROOT=<path-to-glm>
-npm run build:wasm
-```
+### 6.3 C++ 构建
 
-脚本只使用 `GLM_ROOT` 和环境中的 `em++`，不依赖开发机上的固定绝对路径。
+源代码在 `dsp_search_seed/cpp_source_code/`，入口 `wasm_api.cpp`；浏览器构建用
+`wasm_opencl_stub.cpp` 提供 CPU 兼容。构建脚本 `scripts/build_seed_wasm.cjs`：
+`set GLM_ROOT=<path>; npm run build:wasm`。
 
-## 5. 统计系统
+## 7. 统计系统
 
-### 5.1 前端行为
+- 前端：`src/seed_stats_api.js` 按模式读 `public/stats.json`（Welford M2 计算 CI95）或请求后端。
+- 后端：`backend/main.py`（FastAPI）、`stats_api.py`、`run_stats_calc.py`、`batch_calculator.py`、
+  `stats_calculator.py`（Welford）、`stats_storage.py`；`dsp_search_seed/CApi/` 内置 Python CApi。
+- 统计状态文件 `backend/data/seed_stats/` 为运行时数据，不提交；公开发布用筛选后的
+  `public/stats.json`。
+- 收敛判据：星区汇总相对误差阈值 3%，所有参与停止判断的指标都达到才停止。
 
-`src/seed_stats_api.js` 根据查询模式选择数据源：
-
-- `browser`/`auto`：读取 `public/stats.json`，并在前端根据 Welford 的 `M2` 计算 CI95 和相对误差。
-- `backend`：请求 `/api/seed-stats/*`，由本地后端返回实时状态和统计结果。
-
-统计控制区默认隐藏。进入种子查看器后可在控制台执行：
-
-```js
-setSeedQueryMode('backend')
-showStatsControls()
-```
-
-`showStatsControls()` 显示开始、停止、恢复等后端统计控制；`hideStatsControls()` 隐藏控制区但不停止正在运行的后端任务。
-
-### 5.2 后端结构
-
-- `backend/main.py`：FastAPI 入口。
-- `backend/stats_api.py`：统计 API、子进程生命周期和状态接口。
-- `backend/run_stats_calc.py`：独立统计子进程入口。
-- `backend/batch_calculator.py`：按种子批量调用 `GetDataManager`。
-- `backend/stats_calculator.py`：Welford online algorithm，维护每项的 `count`、`mean`、`M2`。
-- `backend/stats_storage.py`：保存和恢复统计状态。
-- `dsp_search_seed/CApi/`：项目内置的 Python CApi 和 Windows 运行库。
-
-统计计算按 `batch_size=1` 处理时，每完成一个种子就能提交一次；中途停止不会提交未完成的批次。
-星区汇总矿点和矿量是停止计算的依据，单个恒星指标仍计算并展示相对误差，但不决定停止。
-
-统计状态文件位于 `backend/data/seed_stats/`，属于运行时数据，不提交到仓库。公开发布使用的是经过筛选的
-`public/stats.json`。
-
-### 5.3 统计量定义
-
-对每个指标维护：
-
-```text
-n    样本量
-mean 均值
-M2   到当前均值的平方离差和
-```
-
-样本方差为 `M2 / (n - 1)`，标准误为 `std / sqrt(n)`。当前实现使用 95% 置信度和正态近似：
-
-```text
-CI 半宽 = 1.96 × 标准误
-相对误差 = CI 半宽 / |均值|
-```
-
-星区汇总的相对误差阈值当前为 3%，所有参与停止判断的汇总矿点/矿量指标都达到阈值后才认为收敛。
-
-## 6. 矿物可用量集成
-
-`src/ore_stats_binding.js` 将统计数据或具体种子数据转换成主计算器的 `ore_quantities`：
-
-- 可选择矿量或矿点模式。
-- 主页面按恒星数自动应用公开统计均值。
-- 种子查看器可选择星区或指定恒星后应用。
-- 原油在矿量模式按产速显示，在矿点模式不再进行产速换算。
-- 气体、可燃冰和统计距离等已从统计指标中移除。
-
-## 7. 构建和验证
+## 8. 构建和验证
 
 ```bash
 npm install
 npm run build:wasm   # 只有修改 C++ 查询引擎时需要
-npm run build        # 生成 GitHub Pages 静态产物
+npm run build        # 生成 GitHub Pages 静态产物（同时重新生成雪碧图）
 npm run lint
+npm run test         # node --test "tests/**/*.test.js"
 ```
 
-Python 统计相关测试位于 `backend/test_*.py`；浏览器查询模式测试位于：
+测试目录 `tests/`：引擎（`tests/engine/`）、依赖图投影（`tests/dependency-graph-edges.test.js`）、
+结果行（`tests/result-rows.test.js`）、整数优化、种子查询等。
 
-- `src/seed_query_mode.test.js`
-- `src/seed_query_service.test.js`
+## 9. 版本与变更
 
-## 8. 版本与变更
-
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本为 0.9.7。每次发布应同步更新 README 标题和
-`CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到 GitHub Pages。
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.12.0。
+每次发布应同步更新 README 标题和 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到
+GitHub Pages。

@@ -5184,6 +5184,38 @@
       "TimeSpend": 600,
       "Proliferator": 1,
       "IconName": "accumulator-full"
+    },
+    {
+      "ID": 161,
+      "Type": 4,
+      "Factories": [
+        2303,
+        2304,
+        2305,
+        2318
+      ],
+      "Name": "全息信标",
+      "Items": [
+        1101,
+        1111,
+        1401,
+        1301
+      ],
+      "ItemCounts": [
+        3,
+        4,
+        2,
+        2
+      ],
+      "Results": [
+        2401
+      ],
+      "ResultCounts": [
+        1
+      ],
+      "TimeSpend": 240,
+      "Proliferator": 3,
+      "IconName": "lighthouse"
     }
   ],
   "items": [
@@ -6481,6 +6513,13 @@
       "Speed": 10000,
       "MultipleOutput": 1,
       "Space": 0
+    },
+    {
+      "ID": 2401,
+      "Type": 7,
+      "Name": "全息信标",
+      "GridIndex": 2412,
+      "IconName": "lighthouse"
     }
   ]
 }

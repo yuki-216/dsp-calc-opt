@@ -6,8 +6,9 @@
  * 物品→喷涂增产剂 消耗边),供优化器做真实有环 SCC 分组;依赖图页只需要
  * "简化的无环关系":
  *   - 去掉 其他物品→电力 的耗电依赖边、去掉 其他物品→喷涂增产剂 的消耗边;
- *   - 保留 增产剂配方内部真实原料边(如 增产剂Mk.III→增产剂Mk.II、Mk.II→Mk.I)
- *     与 燃料链(电力→燃料),电力/增产剂作为独立需求节点出现;
+ *   - 不把电力/增产剂作为独立需求节点加入(不因增产/耗电凭空增加需求);
+ *     用户显式需求的物品仍保留(见 needsList 强制入节点);
+ *   - 保留 增产剂配方内部真实原料边(如 增产剂Mk.III→增产剂Mk.II、Mk.II→Mk.I);
  *   - 副产物与主产物一样建"产物→真实原料"普通依赖边(不孤立,与全部配方模式一致)。
  * 区分"真实原料"与"喷涂附加输入"的唯一可靠依据是原始配方表 recipe.原料:
  * 电力与喷涂增产剂都是引擎按方案附加进 inputs 的,不在原始表里。
@@ -64,20 +65,7 @@ export function projectNeedsOnlyEdges({recipes, recipeData, needsList, deletedIt
         }
     }
 
-    // ---- 第二遍:独立需求节点(电力/增产剂即使无生产边也保留)----
-    let powerDemand = needsSet.has('电力');
-    const proliferatorDemands = new Set();
-    for (const r of recipes.values()) {
-        for (const [k, coeff] of Object.entries(r.inputs || {})) {
-            if (!(coeff > 0)) continue;
-            if (k === '电力') powerDemand = true;
-            else if (proliferatorNames.has(k)) proliferatorDemands.add(k);
-        }
-    }
-    if (powerDemand) items.add('电力');
-    for (const p of proliferatorDemands) items.add(p);
-
-    // ---- 需求物品强制入节点 ----
+    // ---- 需求物品强制入节点(仅用户显式需求;不自动加入电力/增产剂需求)----
     for (const n of needsSet) items.add(n);
 
     // ---- 删除过滤 ----

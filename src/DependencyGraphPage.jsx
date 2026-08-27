@@ -869,6 +869,19 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         return names;
     }, [game_data]);
 
+    // 使用了增产剂(增产剂等级>0)的物品:依赖图节点用背景色区分
+    const proliferatedItems = useMemo(() => {
+        const set = new Set();
+        for (const item in item_data) {
+            const choice = scheme_data.item_recipe_choices?.[item] || 1;
+            const recipe_index = item_data[item]?.[choice];
+            if (recipe_index === undefined) continue;
+            const sf = scheme_data.scheme_for_recipe?.[recipe_index];
+            if (sf && Number(sf['增产剂等级'] || 0) > 0) set.add(item);
+        }
+        return set;
+    }, [item_data, scheme_data]);
+
     const filtered_graph = useMemo(() => {
         // 仅需求模式:从引擎二部图 recipes 自建无环投影(不复用引擎 edges——后者含
         // 物品→电力 / 物品→喷涂增产剂 消耗边,供优化器做真实有环 SCC 分组)。
@@ -1290,6 +1303,9 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
             if (pos.is_source) border_color = '#51cf66'; // 原矿：绿色
             else if (pos.is_sink) border_color = '#ffd43b'; // 最终产物：黄色
 
+            // 使用了增产剂增产的物品:玫红背景区分(区别于蓝/绿/黄边框)
+            const is_proliferated = proliferatedItems.has(item);
+
             const is_highlighted = effective_highlighted_items.has(item);
             const opacity = is_highlighting ? (is_highlighted ? 1 : 0.3) : 1;
             const scale = is_highlighted && item !== tooltip ? 1.1 : 1;
@@ -1303,6 +1319,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                         left: pos.x,
                         top: pos.y,
                         borderColor: border_color,
+                        backgroundColor: is_proliferated ? 'rgba(230, 73, 128, 0.35)' : undefined,
                         borderWidth: is_highlighted ? '4px' : '2px',
                         cursor: pos.is_first_layer ? (dragging_node === item ? 'grabbing' : 'grab') : 'default',
                         opacity,
@@ -1350,6 +1367,10 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
                          onMouseLeave={handle_legend_leave}>
                         <div className="graph-legend-color-inline" style={{borderColor: '#ffd43b', background: legend_hover === 'sink' ? 'rgba(255,212,59,0.3)' : 'rgba(255,212,59,0.1)'}}/>
                         <span>最终</span>
+                    </div>
+                    <div className="graph-legend-item-inline">
+                        <div className="graph-legend-color-inline" style={{background: 'rgba(230, 73, 128, 0.45)'}}/>
+                        <span>增产</span>
                     </div>
                 </div>
                 <button

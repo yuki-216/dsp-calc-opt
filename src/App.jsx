@@ -108,8 +108,8 @@ const EMPTY_ARR = [];
 function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onStatsApplied}) {
     const oreQuantities = settings.ore_quantities || EMPTY_OBJ;
     const recipeData = game_info?.game_data?.recipe_data || EMPTY_ARR;
-    const mineralizeList = settings.mineralize_list || EMPTY_OBJ;
     // 收集可由非行星基地设施采集的无原料物品作为原矿（useMemo 稳定引用，避免每次渲染重建导致 effect 重复触发）
+    // 注:被原矿化的物品是"外部输入"、无采集消耗,不参与矿物可用量/瓶颈,故不并入
     const oreItems = useMemo(() => {
         const oreItems = [];
         const seen = new Set();
@@ -122,11 +122,8 @@ function OreQuantitiesPanel({game_info, settings, set_settings, onNavigate, onSt
                 if (!INFINITE_ITEMS.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
             }
         }
-        for (const item of Object.keys(mineralizeList)) {
-            if (!INFINITE_ITEMS.has(item) && !seen.has(item)) { seen.add(item); oreItems.push(item); }
-        }
         return oreItems;
-    }, [recipeData, mineralizeList]);
+    }, [recipeData]);
 
     const handleChange = (item, numVal) => {
         const newQ = { ...oreQuantities };

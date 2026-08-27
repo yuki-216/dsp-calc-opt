@@ -467,6 +467,8 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const selfConsumption = engineResult?.selfConsumption || EMPTY_OBJ;
     const byproductSources = engineResult?.byproductSources || EMPTY_OBJ;
     const result_graph = engineResult?.graph;
+    // 原矿化物品(无配方)的外部输入量:引擎 LP slack → resourceUsage,用于"原矿输入总需求"展示
+    const resourceUsage = engineResult?.resourceUsage || EMPTY_OBJ;
 
     // 用于存储历史值的数组，最多保留两个版本
     const [historyValues, setHistoryValues] = useState([]);
@@ -703,11 +705,21 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             ? optimizeFactoryMix({c: factory_number, levels: factoryGroup,
                                   baseIndex: scheme_recipe["建筑"], direction: settings.factory_optimize_mode})
             : null;
+        // 设备利用率 = 需求产能 / 建议组合总产能(各等级相对当前等级倍率加权)
+        const mixUtil = mixSuggestion ? (() => {
+            const baseSpeed = factoryGroup[scheme_recipe["建筑"]]?.['倍率'] || 1;
+            let totalCap = 0;
+            for (const m of mixSuggestion.mix) {
+                totalCap += m.count * ((factoryGroup[m.levelIndex]?.['倍率'] || 1) / baseSpeed);
+            }
+            return totalCap > 0 ? (factory_number / totalCap) : null;
+        })() : null;
         // 整数优化列图标尺寸：与"设备"列一致(30/18)；合并列宽为动态测量值，无需缩小
         const mixIconSize = mixSuggestion ? (is_mobile ? 18 : 30) : 0;
         // 整数建议文本(隐藏图标列时作为设备列悬浮提示)
         const mixText = mixSuggestion
-            ? `${mixSuggestion.type === 'compact' ? '紧凑' : '省料'}: ${mixSuggestion.mix.map(m => `${m.count}×${factoryGroup[m.levelIndex]['名称']}`).join(' + ')}`
+            ? `${mixSuggestion.type === 'compact' ? '紧凑' : '省料'}: ${mixSuggestion.mix.map(m => `${m.count}×${factoryGroup[m.levelIndex]['名称']}`).join(' + ')}` +
+              (mixUtil != null ? `（利用率 ${Math.round(mixUtil * 100)}%）` : '')
             : null;
         let is_mineralized = i in mineralize_list;
         let row_class = is_mineralized ? "table-secondary" : "";
@@ -785,7 +797,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                         <div className="d-inline-flex align-items-center" style={{flexShrink: 0}}>
                             {!is_mineralized && mixSuggestion && (
                                 <span className="fast-tooltip d-inline-flex align-items-center"
-                                      data-tooltip={mixSuggestion.type === 'compact' ? '紧凑（省占地）' : '省料（避免浪费）'}>
+                                      data-tooltip={`${mixSuggestion.type === 'compact' ? '紧凑（省占地）' : '省料（避免浪费）'}${mixUtil != null ? ` · 利用率 ${Math.round(mixUtil * 100)}%` : ''}`}>
                                     {mixSuggestion.mix.map(m => [
                                         <ItemIcon key={`mix-i-${m.levelIndex}`} item={factoryGroup[m.levelIndex]['名称']} tooltip={false} size={mixIconSize}/>,
                                         <span key={`mix-c-${m.levelIndex}`} className="me-1 ssmall align-self-end"
@@ -851,6 +863,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     // 使用 useMemo 缓存原矿物品集合
     const rawMaterialItems = useMemo(() => {
         const items = new Set();
+        // 被原矿化的物品直接视为原矿(外部输入,无采集消耗);它们无配方故不在 result_dict,须显式加入
+        for (const item of Object.keys(mineralize_list || {})) {
+            items.add(item);
+        }
         for (const item of Object.keys(result_dict)) {
             if (item in mineralize_list) {
                 items.add(item);
@@ -874,11 +890,15 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     const isRawMaterial = useCallback((item) => rawMaterialItems.has(item), [rawMaterialItems]);
 
     // 缓存原矿列表（用于主视图和Modal），按物品名称排序保持静态顺序
+    // 取值:生产链净产出(result_dict)优先,原矿化物品回退到外部输入量(resourceUsage),避免重复计数
     const rawMaterials = useMemo(() => {
-        return Object.entries(result_dict)
-            .filter(([item]) => isRawMaterial(item))
-            .sort(([a], [b]) => a.localeCompare(b));
-    }, [result_dict, isRawMaterial]);
+        const entries = [];
+        for (const item of rawMaterialItems) {
+            const value = result_dict[item] ?? resourceUsage[item];
+            if (value != null && value > 0) entries.push([item, value]);
+        }
+        return entries.sort(([a], [b]) => a.localeCompare(b));
+    }, [rawMaterialItems, result_dict, resourceUsage]);
 
     // 当前珍稀权重目标值与最大瓶颈物品（仅展示当前计算值，不依赖优化运行）
     const rareWeightInfo = useMemo(() => {
@@ -955,11 +975,12 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             netHeat,
         };
 
-        Object.entries(result_dict).forEach(([item, amount]) => {
-            if (isRawMaterial(item)) {
-                currentValues.rawMaterials[item] = amount;
+        for (const item of rawMaterialItems) {
+            const value = result_dict[item] ?? resourceUsage[item];
+            if (value != null && value > 0) {
+                currentValues.rawMaterials[item] = value;
             }
-        });
+        }
 
         // 如果historyValues为空或者第一个元素与当前值不同，则更新
         if (historyValues.length === 0 || !isEqual(historyValues[0], currentValues)) {
@@ -1237,10 +1258,10 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             }
                             {/* 原矿输入总需求(从建筑&电力模态移入,属"多余和需求"组) */}
                             {(() => {
-                                const rawMaterials = Object.entries(result_dict)
-                                    .filter(([item]) => isRawMaterial(item))
-                                    .sort(([a], [b]) => a.localeCompare(b))
-                                    .filter(([, amount]) => Math.abs(amount) >= PANEL_DISPLAY_EPS);
+                                const rawMaterials = [...rawMaterialItems]
+                                    .map(item => [item, result_dict[item] ?? resourceUsage[item]])
+                                    .filter(([, amount]) => amount != null && amount > 0 && Math.abs(amount) >= PANEL_DISPLAY_EPS)
+                                    .sort(([a], [b]) => a.localeCompare(b));
                                 return rawMaterials.length > 0 && (
                                     <fieldset className="w-fit">
                                         <legend><small>原矿输入总需求</small></legend>
