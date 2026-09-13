@@ -13,6 +13,7 @@ import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
 import {buildResultRowOrder, collectDemandedItems} from './result-rows.js';
 import {optimizeFactoryMix, isOptimizableFactoryGroup} from './factory-integer-optimizer.js';
+import {adjustNeedsList} from './numeric.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
@@ -564,7 +565,9 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
     let result_table_rows = [];
 
-    const RatioAdjustInput = ({value, trimZeros, ceil, noTooltip}) => {
+    // item:该行对应的物品名(仅"分钟毛产出"列传)。等比例缩放后按净需求口径精确落值,
+    // 自耗物品(如X射线裂解里的氢)保证该行在结果表回显正好等于用户输入值。
+    const RatioAdjustInput = ({value, trimZeros, ceil, noTooltip, item}) => {
         let disp_value;
         if (ceil) {
             // 进1法，不去尾0
@@ -580,9 +583,18 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
 
         function set_needs_in_row(e_or_value) {
             if (base_value == 0) return;
-            let new_value = e_or_value.target ? e_or_value.target.value : e_or_value;
-            let ratio = new_value / base_value;
-            set_needs_list(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, v * ratio])));
+            const raw = e_or_value && e_or_value.target ? e_or_value.target.value : e_or_value;
+            // 空输入不缩放:原先 ''/base = 0 会把整张需求表清零(清空输入框再失焦即触发)
+            if (raw === '' || raw === null || raw === undefined) return;
+            const new_value = Number(raw);
+            if (!Number.isFinite(new_value)) return;
+            set_needs_list(prev => adjustNeedsList(prev, {
+                ratio: new_value / base_value,
+                user_value: new_value,
+                fixed_num,
+                item,
+                self_consumption: item !== undefined ? (selfConsumption[item] || 0) : 0,
+            }));
         }
 
         return <span data-tooltip={noTooltip ? undefined : "等比例调整需求"} className="fast-tooltip">
@@ -764,7 +776,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
             </td>
             {/* 分钟毛产出 */}
             <td className="text-center">
-                <RatioAdjustInput value={get_gross_output(own_production, i)}/>
+                <RatioAdjustInput value={get_gross_output(own_production, i)} item={i}/>
                 {/* 精简模式(is_compact)不显示联产物来源括号，腾出宽度 */}
                 {!is_compact && from_side_products}
             </td>
