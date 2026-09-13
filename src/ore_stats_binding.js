@@ -11,7 +11,7 @@ const STATS_ORE_ALIASES = [
     ['分形硅石', '分形硅'], ['有机晶体'], ['光栅石'], ['刺笋结晶'], ['单极磁石'],
 ];
 
-export const EXCLUDED_STATS_ORE_INDEX = 7;
+const EXCLUDED_STATS_ORE_INDEX = 7;
 
 export function getStatsOreIndex(itemName) {
     return STATS_ORE_ALIASES.findIndex(aliases => aliases.includes(itemName));

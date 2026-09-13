@@ -37,6 +37,22 @@ export function trimFloatTail(value, fixed_num = 2) {
 }
 
 /**
+ * 自适应精度格式化（不带单位后缀）。
+ * 目标值量级跨度大（约 1e-3 ~ 1e2），固定小数位会把小值截成 0.00，
+ * 故按量级切换精度。结果表与增产优化器的目标值显示共用本实现。
+ * @param {number} value
+ * @returns {string}
+ */
+export function formatAdaptivePrecision(value) {
+    if (!Number.isFinite(value) || value === 0) return '0';
+    const a = Math.abs(value);
+    if (a >= 100) return value.toFixed(2);
+    if (a >= 1) return value.toFixed(3);
+    if (a >= 0.01) return value.toFixed(4);
+    return Number(value.toPrecision(4)).toString();
+}
+
+/**
  * 按比例缩放需求表并消除浮点尾巴。
  * 全部写回需求表的数值都过 trimFloatTail，保证不会再把 17 位小数固化进 localStorage。
  *

@@ -4,7 +4,7 @@ import {init_scheme_data} from './scheme_data';
 import {get_game_data, GAME_DATA_SOURCES} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
-import {DEBUG} from './engine/debug.js'; // 初始化 __DEBUG 全局开关并导出 DEBUG 标志
+import './engine/debug.js'; // 仅副作用:初始化 __DEBUG 全局开关
 import {persistGet, persistSet} from './sandbox.js';
 
 /** set_game_name_and_data(game_name, game_data) */
@@ -21,7 +21,6 @@ export const CalculationErrorContext = createContext(null);
 /** LP 求解失败弹窗消息(非 null 时显示),关闭用 CalculationFailureDismissContext */
 export const CalculationFailureContext = createContext(null);
 export const CalculationFailureDismissContext = createContext(null);
-export const EngineLogContext = createContext(null);
 export const FuelContext = createContext(null);
 export const FuelSetterContext = createContext(null);
 
@@ -181,7 +180,6 @@ export function ContextProvider({children}) {
 
     const [engineGraphData, setEngineGraphData] = useState(null);
     const [calculationError, setCalculationError] = useState(null);
-    const [engineLogs, setEngineLogs] = useState([]);
     const [calcFailure, setCalcFailure] = useState(null);  // LP 求解失败弹窗消息(非 null 显示)
     const lastGoodSchemeRef = useRef(null);  // 上次成功计算的方案快照(失败回退用)
 
@@ -200,18 +198,14 @@ export function ContextProvider({children}) {
                 count
             }));
             try {
-                const runLogs = [];
-                const onLog = DEBUG ? (msg) => { runLogs.push(msg); } : null;
                 const result = await engine.calculate(
                     needsArray,
                     game_info.game_data.recipe_data,
                     new Set(),
-                    false,
-                    onLog
+                    false
                 );
                 // 记录本次成功的方案快照(下次求解失败时回退用)
                 lastGoodSchemeRef.current = structuredClone(scheme_data);
-                if (DEBUG) setTimeout(() => setEngineLogs(runLogs), 0);
                 // 使用 setTimeout 延迟更新状态，避免在渲染过程中触发状态更新
                 setTimeout(() => setCalculationError(null), 0);
                 if (engine.graph && engine.edges) {
@@ -282,7 +276,6 @@ export function ContextProvider({children}) {
                     <CalculationErrorContext.Provider value={calculationError}>
                         <CalculationFailureContext.Provider value={calcFailure}>
                         <CalculationFailureDismissContext.Provider value={() => setCalcFailure(null)}>
-                        <EngineLogContext.Provider value={engineLogs}>
                         <EngineGraphDataContext.Provider value={engineGraphData}>
                             <GameInfoSetterContext.Provider value={set_game_data}>
                                 <SchemeDataSetterContext.Provider value={set_scheme_data}>
@@ -298,7 +291,6 @@ export function ContextProvider({children}) {
                                 </SchemeDataSetterContext.Provider>
                             </GameInfoSetterContext.Provider>
                         </EngineGraphDataContext.Provider>
-                        </EngineLogContext.Provider>
                         </CalculationFailureDismissContext.Provider>
                         </CalculationFailureContext.Provider>
                     </CalculationErrorContext.Provider>

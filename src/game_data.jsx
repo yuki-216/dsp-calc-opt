@@ -125,8 +125,8 @@ export const GAME_DATA_SOURCES = {
     OrbitalRing: {name: "OrbitalRing", data_file: "OrbitalRing", version: "1.0.7",           display: "星环"},
 };
 
-export const vanilla_game_version = GAME_DATA_SOURCES.Vanilla.version;
-export const default_game_data = get_game_data();
+/** 原版数据源的转换结果,供 getFuelRecipe 等无参调用兜底 */
+const default_game_data = get_game_data();
 
 export function get_game_data(dataSourceName = "Vanilla") {
     const src = GAME_DATA_SOURCES[dataSourceName] ?? GAME_DATA_SOURCES.Vanilla;
@@ -538,9 +538,9 @@ const GAS_ENERGY = {氢: 9, 重氢: 9, 可燃冰: 4.8}; // MJ/单位(官方原�
 
 // ---- 挖矿简化:单位采集耗电基准(kW/个,默认参数算出) ----
 // 采矿机 0.42MW/180 = 2.333; 大型采矿机 2.94×3²=26.46MW/2880 = 9.19; 原油萃取站 0.84MW/150 = 5.6
-export const MINING_PER_UNIT_SMALL = 2.333;
-export const MINING_PER_UNIT_LARGE = 9.19;
-export const OIL_PER_UNIT = 5.6;
+const MINING_PER_UNIT_SMALL = 2.333;
+const MINING_PER_UNIT_LARGE = 9.19;
+const OIL_PER_UNIT = 5.6;
 
 /** 挖矿单位采集耗电(MW/(矿/min)) = 滑块线性插值 ÷ 采集速度(科技) */
 export function getMiningPerUnit(settings) {

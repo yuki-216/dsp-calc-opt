@@ -13,7 +13,7 @@ import {getPowerDeviceCount} from './power-device-count.js';
 import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-practicality.js';
 import {buildResultRowOrder, collectDemandedItems} from './result-rows.js';
 import {optimizeFactoryMix, isOptimizableFactoryGroup} from './factory-integer-optimizer.js';
-import {adjustNeedsList} from './numeric.js';
+import {adjustNeedsList, formatAdaptivePrecision} from './numeric.js';
 import {sandboxUrl} from './sandbox.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
@@ -22,9 +22,9 @@ const EMPTY_OBJ = {};
 // 挖矿简化:设备数不展示(×?)的建筑;建筑统计里不出现的(挖矿机/原油萃取站);采矿机/大型采矿机 统一显示为 挖矿机
 // 轨道采集器设备数可按单采集器产量折算,设备列正常显示;仅建筑统计汇总值 ×?
 // 设备列显示 ×?(设备数不计算):挖矿机/原油萃取站(单位采集耗电计电) + 分馏塔(补氢结构,仅估算电力)
+// 设备数不计算的建筑:设备列显示 ×? 且不计入建筑统计(两处用途目前一致,故共用一个 Set;
+// 若将来需要分开,再拆成两个)
 const HIDDEN_DEVICE_BUILDINGS = new Set(['挖矿机', '原油萃取站', '分馏塔']);
-// 建筑统计忽略:与 HIDDEN_DEVICE_BUILDINGS 一致,分馏塔台数不汇总
-const NO_BUILDING_STATS = new Set(['挖矿机', '原油萃取站', '分馏塔']);
 // 设备列 ×? 的悬浮提示(按建筑区分)
 const DEVICE_HIDDEN_TIPS = {
     '挖矿机': '设备数不计算(依赖实际矿脉/摆放)，电力按单位采集耗电计',
@@ -51,15 +51,6 @@ const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' 
 // 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
 const PANEL_DISPLAY_EPS = 0.01;
 
-// 珍稀权重目标值：纯数字（自适应精度，不带单位后缀）
-function formatRareWeightValue(value) {
-    if (!Number.isFinite(value) || value === 0) return '0';
-    const a = Math.abs(value);
-    if (a >= 100) return value.toFixed(2);
-    if (a >= 1) return value.toFixed(3);
-    if (a >= 0.01) return value.toFixed(4);
-    return Number(value.toPrecision(4)).toString();
-}
 
 /**
  * 创建 scheme_data 更新闭包
@@ -851,7 +842,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
     // 建筑统计按名称排序，保持静态顺序便于对比
     // 挖矿机/原油萃取站 不统计(设备数不计算);轨道采集器显示 ×?(可点击跳种子查看器)
     let building_rows = Object.entries(building_list)
-        .filter(([building]) => !NO_BUILDING_STATS.has(building))
+        .filter(([building]) => !HIDDEN_DEVICE_BUILDINGS.has(building))
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([building, count]) => {
             const isCollector = building === '轨道采集器';
@@ -1206,7 +1197,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                             <legend><small>其余目标值</small></legend>
                             <div className="d-flex flex-column">
                                 <span>珍稀权重</span>
-                                <span>{formatRareWeightValue(rareWeightInfo.objective)}</span>
+                                <span>{formatAdaptivePrecision(rareWeightInfo.objective)}</span>
                                 {rareWeightDelta != null && Math.abs(rareWeightDelta) > 1e-9 && (
                                     <span style={{fontSize: '0.85em', color: rareWeightDelta > 0 ? 'red' : 'green'}}>
                                         {rareWeightDelta > 0 ? '+' : ''}{formatValue(rareWeightDelta, fixed_num)}
@@ -1367,7 +1358,7 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
                                     <legend><small>其余目标值</small></legend>
                                     <div className="d-flex flex-column">
                                         <span>珍稀权重</span>
-                                        <span>{formatRareWeightValue(rareWeightInfo.objective)}</span>
+                                        <span>{formatAdaptivePrecision(rareWeightInfo.objective)}</span>
                                         {rareWeightDelta != null && Math.abs(rareWeightDelta) > 1e-9 && (
                                             <span style={{fontSize: '0.85em', color: rareWeightDelta > 0 ? 'red' : 'green'}}>
                                                 {rareWeightDelta > 0 ? '+' : ''}{formatValue(rareWeightDelta, fixed_num)}

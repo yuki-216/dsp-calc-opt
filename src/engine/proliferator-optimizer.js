@@ -11,6 +11,7 @@ import { CoreEngine } from './index.js';
 import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
 import { validateFinalProliferatorChoices } from './proliferator-final-validation.js';
 import { tarjanSCC } from './graph-utils.js';
+import { formatAdaptivePrecision } from '../numeric.js';
 import {
     RARE_ORE_EQUIVALENCE,
     RARE_ORE_PRACTICALITY_RATIO,
@@ -256,13 +257,9 @@ export function formatObjectiveValue(value, strategy) {
     return value.toFixed(0) + ' 格';
   }
   if (strategy === 'min_rare_weight') {
-    // 目标值为小数（量级约 1e-3），固定 2 位小数会截成 0.00，需自适应精度
-    if (!Number.isFinite(value) || value === 0) return '0 稀缺权重';
-    const a = Math.abs(value);
-    if (a >= 100) return value.toFixed(2) + ' 稀缺权重';
-    if (a >= 1) return value.toFixed(3) + ' 稀缺权重';
-    if (a >= 0.01) return value.toFixed(4) + ' 稀缺权重';
-    return Number(value.toPrecision(4)).toString() + ' 稀缺权重';
+    // 目标值为小数（量级约 1e-3），固定 2 位小数会截成 0.00，需自适应精度。
+    // 与结果表显示共用 numeric.js 的实现（此前两处逐字重复，已收敛）
+    return formatAdaptivePrecision(value) + ' 稀缺权重';
   }
   return formatPowerValue(value);
 }

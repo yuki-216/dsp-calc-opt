@@ -30,12 +30,3 @@ export function getBrowserSeedData(seedId, starNum, resourceIndex) {
         getWorker().postMessage({ requestId, seedId, starNum, resourceIndex, baseUrl });
     });
 }
-
-export function disposeBrowserSeedWorker() {
-    worker?.terminate();
-    worker = null;
-    for (const pending of pendingRequests.values()) {
-        pending.reject(new Error('浏览器种子计算线程已关闭'));
-    }
-    pendingRequests.clear();
-}
