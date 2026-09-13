@@ -4,6 +4,7 @@ import {GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
 import {Recipe} from './recipe.jsx';
 import {projectNeedsOnlyEdges} from './dependency-graph-edges.js';
+import {persistGet, persistSet, persistRemove} from './sandbox.js';
 import './DependencyGraph.css';
 
 const STORAGE_KEY_DELETED = 'dependency_graph_deleted_items';
@@ -764,14 +765,14 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
 
     const [deleted_items, setDeletedItems] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY_DELETED);
+            const saved = persistGet(STORAGE_KEY_DELETED);
             if (saved) return new Set(JSON.parse(saved));
         } catch { /* 解析失败则空删除表 */ }
         return new Set();
     });
 
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify([...deleted_items]));
+        persistSet(STORAGE_KEY_DELETED, JSON.stringify([...deleted_items]));
     }, [deleted_items]);
 
     const [show_deleted_list, setShowDeletedList] = useState(false);
@@ -780,7 +781,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
 
     // 清除旧的持久化数据
     useEffect(() => {
-        localStorage.removeItem('dependency_graph_show_needs_only');
+        persistRemove('dependency_graph_show_needs_only');
     }, []);
 
     const [show_needs_only, setShowNeedsOnly] = useState(() => {
@@ -790,7 +791,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
 
     const [custom_positions, setCustomPositions] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY_POSITIONS);
+            const saved = persistGet(STORAGE_KEY_POSITIONS);
             if (saved) {
                 const obj = JSON.parse(saved);
                 const map = new Map();
@@ -803,7 +804,7 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
 
     const [custom_positions_needs, setCustomPositionsNeeds] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY_POSITIONS_NEEDS);
+            const saved = persistGet(STORAGE_KEY_POSITIONS_NEEDS);
             if (saved) {
                 const obj = JSON.parse(saved);
                 const map = new Map();
@@ -821,14 +822,14 @@ function DependencyGraphInner({onBack, needs_list, isActive, global_state}) {
         if (show_needs_only) return;
         const obj = {};
         custom_positions.forEach((v, k) => obj[k] = v);
-        localStorage.setItem(STORAGE_KEY_POSITIONS, JSON.stringify(obj));
+        persistSet(STORAGE_KEY_POSITIONS, JSON.stringify(obj));
     }, [custom_positions, show_needs_only]);
 
     useEffect(() => {
         if (!show_needs_only) return;
         const obj = {};
         custom_positions_needs.forEach((v, k) => obj[k] = v);
-        localStorage.setItem(STORAGE_KEY_POSITIONS_NEEDS, JSON.stringify(obj));
+        persistSet(STORAGE_KEY_POSITIONS_NEEDS, JSON.stringify(obj));
     }, [custom_positions_needs, show_needs_only]);
 
     const handle_toggle_needs_only = useCallback(() => {

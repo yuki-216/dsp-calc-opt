@@ -16,6 +16,7 @@ import {formatAmount} from './seed_viewer_binding';
 import {getStats} from './seed_stats_api';
 import {buildOreQuantities, getStatsOreIndex, STATS_ORE_ITEMS} from './ore_stats_binding';
 import OreQuantityModeToggle from './OreQuantityModeToggle.jsx';
+import {isSandbox} from './sandbox.js';
 
 function UserSettings({show}) {
     let class_show = show ? "" : "d-none";
@@ -238,10 +239,12 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const prev_game_name = useRef(game_info?.game_data?.game_name ?? '');
     // 注:游戏数据初始化由 ContextProvider 惰性完成(set_game_data 负责数据源切换),此处不再重复初始化
 
-    // 处理新标签页数据：清空原矿化列表（新页面不继承原页面的原矿表）
+    // 处理新标签页数据：「在新窗口计算」用点击前的原矿化列表快照覆盖（快照在
+    // result.jsx 的 openInNewTab 里、mineralize(item) 之前取的）；
+    // 导航栏「新窗口」的空白页载荷不含该字段，于是保持继承自 auto_settings 的列表
     useEffect(() => {
-        if (newTabData) {
-            set_settings({ mineralize_list: {} });
+        if (newTabData && newTabData.mineralize_list) {
+            set_settings({ mineralize_list: newTabData.mineralize_list });
         }
     }, [newTabData, set_settings]);
 
@@ -255,7 +258,12 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     }, [game_info, set_needs_list]);
 
     async function clearData() {
-        if (!confirm(`即将清空所有保存的生产策略、需求列表等数据，初始化整个计算器，是否继续`)) {
+        // 子窗口(沙盒)与父窗口共享 localStorage,清空会连带抹掉父窗口保存的数据
+        const sandbox = isSandbox();
+        const tip = sandbox
+            ? `子窗口：仅清理图标缓存并刷新（不影响其他窗口保存的数据），是否继续`
+            : `即将清空所有保存的生产策略、需求列表等数据，初始化整个计算器，是否继续`;
+        if (!confirm(tip)) {
             return;// 用户取消保存
         }
         // 清空 Service Worker 的 Cache Storage(而不仅是 localStorage):
@@ -274,7 +282,8 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                 if (reg) await reg.update();
             } catch { /* 忽略 */ }
         }
-        localStorage.clear();
+        // 子窗口只清本标签页的存储,避免抹掉父窗口保存的数据
+        if (sandbox) sessionStorage.clear(); else localStorage.clear();
         window.location.reload();
     }
 

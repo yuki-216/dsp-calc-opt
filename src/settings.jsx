@@ -7,6 +7,7 @@ import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
 import {getFuelData} from './game_data.jsx';
 import {collectProliferatorChanges, collectProliferatorModeChanges} from './engine/proliferator-changes.js';
+import {persistGet, persistSet} from './sandbox.js';
 
 // 整数优化方向选项（仅决定中间等级设备的方向；最低级固定紧凑、最高级固定省料）
 // 颜色/顺序对齐增产/加速: 省料↔增产(蓝,前), 紧凑↔加速(橙,后)
@@ -30,7 +31,7 @@ export function Settings() {
     const DEFAULT_SETTINGS = useContext(DefaultSettingsContext);
     // 优化策略(与 OptimizerControls 一致,从 localStorage 读)用于珍稀实用性修正的显示条件
     const optimStrategy = (() => {
-        const saved = localStorage.getItem('dsp-optim-strategy');
+        const saved = persistGet('dsp-optim-strategy');
         return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_rare_weight');
     })();
 
@@ -265,20 +266,20 @@ export function OptimizerControls({needs_list, set_show_ore_quantities, statsApp
     const [optimLogs, setOptimLogs] = useState([]);
     const [showLogs, setShowLogs] = useState(false);
     const [optimStrategy, setOptimStrategy] = useState(() => {
-        const saved = localStorage.getItem('dsp-optim-strategy');
+        const saved = persistGet('dsp-optim-strategy');
         // min_raw_ore（最大瓶颈法）已移除，映射到上位替代珍稀权重；默认珍稀权重
         return saved === 'min_raw_ore' ? 'min_rare_weight' : (saved || 'min_rare_weight');
     });
     const [noProliferatorPercent, setNoProliferatorPercent] = useState(() => {
-        return localStorage.getItem('dsp-no-proliferator-weight-percent') || '0.1';
+        return persistGet('dsp-no-proliferator-weight-percent') || '0.1';
     });
 
     // 持久化优化策略选择
     useEffect(() => {
-        localStorage.setItem('dsp-optim-strategy', optimStrategy);
+        persistSet('dsp-optim-strategy', optimStrategy);
     }, [optimStrategy]);
     useEffect(() => {
-        localStorage.setItem('dsp-no-proliferator-weight-percent', noProliferatorPercent);
+        persistSet('dsp-no-proliferator-weight-percent', noProliferatorPercent);
     }, [noProliferatorPercent]);
     const [showStatsApplied, setShowStatsApplied] = useState(false);
     // 结果表含轨道采集器时的"去获取精确值"提示(10秒消失)

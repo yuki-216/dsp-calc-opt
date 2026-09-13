@@ -5,6 +5,7 @@ import {Header, IconStyles, ThemeProvider} from './ui_components.jsx';
 import {ContextProvider} from './contexts.jsx';
 import {DependencyGraphPage} from './DependencyGraphPage.jsx';
 import SeedViewerPage from './SeedViewerPage.jsx';
+import {persistGet, persistSet} from './sandbox.js';
 
 // Not using 'bootstrap/dist/js/bootstrap.min.js' here, because it breaks dropdown-list
 import 'bootstrap';
@@ -32,27 +33,29 @@ function RootApp() {
     const [newTabData, setNewTabData] = useState(null);
     const [needs_list, set_needs_list] = useState(() => {
         try {
-            // 检查是否有新标签页数据
+            // 检查是否有新标签页数据(中转 key:父子窗口共享,直连 localStorage,读后即删)
             const saved = localStorage.getItem('dsp-calc-new-tab-data');
             if (saved) {
                 const data = JSON.parse(saved);
                 localStorage.removeItem('dsp-calc-new-tab-data');
                 // 延迟设置newTabData，避免在useState initializer中调用setState
                 setTimeout(() => setNewTabData(data), 0);
+                // 导航栏「新窗口」开出的空白计算页:需求表为空,不继承
+                if (data.blank) return {};
                 // 返回包含新物品的需求表
                 return { [data.item]: data.count };
             }
         } catch { /* 解析失败则忽略新标签页数据 */ }
         try {
-            const saved = localStorage.getItem(STORAGE_KEY_NEEDS);
+            const saved = persistGet(STORAGE_KEY_NEEDS);
             if (saved) return JSON.parse(saved);
         } catch { /* 解析失败则回退到默认空需求 */ }
         return {};
     });
 
-    // 需求表变更时持久化
+    // 需求表变更时持久化(沙盒子窗口写自己的 sessionStorage,不覆盖父窗口)
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEY_NEEDS, JSON.stringify(needs_list)); } catch { /* 写入失败可忽略 */ }
+        persistSet(STORAGE_KEY_NEEDS, JSON.stringify(needs_list));
     }, [needs_list]);
 
     // 使用 CSS display 切换而非条件渲染，避免切换页面时卸载/重挂组件导致 useMemo 重复计算

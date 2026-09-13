@@ -1,9 +1,10 @@
 import {createContext, useContext, useState, useEffect} from 'react';
 import {Dropdown, Nav, Navbar, OverlayTrigger, Tooltip} from 'react-bootstrap';
-import {FaMoon, FaProjectDiagram, FaQq, FaReact, FaSearch, FaSun} from 'react-icons/fa';
+import {FaExternalLinkAlt, FaMoon, FaProjectDiagram, FaQq, FaReact, FaSearch, FaSun} from 'react-icons/fa';
 import {useRegisterSW} from 'virtual:pwa-register/react';
 import {GAME_DATA_SOURCES, get_game_data} from './game_data';
 import {GameInfoContext, GameInfoSetterContext} from './contexts.jsx';
+import {persistGet, persistSet, sandboxUrl} from './sandbox.js';
 
 // ========== ThemeContext ==========
 
@@ -11,13 +12,13 @@ const ThemeContext = createContext(undefined);
 
 export function ThemeProvider({children}) {
     const [theme, setTheme] = useState(() => {
-        const saved = localStorage.getItem('theme');
+        const saved = persistGet('theme');
         return saved || 'dark';
     });
 
     useEffect(() => {
         document.documentElement.setAttribute('data-bs-theme', theme);
-        localStorage.setItem('theme', theme);
+        persistSet('theme', theme);
     }, [theme]);
 
     const toggleTheme = () => {
@@ -167,6 +168,15 @@ export function Header({onNavigate, currentPage}) {
         }
     }
 
+    /** 新窗口(空白计算页):不附带需求,且作为沙盒不写回父窗口的 localStorage */
+    function handle_new_window(e) {
+        e.preventDefault();
+        // 中转 key 由父子窗口共享,直连 localStorage;blank 标记让新页面以空需求启动
+        localStorage.setItem('dsp-calc-new-tab-data', JSON.stringify({blank: true}));
+        const w = window.open(sandboxUrl(window.location.href), '_blank');
+        if (!w) localStorage.removeItem('dsp-calc-new-tab-data');   // 弹窗被拦截时兜底
+    }
+
     return (
         <Navbar className="px-3 text-nowrap" bg="body-tertiary">
             <Navbar.Brand href="#" className="d-inline-flex align-items-baseline"
@@ -195,6 +205,15 @@ export function Header({onNavigate, currentPage}) {
                     >
                         <FaSearch/>
                         <span>种子查看</span>
+                    </Nav.Link>
+                    <Nav.Link
+                        href="#"
+                        className="d-inline-flex align-items-center gap-1"
+                        onClick={handle_new_window}
+                        title="在新窗口打开空白计算页（不继承当前需求表）"
+                    >
+                        <FaExternalLinkAlt/>
+                        <span>新窗口</span>
                     </Nav.Link>
                     {/* <Nav.Link href="https://www.bilibili.com/read/readlist/rl630834" target="_blank">逻辑原理</Nav.Link> */}
                     {/* <Nav.Link href="https://space.bilibili.com/16051534">联系作者</Nav.Link> */}

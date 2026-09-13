@@ -9,6 +9,7 @@ import SeedStatsPanel from './SeedStatsPanel';
 import SeedStatsResult from './SeedStatsResult';
 import OreQuantityModeToggle from './OreQuantityModeToggle.jsx';
 import OrbitalCollectorPanel from './OrbitalCollectorPanel';
+import {persistGet, persistSet} from './sandbox.js';
 import './SeedViewer.css';
 
 // 验证函数
@@ -45,7 +46,7 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
     // 状态管理
     const [seedId, setSeedId] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
+            const saved = persistGet(STORAGE_KEY);
             return saved ? JSON.parse(saved).seedId || 10381977 : 10381977;
         } catch {
             return 10381977;
@@ -53,7 +54,7 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
     });
     const [starNum, setStarNum] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
+            const saved = persistGet(STORAGE_KEY);
             return saved ? JSON.parse(saved).starNum || 64 : 64;
         } catch {
             return 64;
@@ -61,7 +62,7 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
     });
     const [resourceIndex, setResourceIndex] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
+            const saved = persistGet(STORAGE_KEY);
             return saved ? JSON.parse(saved).resourceIndex || 4 : 4;
         } catch {
             return 4;
@@ -73,7 +74,7 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
     const [error, setError] = useState(null);
     const [result, setResult] = useState(() => {
         try {
-            const cached = localStorage.getItem(CACHE_KEY);
+            const cached = persistGet(CACHE_KEY);
             return cached ? JSON.parse(cached) : null;
         } catch {
             return null;
@@ -215,25 +216,17 @@ export default function SeedViewerPage({ onNavigate, isActive }) {
         };
     }, [isActive]);
 
-    // 保存设置到localStorage
+    // 保存设置到localStorage(沙盒子窗口写自己的 sessionStorage)
     useEffect(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                seedId, starNum, resourceIndex
-            }));
-        } catch {
-            // localStorage 不可用时不影响页面工作
-        }
+        persistSet(STORAGE_KEY, JSON.stringify({
+            seedId, starNum, resourceIndex
+        }));
     }, [seedId, starNum, resourceIndex]);
 
     // 保存查询结果到localStorage
     useEffect(() => {
-        try {
-            if (result) {
-                localStorage.setItem(CACHE_KEY, JSON.stringify(result));
-            }
-        } catch {
-            // 缓存不可用时不影响查询结果展示
+        if (result) {
+            persistSet(CACHE_KEY, JSON.stringify(result));
         }
     }, [result]);
 

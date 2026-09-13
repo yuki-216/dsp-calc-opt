@@ -5,6 +5,7 @@ import {get_game_data, GAME_DATA_SOURCES} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
 import {DEBUG} from './engine/debug.js'; // 初始化 __DEBUG 全局开关并导出 DEBUG 标志
+import {persistGet, persistSet} from './sandbox.js';
 
 /** set_game_name_and_data(game_name, game_data) */
 export const GameInfoSetterContext = createContext(null);
@@ -84,7 +85,7 @@ export function safe_parse_json(str) {
 /** 读取上次选择的数据源(localStorage game_source),非法/缺失时回退原版 */
 function getInitialSourceName() {
     try {
-        const saved = localStorage.getItem('game_source');
+        const saved = persistGet('game_source');
         if (saved && GAME_DATA_SOURCES[saved]) return saved;
     } catch { /* localStorage 不可用时默认原版 */ }
     return 'Vanilla';
@@ -95,7 +96,7 @@ export function ContextProvider({children}) {
     const [game_info, set_game_info] = useState(() => new GameInfo(initialGameData));
     const [scheme_data, set_scheme_data] = useState(() => {
         const game_name = initialGameData.game_name;
-        const all = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
+        const all = safe_parse_json(persistGet("auto_scheme")) || {};
         const saved = all[game_name];
         if (saved && saved.scheme_for_recipe &&
             saved.scheme_for_recipe.length === initialGameData.recipe_data.length) {
@@ -113,7 +114,7 @@ export function ContextProvider({children}) {
         return init_scheme_data(initialGameData);
     });
     const [settings, set_settings] = useSetState(() => {
-        const saved = safe_parse_json(localStorage.getItem("auto_settings"));
+        const saved = safe_parse_json(persistGet("auto_settings"));
         let merged = saved ? {...DEFAULT_SETTINGS, ...saved} : {...DEFAULT_SETTINGS};
         // 移除不在 DEFAULT_SETTINGS 中的旧字段（如 blue_buff）
         for (const key of Object.keys(merged)) {
@@ -154,17 +155,17 @@ export function ContextProvider({children}) {
         };
     }, []);
 
-    // Auto-save scheme_data
+    // Auto-save scheme_data(沙盒子窗口写 sessionStorage,不覆盖父窗口)
     const game_name = game_info.game_data.game_name;
     useEffect(() => {
-        let all = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
+        let all = safe_parse_json(persistGet("auto_scheme")) || {};
         all[game_name] = scheme_data;
-        localStorage.setItem("auto_scheme", JSON.stringify(all));
+        persistSet("auto_scheme", JSON.stringify(all));
     }, [scheme_data, game_name]);
 
     // Auto-save settings
     useEffect(() => {
-        localStorage.setItem("auto_settings", JSON.stringify(settings));
+        persistSet("auto_settings", JSON.stringify(settings));
     }, [settings]);
 
     const global_state = useMemo(() => {
@@ -251,15 +252,13 @@ export function ContextProvider({children}) {
     /** 切换数据源(或初始化):重建 GameInfo + 恢复/初始化该源方案 + 持久化选择 + 清空源相关设置 */
     const set_game_data = useCallback((game_data) => {
         set_game_info(new GameInfo(game_data));
-        const all = safe_parse_json(localStorage.getItem("auto_scheme")) || {};
+        const all = safe_parse_json(persistGet("auto_scheme")) || {};
         const saved = all[game_data.game_name];
         set_scheme_data(saved && saved.scheme_for_recipe &&
             saved.scheme_for_recipe.length === game_data.recipe_data.length
             ? saved
             : init_scheme_data(game_data));
-        try {
-            localStorage.setItem('game_source', game_data.game_name);
-        } catch { /* 持久化失败可忽略 */ }
+        persistSet('game_source', game_data.game_name);
         // 数据源相关设置(矿物可用量/原矿化列表)基于原版矿名,切换后清空避免错配;
         // 增产剂等级过滤为当前数据源存在的等级(如创世之书仅"增产剂",移除 Mk.I/Mk.II)
         const validLevels = game_data.proliferator_data

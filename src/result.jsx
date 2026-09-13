@@ -14,6 +14,7 @@ import {getRareOreCorrection, correctedRareWeightUnit} from './engine/rare-ore-p
 import {buildResultRowOrder, collectDemandedItems} from './result-rows.js';
 import {optimizeFactoryMix, isOptimizableFactoryGroup} from './factory-integer-optimizer.js';
 import {adjustNeedsList} from './numeric.js';
+import {sandboxUrl} from './sandbox.js';
 
 // 稳定空引用，避免 `|| {}` 每次渲染新建对象导致依赖数组不稳定
 const EMPTY_OBJ = {};
@@ -416,12 +417,18 @@ export function Result({needs_list, set_needs_list, show_ore_popup, set_show_ore
      * @param {number} count - 数量（从输出表继承）
      */
     function openInNewTab(item, count) {
+        // 快照必须在 mineralize(item) 之前：set_settings 只是入队，
+        // 本次渲染闭包里的 settings.mineralize_list 仍是点击前的列表
+        const mineralize_snapshot = {...(settings.mineralize_list || {})};
         // 原页面：标记为原矿
         mineralize(item);
-        // 传递数据到新标签页（不标记为原矿）
-        const data = { item, count, asOre: false };
+        // 传递数据到新标签页：需求 + 点击前的原矿化列表（供新页面继承）
+        // 中转 key 由父子窗口共享，直连 localStorage，不走沙盒隔离层
+        const data = { item, count, mineralize_list: mineralize_snapshot };
         localStorage.setItem('dsp-calc-new-tab-data', JSON.stringify(data));
-        window.open(window.location.href, '_blank');
+        const w = window.open(sandboxUrl(window.location.href), '_blank');
+        // 弹窗被拦截时清掉载荷，避免父窗口下次刷新误吃这份数据
+        if (!w) localStorage.removeItem('dsp-calc-new-tab-data');
     }
 
     // TODO refactor to a simple list
