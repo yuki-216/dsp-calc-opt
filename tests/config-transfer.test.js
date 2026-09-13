@@ -142,11 +142,12 @@ test('文件里没有可导入的核心项时整体失败', () => {
     assert.ok(r.error.includes('没有可导入'));
 });
 
-test('文件名：留空回退时间戳名，自动补 .json 后缀', () => {
-    assert.match(default_file_name(), /^dsp-calc-config-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/);
-    // 留空（含纯空白）→ 时间戳名 + .json
-    assert.match(sanitize_file_name(''), /^dsp-calc-config-[\d-]+\.json$/);
-    assert.match(sanitize_file_name('   '), /^dsp-calc-config-[\d-]+\.json$/);
+test('文件名：留空回退默认名，自动补 .json 后缀', () => {
+    assert.equal(default_file_name(), 'dsp_config-');
+    // 留空（含纯空白）→ 默认名 + .json
+    assert.equal(sanitize_file_name(''), 'dsp_config-.json');
+    assert.equal(sanitize_file_name('   '), 'dsp_config-.json');
+    assert.equal(sanitize_file_name('dsp_config-创世之书'), 'dsp_config-创世之书.json');
     assert.equal(sanitize_file_name('我的配置'), '我的配置.json');
     assert.equal(sanitize_file_name('backup'), 'backup.json');
 });

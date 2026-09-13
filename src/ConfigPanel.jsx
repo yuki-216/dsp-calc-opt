@@ -100,7 +100,7 @@ export function ConfigPanel() {
                style={{width: '18em'}}
                value={file_name}
                onChange={e => set_file_name(e.target.value)}
-               placeholder="留空则按时间戳命名"
+               placeholder="留空则用 dsp_config-.json"
                title="导出文件名（文件名非法字符会被替换成下划线，自动补 .json 后缀）"/>
         <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                 onClick={export_config}
