@@ -6,20 +6,28 @@ import {
     resetSeedQueryMode,
     setSeedQueryMode,
 } from '../src/seed_query_mode.js';
+import {install_fake_storage} from './helpers/fake-storage.mjs';
 
 test('browser is the default seed query mode', () => {
-    const storage = new Map();
+    install_fake_storage();
 
-    assert.equal(getSeedQueryMode(storage), 'browser');
+    assert.equal(getSeedQueryMode(), 'browser');
 });
 
 test('console mode changes persist and invalid modes are rejected', () => {
-    const storage = new Map();
+    const store = install_fake_storage();
 
-    assert.equal(setSeedQueryMode('backend', storage), 'backend');
-    assert.equal(getSeedQueryMode(storage), 'backend');
-    assert.throws(() => setSeedQueryMode('unknown', storage), /Invalid seed query mode/);
+    assert.equal(setSeedQueryMode('backend'), 'backend');
+    assert.equal(getSeedQueryMode(), 'backend');
+    assert.equal(store.get('seed-query-mode'), 'backend');
+    assert.throws(() => setSeedQueryMode('unknown'), /Invalid seed query mode/);
 
-    assert.equal(resetSeedQueryMode(storage), 'browser');
-    assert.equal(getSeedQueryMode(storage), 'browser');
+    assert.equal(resetSeedQueryMode(), 'browser');
+    assert.equal(getSeedQueryMode(), 'browser');
+});
+
+test('非法的已存值回退 browser', () => {
+    install_fake_storage({'seed-query-mode': 'nonsense'});
+
+    assert.equal(getSeedQueryMode(), 'browser');
 });

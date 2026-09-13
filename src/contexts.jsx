@@ -1,7 +1,6 @@
 import {createContext, useEffect, useState, useMemo, useCallback, useRef} from 'react';
 import {GameInfo, GlobalState} from './game_data';
-import {init_scheme_data} from './scheme_data';
-import {get_game_data, GAME_DATA_SOURCES} from "./game_data.jsx";
+import {get_game_data, GAME_DATA_SOURCES, init_scheme_data} from "./game_data.jsx";
 import {useSetState} from "ahooks";
 import {CoreEngine} from './engine/index.js';
 import './engine/debug.js'; // 仅副作用:初始化 __DEBUG 全局开关

@@ -1,54 +1,39 @@
+import {persistGet, persistSet, persistRemove} from './sandbox.js';
+
 const STORAGE_KEY = 'seed-query-mode';
 const VALID_MODES = new Set(['browser', 'backend', 'auto']);
 
-function getStorage(storage) {
-    if (storage) return storage;
-    if (typeof localStorage !== 'undefined') return localStorage;
-    return null;
-}
+/**
+ * 种子查询模式，存于 localStorage('seed-query-mode')。
+ * 存储走 sandbox.js 的收口层：沙盒子窗口里改模式只影响本标签页，
+ * 不会覆盖父窗口保存的模式（与其它配置一致）。
+ */
 
-function readValue(storage) {
-    if (!storage) return null;
-    if (typeof storage.getItem === 'function') return storage.getItem(STORAGE_KEY);
-    return storage.get(STORAGE_KEY) ?? null;
-}
-
-function writeValue(storage, value) {
-    if (!storage) return;
-    if (typeof storage.setItem === 'function') {
-        storage.setItem(STORAGE_KEY, value);
-    } else {
-        storage.set(STORAGE_KEY, value);
-    }
-}
-
-function removeValue(storage) {
-    if (!storage) return;
-    if (typeof storage.removeItem === 'function') {
-        storage.removeItem(STORAGE_KEY);
-    } else {
-        storage.delete(STORAGE_KEY);
-    }
-}
-
-export function getSeedQueryMode(storage) {
-    const value = readValue(getStorage(storage));
+/** @returns {'browser'|'backend'|'auto'} 非法值回退 browser */
+export function getSeedQueryMode() {
+    const value = persistGet(STORAGE_KEY);
     return VALID_MODES.has(value) ? value : 'browser';
 }
 
-export function setSeedQueryMode(mode, storage) {
+/**
+ * @param {'browser'|'backend'|'auto'} mode
+ * @returns {string} 生效的模式
+ */
+export function setSeedQueryMode(mode) {
     if (!VALID_MODES.has(mode)) {
         throw new Error(`Invalid seed query mode: ${mode}`);
     }
-    writeValue(getStorage(storage), mode);
+    persistSet(STORAGE_KEY, mode);
     return mode;
 }
 
-export function resetSeedQueryMode(storage) {
-    removeValue(getStorage(storage));
+/** 恢复默认(browser)，返回生效的模式 */
+export function resetSeedQueryMode() {
+    persistRemove(STORAGE_KEY);
     return 'browser';
 }
 
+// 控制台调试入口
 if (typeof window !== 'undefined') {
     window.setSeedQueryMode = (mode) => {
         const nextMode = setSeedQueryMode(mode);
@@ -61,4 +46,3 @@ if (typeof window !== 'undefined') {
         return nextMode;
     };
 }
-

@@ -1,13 +1,13 @@
 import { getSeedQueryMode } from './seed_query_mode.js';
 
-export function createSeedQueryService({storage, browserQuery, backendQuery}) {
+export function createSeedQueryService({browserQuery, backendQuery}) {
     if (typeof browserQuery !== 'function' || typeof backendQuery !== 'function') {
         throw new TypeError('Seed query service requires browserQuery and backendQuery functions');
     }
 
     return {
         async querySeed(seedId, starNum, resourceIndex) {
-            const mode = getSeedQueryMode(storage);
+            const mode = getSeedQueryMode();
             if (mode === 'backend') {
                 return backendQuery(seedId, starNum, resourceIndex);
             }

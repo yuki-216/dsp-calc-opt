@@ -154,6 +154,7 @@ const queryService = createSeedQueryService({
     backendQuery: getBackendSeedData,
 });
 
+
 /** 获取种子数据，默认使用浏览器 WASM。 */
 export async function getSeedData(seedId, starNum = 64, resourceIndex = 0) {
     return queryService.querySeed(seedId, starNum, resourceIndex);

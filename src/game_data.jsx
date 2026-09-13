@@ -414,6 +414,58 @@ export function buildItemRecipeIndex(recipe_data) {
     return itemData;
 }
 
+// ========== 方案默认值（同样由 recipe_data 派生） ==========
+
+/** 各数据源的 allowed_recipes（物品名→recipe_data 索引数组），按数据源名取用 */
+const allowed_modules = import.meta.glob('../data/allowed_recipes_*.json', {
+    import: 'default',
+    eager: true,
+});
+const allowed_by_source = Object.fromEntries(
+    Object.entries(allowed_modules)
+        .map(([module, data]) => [module.replace(/^.*allowed_recipes_([^.]+)\.json$/, '$1'), data])
+);
+
+/** 获取指定数据源(game_name)的 allowed_recipes 映射 */
+export function getAllowedRecipes(game_name) {
+    return allowed_by_source[game_name] || {};
+}
+
+const DEFAULT_SCHEME_DATA = {
+    "item_recipe_choices": {"氢": 1},
+    "scheme_for_recipe": [{"建筑": 0, "增产剂等级": 0, "增产模式": 0}],
+    "selected_fuel": "无",
+};
+
+/**
+ * 初始化指定数据源的默认方案（配方选择 + 逐配方的建筑/增产设置）
+ * 每个物品默认选 allowed_recipes 中排第一的配方——顺序即偏好顺序，
+ * 如硅石默认"直接获取"而非石矿配方（见 scripts/generate_allowed_recipes.cjs）。
+ * @param {Object} game_data - get_game_data 的产物
+ * @returns {Object} scheme_data
+ */
+export function init_scheme_data(game_data) {
+    let scheme_data = structuredClone(DEFAULT_SCHEME_DATA);
+    let item_data = build_item_data(game_data.recipe_data);
+    const allowed_recipes = getAllowedRecipes(game_data.game_name);
+    scheme_data.item_recipe_choices = {};
+    scheme_data.scheme_for_recipe = [];
+    scheme_data.selected_fuel = "无";
+    for (let item in item_data) {
+        const allowed = allowed_recipes[item];
+        let default_pos = 1;
+        if (allowed && allowed.length > 0) {
+            const pos = item_data[item].indexOf(allowed[0]);
+            if (pos >= 1) default_pos = pos; // 位置 0 是物品 ID 占位，配方从 1 开始
+        }
+        scheme_data.item_recipe_choices[item] = default_pos;
+    }
+    for (var i = 0; i < game_data.recipe_data.length; i++) {
+        scheme_data.scheme_for_recipe.push({"建筑": 0, "增产剂等级": 0, "增产模式": 0});
+    }
+    return scheme_data;
+}
+
 export class GameInfo {
     game_data;        // 原始游戏数据
     item_data;        // 物品名->[物品ID, 配方索引1, ...]
