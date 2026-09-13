@@ -1,1554 +1,1410 @@
 {
-  "X-ray": {
+  "accelerator-1": {
     "x": 0,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "accelerator-1": {
+  "accelerator-2": {
     "x": 80,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "accelerator-2": {
+  "accelerator-3": {
     "x": 160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "accelerator-3": {
+  "accumulator-full": {
     "x": 240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "accumulator-full": {
+  "accumulator": {
     "x": 320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "accumulator": {
+  "anti-matter": {
     "x": 400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "anti-matter": {
+  "antimatter-energy-fuel": {
     "x": 480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "antimatter-energy-fuel": {
+  "assembler-1": {
     "x": 560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "assembler-1": {
+  "assembler-2": {
     "x": 640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "assembler-2": {
+  "assembler-3": {
     "x": 720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "assembler-3": {
+  "assembler-4": {
     "x": 800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "assembler-4": {
+  "bamboo-crystal": {
     "x": 880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "bamboo-crystal": {
+  "battle-base": {
     "x": 960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "battle-base": {
+  "belt-1": {
     "x": 1040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "belt-1": {
+  "belt-2": {
     "x": 1120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "belt-2": {
+  "belt-3": {
     "x": 1200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "belt-3": {
+  "bullet-alloy": {
     "x": 1280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "bullet-alloy": {
+  "bullet-titanium": {
     "x": 1360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "bullet-titanium": {
+  "bullet": {
     "x": 1440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "bullet": {
+  "c-matrix": {
     "x": 1520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "c-matrix": {
+  "cannonball-alloy": {
     "x": 1600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "cannonball-alloy": {
+  "cannonball-cluster": {
     "x": 1680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "cannonball-cluster": {
+  "cannonball": {
     "x": 1760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "cannonball": {
+  "capsule-antimatter": {
     "x": 1840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "capsule-antimatter": {
+  "capsule-energy": {
     "x": 1920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "capsule-deuteron": {
+  "casimir-crystal": {
     "x": 2000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "capsule-energy": {
+  "charging-pole": {
     "x": 2080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "casimir-crystal-lv2": {
+  "chemical-plant-2": {
     "x": 2160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "casimir-crystal": {
+  "chemical-plant": {
     "x": 2240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "charging-pole": {
+  "circuit-board": {
     "x": 2320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "chemical-plant-2": {
+  "coal-ore": {
     "x": 2400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "chemical-plant": {
+  "copper-ore": {
     "x": 2480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "circuit-board": {
+  "copper-plate": {
     "x": 2560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "coal-ore": {
+  "crystal-rubber": {
     "x": 2640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "copper-ore": {
+  "delivery-drone": {
     "x": 2720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "copper-plate": {
+  "delivery-machine": {
     "x": 2800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "crystal-rubber-lv0": {
+  "deuterium-energy-fuel": {
     "x": 2880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "crystal-rubber": {
+  "deuterium": {
     "x": 2960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "delivery-drone": {
+  "diamond-ore": {
     "x": 3040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "delivery-machine": {
+  "diamond": {
     "x": 3120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "deuterium-energy-fuel": {
+  "dyson-sphere-component": {
     "x": 3200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "deuterium-formula": {
+  "e-matrix": {
     "x": 3280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "deuterium": {
+  "electric-motor": {
     "x": 3360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "diamond-lv2": {
+  "em-disturb": {
     "x": 3440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "diamond-ore": {
+  "em-rail-ejector": {
     "x": 3520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "diamond": {
+  "em-suppress": {
     "x": 3600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "dyson-sphere-component": {
+  "energy-exchanger": {
     "x": 3680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "e-matrix": {
+  "energy-fragment": {
     "x": 3760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "electric-motor": {
+  "engine": {
     "x": 3840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "em-disturb": {
+  "explosive": {
     "x": 3920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "em-rail-ejector": {
+  "fighter-laser": {
     "x": 4000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "em-suppress": {
+  "fighter-plasma": {
     "x": 4080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "energy-exchanger": {
+  "fighter-shield": {
     "x": 4160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "energy-fragment": {
+  "fractal-silica": {
     "x": 4240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "engine": {
+  "fractionator": {
     "x": 4320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "explosive": {
+  "frame-material": {
     "x": 4400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fighter-laser": {
+  "fuel-plant": {
     "x": 4480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fighter-plasma": {
+  "fuel-thruster": {
     "x": 4560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fighter-shield": {
+  "fusion-capacitor": {
     "x": 4640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fractal-silica": {
+  "fusion-power-station": {
     "x": 4720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fractionator": {
+  "fusion-reactor": {
     "x": 4800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "frame-material": {
+  "g-matrix": {
     "x": 4880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fuel-plant": {
+  "gas-hydrate": {
     "x": 4960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fuel-thruster": {
+  "gear-wheel": {
     "x": 5040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fusion-capacitor": {
+  "geothermal-power-station": {
     "x": 5120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fusion-power-station": {
+  "glass": {
     "x": 5200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "fusion-reactor": {
+  "graphene": {
     "x": 5280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "g-matrix": {
+  "graphite": {
     "x": 5360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "gas-hydrate": {
+  "grating-ore": {
     "x": 5440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "gear-wheel": {
+  "gravity-lens": {
     "x": 5520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "geothermal-power-station": {
+  "hadron-collider": {
     "x": 5600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "glass": {
+  "high-explosive": {
     "x": 5680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "graphene-lv2": {
+  "hydrogen-energy-fuel": {
     "x": 5760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "graphene": {
+  "hydrogen": {
     "x": 5840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "graphite": {
+  "hyper-magnetism-ring": {
     "x": 5920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "grating-ore": {
+  "i-matrix": {
     "x": 6000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "gravity-lens": {
+  "inserter-1": {
     "x": 6080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "hadron-collider": {
+  "inserter-2": {
     "x": 6160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "high-explosive": {
+  "inserter-3": {
     "x": 6240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "hydrogen-energy-fuel": {
+  "inserter-4": {
     "x": 6320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "hydrogen": {
+  "interstellar-logistic-station": {
     "x": 6400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "hyper-magnetism-ring": {
+  "ion-thruster": {
     "x": 6480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "i-matrix": {
+  "iron-ore": {
     "x": 6560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "inserter-1": {
+  "iron-plate": {
     "x": 6640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "inserter-2": {
+  "lab-2": {
     "x": 6720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "inserter-3": {
+  "lab": {
     "x": 6800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "inserter-4": {
+  "lighthouse": {
     "x": 6880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "interstellar-logistic-station": {
+  "logistic-drone": {
     "x": 6960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "ion-thruster": {
+  "logistic-station": {
     "x": 7040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "iron-ore": {
+  "logistic-vessel": {
     "x": 7120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "iron-plate": {
+  "mag-turbine": {
     "x": 7200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "lab-2": {
+  "magnet": {
     "x": 7280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "lab": {
+  "magnetism-wire": {
     "x": 7360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "lighthouse": {
+  "memory": {
     "x": 7440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "logistic-drone": {
+  "micro-component": {
     "x": 7520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "logistic-station": {
+  "mining-drill-mk2": {
     "x": 7600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "logistic-vessel": {
+  "mining-drill": {
     "x": 7680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "mag-turbine": {
+  "missile-graviton": {
     "x": 7760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "magnet": {
+  "missile-supersonic": {
     "x": 7840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "magnetism-wire": {
+  "missile": {
     "x": 7920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "memory": {
+  "monitor": {
     "x": 8000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "micro-component": {
+  "mono-mag-ore": {
     "x": 8080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "mining-drill-mk2": {
+  "nanotube": {
     "x": 8160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "mining-drill": {
+  "negentropy": {
     "x": 8240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "missile-graviton": {
+  "oil-extractor": {
     "x": 8320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "missile-supersonic": {
+  "oil-refinery": {
     "x": 8400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "missile": {
+  "oil": {
     "x": 8480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "monitor": {
+  "orbital-collector": {
     "x": 8560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "mono-mag-ore": {
+  "orbital-substation": {
     "x": 8640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "nanotube-lv2": {
+  "partical-capacitor": {
     "x": 8720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "nanotube": {
+  "particle-explosive": {
     "x": 8800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "negentropy": {
+  "particle-wide-band": {
     "x": 8880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "oil-extractor": {
+  "photo-shifter": {
     "x": 8960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "oil-refinery": {
+  "photon-capacitor-full": {
     "x": 9040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "oil": {
+  "piler": {
     "x": 9120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "orbital-collector": {
+  "plane-filter": {
     "x": 9200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "orbital-substation": {
+  "plant-fuel": {
     "x": 9280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "partical-capacitor-lv2": {
+  "plasma-generator": {
     "x": 9360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "partical-capacitor": {
+  "plastic": {
     "x": 9440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "particle-explosive": {
+  "prism": {
     "x": 9520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "particle-wide-band": {
+  "processor": {
     "x": 9600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "photo-shifter-lv2": {
+  "quantum-processor": {
     "x": 9680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "photo-shifter": {
+  "ray-receiver": {
     "x": 9760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "photon-capacitor-full": {
+  "reassembler": {
     "x": 9840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "photon-formula": {
+  "refined-oil": {
     "x": 9920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "piler": {
+  "rocket": {
     "x": 10000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "plane-filter": {
+  "silicium-high-purity": {
     "x": 10080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "plant-fuel": {
+  "silicium-ore": {
     "x": 10160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "plasma-generator": {
+  "silicium-single-crystal": {
     "x": 10240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "plasma-refining": {
+  "silicon-neuron": {
     "x": 10320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "plastic": {
+  "smelter-2": {
     "x": 10400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "prism": {
+  "smelter-3": {
     "x": 10480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "processor": {
+  "smelter": {
     "x": 10560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "quantum-processor": {
+  "solar-collector": {
     "x": 10640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "ray-receiver": {
+  "solar-panel": {
     "x": 10720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "reassembler": {
+  "space-warper": {
     "x": 10800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "refined-oil": {
+  "splitter-4dir": {
     "x": 10880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "reforming-refine": {
+  "spray-coater": {
     "x": 10960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "rocket": {
+  "steel-plate": {
     "x": 11040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "silicium-high-purity-lv2": {
+  "stone-brick": {
     "x": 11120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "silicium-high-purity": {
+  "stone-ore": {
     "x": 11200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "silicium-ore": {
+  "storage-1": {
     "x": 11280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "silicium-single-crystal": {
+  "storage-2": {
     "x": 11360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "silicon-neuron": {
+  "storage-tank": {
     "x": 11440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "smelter-2": {
+  "strange-matter-generator": {
     "x": 11520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "smelter-3": {
+  "sulphuric-acid": {
     "x": 11600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "smelter": {
+  "t-matrix": {
     "x": 11680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "soil-pile": {
+  "terrain-tool": {
     "x": 11760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "solar-collector": {
+  "tesla-coil": {
     "x": 11840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "solar-panel": {
+  "titan-crystal": {
     "x": 11920,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "space-warper-lv2": {
+  "titan-glass": {
     "x": 12000,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "space-warper": {
+  "titanium-alloy": {
     "x": 12080,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "splitter-4dir": {
+  "titanium-ore": {
     "x": 12160,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "spray-coater": {
+  "titanium-plate": {
     "x": 12240,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "steel-plate": {
+  "turret-cannon": {
     "x": 12320,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "stone-brick": {
+  "turret-disturb": {
     "x": 12400,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "stone-ore": {
+  "turret-gauss": {
     "x": 12480,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "storage-1": {
+  "turret-laser": {
     "x": 12560,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "storage-2": {
+  "turret-missile": {
     "x": 12640,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "storage-tank": {
+  "turret-plasma-ground": {
     "x": 12720,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "strange-matter-generator": {
+  "turret-plasma": {
     "x": 12800,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "sulphuric-acid": {
+  "turret-shield": {
     "x": 12880,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "t-matrix": {
+  "turret-signal": {
     "x": 12960,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "terrain-tool": {
+  "u-matrix": {
     "x": 13040,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "tesla-coil": {
+  "vertical-launching-silo": {
     "x": 13120,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "titan-crystal": {
+  "virtual-energy-fuel": {
     "x": 13200,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "titan-glass": {
+  "virtual-particle": {
     "x": 13280,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "titanium-alloy": {
+  "warship-laser": {
     "x": 13360,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "titanium-ore": {
+  "warship-plasma": {
     "x": 13440,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "titanium-plate": {
+  "water-pump": {
     "x": 13520,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "turret-cannon": {
+  "water": {
     "x": 13600,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "turret-disturb": {
+  "wind-turbine": {
     "x": 13680,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "turret-gauss": {
+  "wood": {
     "x": 13760,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
-  "turret-laser": {
+  "伊卡洛斯": {
     "x": 13840,
     "y": 0,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "turret-missile": {
-    "x": 13920,
-    "y": 0,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "turret-plasma-ground": {
-    "x": 14000,
-    "y": 0,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "turret-plasma": {
-    "x": 14080,
-    "y": 0,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "turret-shield": {
-    "x": 14160,
-    "y": 0,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "turret-signal": {
-    "x": 14240,
-    "y": 0,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "u-matrix": {
-    "x": 0,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "vertical-launching-silo": {
-    "x": 80,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "virtual-energy-fuel": {
-    "x": 160,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "virtual-particle": {
-    "x": 240,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "warship-laser": {
-    "x": 320,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "warship-plasma": {
-    "x": 400,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "water-pump": {
-    "x": 480,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "water": {
-    "x": 560,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "wind-turbine": {
-    "x": 640,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "wood": {
-    "x": 720,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "伊卡洛斯": {
-    "x": 800,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "巨构星际组装厂": {
-    "x": 880,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
   "电力": {
-    "x": 960,
+    "x": 0,
     "y": 80,
     "width": 1024,
     "height": 1024,
-    "total_width": 14320,
-    "total_height": 1104
-  },
-  "矩阵上传": {
-    "x": 1984,
-    "y": 80,
-    "width": 80,
-    "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   },
   "行星基地": {
-    "x": 2064,
+    "x": 1024,
     "y": 80,
     "width": 80,
     "height": 80,
-    "total_width": 14320,
+    "total_width": 13920,
     "total_height": 1104
   }
 }

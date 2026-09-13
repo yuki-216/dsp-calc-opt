@@ -18,9 +18,6 @@ ReactDOM.createRoot(document.getElementById('icon-styles')).render(
     <IconStyles/>
 )
 
-// 隐藏原始 header div，使用 RootApp 内的 header
-document.getElementById('header').style.display = 'none';
-
 /**
  * 根应用组件，包含页面切换逻辑
  * ContextProvider 和 Header 在此组件内渲染，确保切换页面时 context 不丢失

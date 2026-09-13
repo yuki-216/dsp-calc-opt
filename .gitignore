@@ -63,3 +63,6 @@ __pycache__/
 backend/data/
 backend/.pytest_cache/
 scheme_export.json
+
+# 雪碧图未压缩图集(vite 插件 spritesmith 的构建中间产物,运行时用的是 public/icon/*)
+icon/*.png
