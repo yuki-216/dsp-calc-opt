@@ -1,7 +1,7 @@
 import {useContext, useState, useCallback, useRef, useEffect} from 'react';
 import {CompactModeContext, DefaultSettingsContext, FuelContext, FuelSetterContext, GlobalStateContext, SchemeDataSetterContext, SettingsContext, SettingsSetterContext} from './contexts.jsx';
 import {HorizontalMultiButtonSelect} from './recipe.jsx';
-import {pro_mode_class, mkShort} from './result.jsx';
+import {pro_mode_class, mkShort, isSemiOrNarrower, isMidOrNarrower} from './result.jsx';
 import {optimizeProliferatorStrategy} from './engine/proliferator-optimizer.js';
 import {FaMagic, FaChevronDown, FaChevronUp} from 'react-icons/fa';
 import {ItemIcon} from './ui_components.jsx';
@@ -20,10 +20,6 @@ const FACTORY_OPTIMIZE_MODES = [
 
 // 分馏塔带速选项(数值=带速/min):360/720/1800 及各自 2/3/4 倍堆叠叠加,去重后 10 档
 const BELT_SPEEDS = [360, 720, 1080, 1440, 1800, 2160, 2880, 3600, 5400, 7200];
-// 设备等级下拉:semi 及更窄触发(compact 仍保持按钮),与结果表一致
-const isSemiOrNarrower = (m) => m === 'semi' || m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
-// 增产等级下拉:mid 及更窄触发,与结果表一致
-const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
 
 export function Settings() {
     const settings = useContext(SettingsContext);

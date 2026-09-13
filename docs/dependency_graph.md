@@ -13,7 +13,7 @@
 - `src/DependencyGraphPage.jsx` - 依赖图页面主组件
 - `src/dependency-graph-edges.js` - 仅需求模式无环投影纯函数（`projectNeedsOnlyEdges`）
 - `src/DependencyGraph.css` - 依赖图样式
-- `src/engine/graph-utils.js` - 共享图算法（tarjanSCC 等），**仅被增产优化器消费**，依赖图页不使用
+- `src/engine/proliferator-optimizer.js` - 内含 tarjanSCC（原 `graph-utils.js`，**仅被增产优化器消费**，依赖图页不使用）
 
 ## 边方向
 
@@ -98,9 +98,10 @@
 3. **层间距计算**：根据每层引线密度动态调整（90px-115px）
 4. **位置分配**：首层排列 + 重心法优化（两遍遍历，参考父子节点 x 均值），首层节点拖拽后触发重叠推开
 
-### 共享图算法（graph-utils.js）
+### 共享图算法（tarjanSCC）
 
-`tarjanSCC`、`compressToDag`、`dagTopologicalSort` 当前**仅被增产优化器**（`src/engine/proliferator-optimizer.js`）消费：优化器基于引擎 edges 自算 SCC 分组，依赖图页已不再使用这些算法。
+`tarjanSCC` **仅被增产优化器**消费（已直接并入 `src/engine/proliferator-optimizer.js`）：优化器基于引擎 edges 自算 SCC 分组，依赖图页已不再使用该算法。
+（`compressToDag`、`dagTopologicalSort` 已作为死代码删除。）
 
 ### 引线路径生成
 

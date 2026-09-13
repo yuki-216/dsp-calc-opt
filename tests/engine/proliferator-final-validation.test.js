@@ -1,7 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {validateFinalProliferatorChoices} from '../../src/engine/proliferator-final-validation.js';
+import {
+    validateFinalProliferatorChoices,
+    relativeObjectiveImprovement,
+    shouldAcceptProliferator,
+} from '../../src/engine/proliferator-final-validation.js';
+
+// ---- 阈值判定（原 proliferator-threshold.test.js，模块已并入本文件） ----
+
+test('uses the no-proliferator objective as the relative improvement baseline', () => {
+    assert.ok(Math.abs(relativeObjectiveImprovement(100, 99.5) - 0.005) < 1e-12);
+    assert.ok(Math.abs(relativeObjectiveImprovement(100, 99.6) - 0.004) < 1e-12);
+});
+
+test('rejects proliferator when improvement is below the configured threshold', () => {
+    assert.equal(shouldAcceptProliferator({baseline: 100, candidate: 99.6, threshold: 0.005}), false);
+    assert.equal(shouldAcceptProliferator({baseline: 100, candidate: 99.5, threshold: 0.005}), true);
+});
+
+test('accepts a strictly better candidate when the no-proliferator baseline is zero', () => {
+    assert.equal(shouldAcceptProliferator({baseline: 0, candidate: -1, threshold: 0.005}), true);
+    assert.equal(shouldAcceptProliferator({baseline: 0, candidate: 0, threshold: 0.005}), false);
+});
 
 function makeScheme(aLevel = 1, bLevel = 1) {
     return {

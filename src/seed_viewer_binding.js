@@ -3,9 +3,7 @@
  * 默认使用浏览器 WASM，控制台可切换到本地后端
  */
 
-import { createSeedQueryService } from './seed_query_service.js';
-import { getSeedQueryMode } from './seed_query_mode.js';
-import { getBrowserSeedData } from './seed_query_browser.js';
+import { createSeedQueryService, getBrowserSeedData, getSeedQueryMode } from './seed_query.js';
 
 // API配置 - 开发模式使用代理，生产模式使用完整URL
 const API_CONFIG = {

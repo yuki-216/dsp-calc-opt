@@ -116,7 +116,7 @@ src/main.jsx
   `recipeExecutions`/`graph`/`totalFootprint` 等）。
 - `proliferator-optimizer.js`：按目标（最小电力/珍稀权重/净热值/占地）优化各物品增产/加速方案。
 - `rare-ore-practicality.js`：珍稀矿实用性修正。
-- `graph-utils.js`：图工具（SCC 等，供优化器分组）。
+- （Tarjan SCC 合并前在 `graph-utils.js`，只有优化器使用，已并入 `proliferator-optimizer.js`）
 - `debug.js`：`window.__DEBUG` 调试开关。
 
 计算流程：

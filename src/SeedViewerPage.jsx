@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { FaSearch, FaSpinner, FaExclamationTriangle, FaChartLine, FaArrowLeft } from 'react-icons/fa';
 import { doInit, getSeedData, isSeedDataValid, RESOURCE_RATES } from './seed_viewer_binding';
-import { getStats, getStatsConvergence } from './seed_stats_api';
+import { getStats, getStatsConvergence, buildOreQuantities } from './seed_stats_api';
 import { SettingsContext, SettingsSetterContext } from './contexts.jsx';
-import { buildOreQuantities } from './ore_stats_binding';
 import SeedViewerResult from './SeedViewerResult';
 import SeedStatsPanel from './SeedStatsPanel';
 import SeedStatsResult from './SeedStatsResult';
-import OreQuantityModeToggle from './OreQuantityModeToggle.jsx';
+import { OreQuantityModeToggle } from './ui_components.jsx';
 import OrbitalCollectorPanel from './OrbitalCollectorPanel';
 import {persistGet, persistSet} from './sandbox.js';
 import './SeedViewer.css';

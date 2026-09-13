@@ -10,13 +10,11 @@ import {Modal, Button} from 'react-bootstrap';
 import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {Settings, BatchPresetControls, OptimizerControls, FuelSelect} from './settings.jsx';
-import {ItemIcon} from './ui_components.jsx';
+import {ItemIcon, OreQuantityModeToggle} from './ui_components.jsx';
 import {FaTrashAlt, FaCog, FaMountain, FaFileExport} from 'react-icons/fa';
 import {ConfigPanel} from './ConfigPanel.jsx';
 import {formatAmount} from './seed_viewer_binding';
-import {getStats} from './seed_stats_api';
-import {buildOreQuantities, getStatsOreIndex, STATS_ORE_ITEMS} from './ore_stats_binding';
-import OreQuantityModeToggle from './OreQuantityModeToggle.jsx';
+import {getStats, buildOreQuantities, getStatsOreIndex, STATS_ORE_ITEMS} from './seed_stats_api';
 import {isSandbox} from './sandbox.js';
 
 function UserSettings({show}) {

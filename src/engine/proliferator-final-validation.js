@@ -1,15 +1,27 @@
-import {getThresholdMetric, relativeThresholdImprovement, shouldAcceptProliferator} from './proliferator-threshold.js';
+const EPSILON = 1e-12;
 
+/**
+ * 计算候选目标相对于无增产剂目标的相对改善比例。
+ * 目标函数均为越小越好，因此正数表示候选方案更优。
+ */
+export function relativeObjectiveImprovement(baseline, candidate) {
+    if (Math.abs(baseline) <= EPSILON) {
+        return candidate < baseline ? Number.POSITIVE_INFINITY : 0;
+    }
+    return (baseline - candidate) / Math.abs(baseline);
+}
+
+/** 判断增产剂候选是否达到"无增产剂加权"阈值 */
+export function shouldAcceptProliferator({baseline, candidate, threshold = 0.005}) {
+    return relativeObjectiveImprovement(baseline, candidate) >= Math.max(0, threshold);
+}
+
+/** 按优化策略取出用于比较的目标值 */
 function getObjectiveValue(result, strategy) {
     if (strategy === 'min_rare_weight') return result.rareWeightObjective ?? 0;
     if (strategy === 'min_net_heat') return result.netOreHeat ?? 0;
     if (strategy === 'min_footprint') return result.totalFootprint ?? 0;
     return result.totalEnergyCost ?? 0;
-}
-
-function getMetric(result, strategy) {
-    const objectiveValue = getObjectiveValue(result, strategy);
-    return getThresholdMetric({...result, objectiveValue});
 }
 
 function isProliferatorEnabled(recipeScheme) {
@@ -54,17 +66,17 @@ export async function validateFinalProliferatorChoices({
                     : currentScheme.scheme_for_recipe?.[recipeIndex];
                 if (!recipeScheme || !isProliferatorEnabled(recipeScheme)) continue;
 
-                const candidateMetric = getMetric(currentResult, strategy);
+                const candidateMetric = getObjectiveValue(currentResult, strategy);
                 const noProScheme = structuredClone(currentScheme);
                 clearProliferator(noProScheme.scheme_for_recipe[recipeIndex]);
                 const noProResult = await calculateResult(gameData, noProScheme, settings, needs);
-                const noProMetric = getMetric(noProResult, strategy);
+                const noProMetric = getObjectiveValue(noProResult, strategy);
                 const accepted = shouldAcceptProliferator({
                     baseline: noProMetric,
                     candidate: candidateMetric,
                     threshold,
                 });
-                const improvement = relativeThresholdImprovement(noProMetric, candidateMetric) * 100;
+                const improvement = relativeObjectiveImprovement(noProMetric, candidateMetric) * 100;
                 const improvementText = Number.isFinite(improvement) ? improvement.toFixed(2) : '∞';
 
                 if (!accepted) {

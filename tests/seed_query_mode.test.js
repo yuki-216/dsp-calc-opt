@@ -5,7 +5,7 @@ import {
     getSeedQueryMode,
     resetSeedQueryMode,
     setSeedQueryMode,
-} from '../src/seed_query_mode.js';
+} from '../src/seed_query.js';
 import {install_fake_storage} from './helpers/fake-storage.mjs';
 
 test('browser is the default seed query mode', () => {

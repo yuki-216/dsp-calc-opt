@@ -42,10 +42,10 @@ export function mkShort(name) {
     const n = ROMAN_TO_NUM[m[1].toUpperCase()];
     return n ? `Mk${n}` : name;
 }
-// 设备等级列下拉:semi 及更窄触发(compact 仍保持按钮)
-const isSemiOrNarrower = (m) => m === 'semi' || m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
+// 设备等级列下拉:semi 及更窄触发(compact 仍保持按钮)。设置面板也用它,故导出
+export const isSemiOrNarrower = (m) => m === 'semi' || m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
 // 增产等级列下拉:mid 及更窄触发(semi/compact 仍保持按钮)
-const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
+export const isMidOrNarrower = (m) => m === 'mid' || m === 'slender' || m === 'narrow' || m === 'mobile';
 
 // 面板显示阈值：LP 数值噪声（引擎相对容差已尽力）残留 < 0.01 的条目不显示，UI 兜底
 const PANEL_DISPLAY_EPS = 0.01;

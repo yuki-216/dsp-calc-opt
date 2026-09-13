@@ -10,7 +10,6 @@
 import { CoreEngine } from './index.js';
 import { GlobalState, FUEL_DATA_BASE, buildItemRecipeIndex } from '../game_data.jsx';
 import { validateFinalProliferatorChoices } from './proliferator-final-validation.js';
-import { tarjanSCC } from './graph-utils.js';
 import { formatAdaptivePrecision } from '../numeric.js';
 import {
     RARE_ORE_EQUIVALENCE,
@@ -854,3 +853,68 @@ export function formatPowerValue(value) {
   return value.toFixed(2) + ' kW';
 }
 
+// ========== Tarjan SCC 强连通分量（原 graph-utils.js，只有本文件使用，已并入） ==========
+
+/**
+ * Tarjan SCC 算法（通用实现）
+ * @param {Set<string>} items - 所有物品节点集合
+ * @param {Array<{from: string, to: string}>} edges - 边列表 (from=产物, to=原料)
+ * @returns {Array<Set<string>>} SCC 分组（逆拓扑序：sccGroups[0]=最终产物，sccGroups[last]=原矿）
+ * 单节点 SCC = 普通 DAG 节点，多节点 SCC = 循环依赖组
+ */
+export function tarjanSCC(items, edges) {
+  // 构建邻接表
+  const adj = new Map();
+  items.forEach(item => adj.set(item, []));
+  edges.forEach(({ from, to }) => {
+    if (from !== to && adj.has(from) && adj.has(to)) {
+      adj.get(from).push(to);
+    }
+  });
+
+  let index = 0;
+  const stack = [];
+  const onStack = new Set();
+  const indices = new Map();
+  const lowlinks = new Map();
+  const sccGroups = [];
+
+  function strongConnect(v) {
+    indices.set(v, index);
+    lowlinks.set(v, index);
+    index++;
+    stack.push(v);
+    onStack.add(v);
+
+    const neighbors = adj.get(v) || [];
+    for (const w of neighbors) {
+      if (!indices.has(w)) {
+        strongConnect(w);
+        lowlinks.set(v, Math.min(lowlinks.get(v), lowlinks.get(w)));
+      } else if (onStack.has(w)) {
+        lowlinks.set(v, Math.min(lowlinks.get(v), indices.get(w)));
+      }
+    }
+
+    if (lowlinks.get(v) === indices.get(v)) {
+      const scc = new Set();
+      let w;
+      do {
+        w = stack.pop();
+        onStack.delete(w);
+        scc.add(w);
+      } while (w !== v);
+      sccGroups.push(scc);
+    }
+  }
+
+  items.forEach(item => {
+    if (!indices.has(item)) {
+      strongConnect(item);
+    }
+  });
+
+  // 反转为逆拓扑序：sccGroups[0] = 最终产物（顶层），sccGroups[last] = 原矿（底层）
+  sccGroups.reverse();
+  return sccGroups;
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createSeedQueryService } from '../src/seed_query_service.js';
+import { createSeedQueryService } from '../src/seed_query.js';
 import {install_fake_storage} from './helpers/fake-storage.mjs';
 
 test('the query service uses browser mode by default', async () => {
