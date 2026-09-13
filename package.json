@@ -1,7 +1,7 @@
 {
   "name": "dsp_calculator",
   "private": true,
-  "version": "0.13.0",
+  "version": "0.14.0",
   "license": "GPL-3.0",
   "type": "module",
   "scripts": {
@@ -15,7 +15,9 @@
     "preview": "vite preview",
     "generate:recipes": "node scripts/generate_allowed_recipes.cjs Vanilla.json allowed_recipes_Vanilla.json",
     "generate:recipes:genesisbook": "node scripts/generate_allowed_recipes.cjs GenesisBook.json allowed_recipes_GenesisBook.json",
-    "download:genesisbook": "node scripts/download_genesisbook.cjs"
+    "generate:recipes:orbitalring": "node scripts/generate_allowed_recipes.cjs OrbitalRing.json allowed_recipes_OrbitalRing.json",
+    "download:genesisbook": "node scripts/download_genesisbook.cjs",
+    "download:orbitalring": "node scripts/download_orbitalring.cjs"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",

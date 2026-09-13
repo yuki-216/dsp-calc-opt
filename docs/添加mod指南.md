@@ -93,6 +93,8 @@ node scripts/generate_allowed_recipes.cjs <Mod>.json allowed_recipes_<Mod>.json
 | **闭环 infeasible** | 默认配方选到闭环合成链 → LP 无可行解 | allowed_recipes 生成"无中生有优先" |
 | **增产剂缺失** | mod 无 Mk.I/Mk.II 等 → 图标缺失/按钮残留 | `proliferator_data[i].增产剂 = null`，UI 自动隐藏 |
 | **燃料** | mod 新燃料无热值数据，不参与发电计算 | 保持现状（仅作普通物品参与生产链） |
+| **mod 移除原版物品** | 改造型 mod（如星环移除了 50 个原版物品，含能量矩阵/宇宙矩阵）会让**按名字硬编码的列表**指向不存在的物品——典型是 `FUEL_DATA_BASE`（原版燃料表）：燃料选择里出现"?"占位图标，选中后还会生成引用不存在物品的燃料配方 | `getFuelData(data)` 已按当前数据源物品表过滤；新增其它硬编码列表时务必同样先查 `data.item_icon_name[name] !== undefined` |
+| **mod 专属设施** | 新设施走通用路径（从物品的 `Speed`/`Space`/`WorkEnergyPerTick` 读取），无需改引擎；但发电设备是**按名字硬编码**的（`powerBuildingNames`/`DEVICE_POWER_CONSUMPTION`），mod 自己的发电建筑（如星环的「地上太阳」「裂变重水堆」）不会被自动识别 | 需要精确发电计算时，在 `get_game_data` 里按 `src.name` 补该 mod 的发电建筑与功率 |
 | **雪碧图** | dev 启动后 glob 不重扫新增图标 JSON | 删除旧 json 或 `npm run build` 生成后提交产物 |
 | **allowed_recipes 手工调整** | 原版版本含手工调整 | 只生成 mod 版本，勿覆盖原版 |
 | **数据源切换清空** | `set_game_data` 清空矿物可用量/原矿化、过滤增殖等级 | 这是预期行为，跨源偏好不保留 |

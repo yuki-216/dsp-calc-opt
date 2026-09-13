@@ -1,6 +1,6 @@
 # 代码分析
 
-本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.12.0`。
+本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.14.0`。
 
 ## 1. 项目定位
 
@@ -47,6 +47,8 @@ src/main.jsx
 
 - `data/Vanilla.json`：原版（物品 + 配方，结构见 `src/game_data.jsx` 头部注释）
 - `data/GenesisBook.json`：创世之书 mod（由 `npm run download:genesisbook` 从 dsp-calc 拉取）
+- `data/OrbitalRing.json`：星环 mod（由 `npm run download:orbitalring` 从 dsp-calc 的 **multi-mods** 分支拉取；
+  数据在 `src/engine/data/raw/`、图标在 `src/ui/components/icons/assets/OrbitalRing/`，与创世之书的路径不同）
 
 `src/game_data.jsx` 用 `import.meta.glob('../data/*.json')` 预加载所有数据文件，`data_indices` 的
 键为文件名 basename。图标同理：`src/ui_components.jsx` 用 `import.meta.glob('../icon/*.json')` 加载
@@ -209,6 +211,6 @@ npm run test         # node --test "tests/**/*.test.js"
 
 ## 9. 版本与变更
 
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.13.0。
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.14.0。
 每次发布应同步更新 README 标题和 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到
 GitHub Pages。

@@ -52,9 +52,19 @@ export const FUEL_DATA_BASE = [
 ];
 
 /**
- * 获取完整的燃料数据（直接返回常量）
+ * 获取燃料数据，按当前数据源过滤。
+ *
+ * FUEL_DATA_BASE 是原版燃料表，而 mod 可能移除原版物品（如星环没有"高能石墨"和
+ * "液氢燃料棒"）：不过滤的话，燃料选择里会显示成"?"占位图标，选中后还会凭空生成
+ * 一条引用不存在物品的燃料配方。数据源未提供时返回完整列表（兼容无参调用）。
+ *
+ * @param {Object} [data] - get_game_data 的产物
+ * @returns {Array}
  */
-export const getFuelData = () => FUEL_DATA_BASE;
+export const getFuelData = (data) => {
+    if (!data || !data.item_icon_name) return FUEL_DATA_BASE;
+    return FUEL_DATA_BASE.filter(f => f.name === "无" || data.item_icon_name[f.name] !== undefined);
+};
 
 /**
  * 设备消耗速度（MW）
@@ -112,6 +122,7 @@ const data_indices = Object.fromEntries(
 export const GAME_DATA_SOURCES = {
     Vanilla:     {name: "Vanilla",     data_file: "Vanilla",     version: "0.10.31.24710", display: "原版"},
     GenesisBook: {name: "GenesisBook", data_file: "GenesisBook", version: "3.0.14",          display: "创世之书"},
+    OrbitalRing: {name: "OrbitalRing", data_file: "OrbitalRing", version: "1.0.7",           display: "星环"},
 };
 
 export const vanilla_game_version = GAME_DATA_SOURCES.Vanilla.version;
@@ -297,6 +308,13 @@ export function get_game_data(dataSourceName = "Vanilla") {
     // 创世之书特有:mod 中只有一种增产剂——Mk.III 改名"增产剂";Mk.I/Mk.II 物品不存在,
     // "增产剂"字段置 null,使 result/settings 的等级选项按 `增产剂 != null` 自动隐藏
     if (src.name === "GenesisBook") {
+        data.proliferator_data[1].增产剂 = null;
+        data.proliferator_data[2].增产剂 = null;
+        data.proliferator_data[3].增产剂 = "增产剂";
+    }
+    // 星环特有:mod 中也只有一种增产剂,物品名直接就叫"增产剂"(图标沿用 accelerator-3),
+    // 故无需改名,只需把不存在的 Mk.I/Mk.II 等级置 null
+    if (src.name === "OrbitalRing") {
         data.proliferator_data[1].增产剂 = null;
         data.proliferator_data[2].增产剂 = null;
         data.proliferator_data[3].增产剂 = "增产剂";
