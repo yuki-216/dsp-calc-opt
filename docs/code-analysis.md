@@ -87,6 +87,20 @@ src/main.jsx
 - `src/needs_list.jsx`、`src/item_select.jsx`：需求列表（物品选择器）。
 - `src/scheme_data.jsx`：生产方案初始化、按数据源的 `allowed_recipes`、方案持久化。
 - `src/result.jsx`：生产结果展示（结果表、原矿输入总需求、副产物、历史差值）。
+- `src/numeric.js`：数值精度工具（`trimFloatTail` 消浮点尾巴、`adjustNeedsList` 等比缩放需求表）。
+- `src/ConfigPanel.jsx` + `src/config_transfer.js`：配置导入/导出（见 4.5）。
+
+### 4.1.1 本地持久化与子窗口沙盒
+
+`src/sandbox.js` 收口全部 localStorage 访问：`persistGet` / `persistSet` / `persistRemove`。
+
+由「在新窗口计算」与导航栏「新窗口」打开的子窗口，地址带 `?sandbox=1`。这类窗口
+与父窗口共享同一份 localStorage，直接写回会覆盖父窗口的持久化状态，因此收口层
+让它们写自己的 **sessionStorage**（按标签页隔离、刷新存活），读取时先查 sessionStorage、
+未命中再回落 localStorage 继承父窗口。普通窗口下收口层等价于原生 localStorage。
+
+唯一例外是一次性中转 key `dsp-calc-new-tab-data`（父窗口写、子窗口读后即删），
+必须直连 `localStorage`，不走收口层。
 
 ### 4.2 CoreEngine（LP 配平）
 
@@ -126,6 +140,20 @@ src/main.jsx
 被原矿化的物品（`settings.mineralize_list`）不再通过生产链生产——引擎把其加入 `noRecipeItems`，
 用 slack 变量满足需求，外部输入量进入 `resourceUsage`。结果表"原矿输入总需求"读取
 `resourceUsage` 显示需要外部输入多少；被原矿化物品不参与矿物可用量/瓶颈（`OreQuantitiesPanel`）。
+
+### 4.5 配置导入 / 导出
+
+顶部工具栏「配置管理」→ `src/ConfigPanel.jsx`（内联面板）→ `src/config_transfer.js`（纯逻辑）。
+
+导出严格核心 6 项：`auto_scheme`、`dsp-calc-needs-list`、`auto_settings`、`game_source`、
+`dsp-optim-strategy`、`dsp-no-proliferator-weight-percent`。值按**原始字符串**搬运——
+前三个键存的是 JSON 文本，后三个是裸字符串（如 `game_source` 直接就是 `Vanilla`）。
+
+导入按 localStorage 键粒度合并（文件里有哪项替换哪项，其余保持不变），例外是
+`auto_scheme` 走**桶级合并**：它是 `{数据源: 方案}` 的分桶对象，整键替换会连另一个
+数据源的方案一起抹掉。分桶长度与目标数据源 `recipe_data.length` 不符时跳过该桶并告警
+（否则 `contexts.jsx` 初始化会判定方案无效、静默回退默认）。写入后 `reload()`，
+避开 `set_game_data` 在切换数据源时的清理路径。
 
 ## 5. 依赖图
 
@@ -181,6 +209,6 @@ npm run test         # node --test "tests/**/*.test.js"
 
 ## 9. 版本与变更
 
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.12.0。
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.13.0。
 每次发布应同步更新 README 标题和 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到
 GitHub Pages。
