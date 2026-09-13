@@ -11,7 +11,8 @@ import {NeedsList} from './needs_list.jsx';
 import {Result} from './result.jsx';
 import {Settings, BatchPresetControls, OptimizerControls, FuelSelect} from './settings.jsx';
 import {ItemIcon} from './ui_components.jsx';
-import {FaTrashAlt, FaCog, FaMountain} from 'react-icons/fa';
+import {FaTrashAlt, FaCog, FaMountain, FaFileExport} from 'react-icons/fa';
+import {ConfigPanel} from './ConfigPanel.jsx';
 import {formatAmount} from './seed_viewer_binding';
 import {getStats} from './seed_stats_api';
 import {buildOreQuantities, getStatsOreIndex, STATS_ORE_ITEMS} from './ore_stats_binding';
@@ -230,6 +231,7 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
     const settings = useContext(SettingsContext);
     const set_settings = useContext(SettingsSetterContext);
     const [misc_show, set_misc_show] = useState(false);
+    const [show_config, set_show_config] = useState(false);
     const [show_ore_quantities, set_show_ore_quantities] = useState(false);
     const [show_ore_popup, set_show_ore_popup] = useState(false);
     const [show_building_popup, set_show_building_popup] = useState(false);
@@ -300,6 +302,11 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                         <FaTrashAlt/>
                         <span className="toolbar-btn-text">清空缓存</span>
                     </button>
+                    <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${show_config ? 'btn-primary' : 'btn-outline-secondary'}`}
+                            onClick={() => set_show_config(s => !s)} title="配置导入 / 导出">
+                        <FaFileExport/>
+                        <span className="toolbar-btn-text">配置管理</span>
+                    </button>
                     <button className={`btn btn-sm d-inline-flex align-items-center gap-1 ${misc_show ? 'btn-primary' : 'btn-outline-primary'}`}
                             onClick={() => set_misc_show(s => !s)} title="参数设置">
                         <FaCog/>
@@ -312,6 +319,8 @@ export default function App({needs_list, set_needs_list, newTabData, onNavigate}
                     </button>
                 </div>
             </div>
+            {/*配置导入/导出*/}
+            {show_config && <ConfigPanel/>}
             {/*采矿参数&其他设置*/}
             <UserSettings show={misc_show}/>
             {/*矿物可用量设置*/}
