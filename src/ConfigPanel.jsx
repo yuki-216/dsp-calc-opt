@@ -3,7 +3,10 @@ import {FaFileExport, FaFileImport} from 'react-icons/fa';
 import {GAME_DATA_SOURCES, get_game_data} from './game_data.jsx';
 import {safe_parse_json} from './contexts.jsx';
 import {isSandbox, persistGet, persistSet} from './sandbox.js';
-import {buildExportPayload, parseImportFile, validateImport, applyImport} from './config_transfer.js';
+import {
+    buildExportPayload, parseImportFile, validateImport, applyImport,
+    default_file_name, sanitize_file_name,
+} from './config_transfer.js';
 
 /**
  * 配置管理面板：把「打开时恢复的本地缓存」导出到文件 / 从文件导入。
@@ -14,6 +17,7 @@ import {buildExportPayload, parseImportFile, validateImport, applyImport} from '
  */
 export function ConfigPanel() {
     const [msg, set_msg] = useState(null);   // {type: 'success'|'danger'|'warning', text}
+    const [file_name, set_file_name] = useState(() => default_file_name());
     const file_ref = useRef(null);
     const sandbox = isSandbox();
 
@@ -31,15 +35,15 @@ export function ConfigPanel() {
             });
             const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
-            const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+            const name = sanitize_file_name(file_name);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `dsp-calc-config-${stamp}.json`;
+            a.download = name;
             document.body.appendChild(a);
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            set_msg({type: 'success', text: `已导出 ${Object.keys(payload.data).length} 项配置。`});
+            set_msg({type: 'success', text: `已导出 ${Object.keys(payload.data).length} 项配置到 ${name}。`});
         } catch {
             set_msg({type: 'danger', text: '导出失败，请重试。'});
         }
@@ -92,6 +96,12 @@ export function ConfigPanel() {
     }
 
     return <div className="d-flex flex-wrap align-items-center gap-2 py-1">
+        <input type="text" className="form-control form-control-sm"
+               style={{width: '18em'}}
+               value={file_name}
+               onChange={e => set_file_name(e.target.value)}
+               placeholder="留空则按时间戳命名"
+               title="导出文件名（文件名非法字符会被替换成下划线，自动补 .json 后缀）"/>
         <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                 onClick={export_config}
                 title="导出需求表 / 方案 / 设置 / 矿物可用量 / 原矿化 / 数据源 / 优化策略为 JSON 文件">

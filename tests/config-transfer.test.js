@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     EXPORT_KEYS, buildExportPayload, parseImportFile, validateImport, applyImport,
+    default_file_name, sanitize_file_name,
 } from '../src/config_transfer.js';
 
 /** 伪造的 storage 适配器 */
@@ -139,6 +140,23 @@ test('文件里没有可导入的核心项时整体失败', () => {
     const r = validateImport({type: 'config', data: {'theme': '"dark"'}}, opts);
     assert.equal(r.ok, false);
     assert.ok(r.error.includes('没有可导入'));
+});
+
+test('文件名：留空回退时间戳名，自动补 .json 后缀', () => {
+    assert.match(default_file_name(), /^dsp-calc-config-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/);
+    // 留空（含纯空白）→ 时间戳名 + .json
+    assert.match(sanitize_file_name(''), /^dsp-calc-config-[\d-]+\.json$/);
+    assert.match(sanitize_file_name('   '), /^dsp-calc-config-[\d-]+\.json$/);
+    assert.equal(sanitize_file_name('我的配置'), '我的配置.json');
+    assert.equal(sanitize_file_name('backup'), 'backup.json');
+});
+
+test('文件名：已带 .json 不重复追加，非法字符被替换', () => {
+    assert.equal(sanitize_file_name('backup.json'), 'backup.json');
+    assert.equal(sanitize_file_name('BACKUP.JSON'), 'BACKUP.JSON');
+    // Windows 非法字符 \ / : * ? " < > | 与路径分隔符
+    assert.equal(sanitize_file_name('a/b\\c:d*e?f"g<h>i|j'), 'a_b_c_d_e_f_g_h_i_j.json');
+    assert.equal(sanitize_file_name('  spaced  '), 'spaced.json');
 });
 
 test('applyImport 按键写入', () => {

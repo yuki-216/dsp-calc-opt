@@ -43,6 +43,27 @@ function is_plain_object(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** 默认文件名（不含扩展名）：按导出时刻的时间戳生成 */
+export function default_file_name() {
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    return `dsp-calc-config-${stamp}`;
+}
+
+/** Windows / macOS / Linux 上都不合法的文件名字符 */
+const ILLEGAL_NAME_CHARS = /[\\/:*?"<>|]/g;
+
+/**
+ * 规整用户输入的文件名：非法字符替换成下划线，补上 .json 后缀。
+ * 留空则回退到导出时刻的时间戳名——避免面板开着很久时，用了打开那一刻的过时时间。
+ * @param {string} raw
+ * @returns {string}
+ */
+export function sanitize_file_name(raw) {
+    const base = String(raw ?? '').trim().replace(ILLEGAL_NAME_CHARS, '_');
+    if (!base) return `${default_file_name()}.json`;
+    return base.toLowerCase().endsWith('.json') ? base : `${base}.json`;
+}
+
 /**
  * 收集导出载荷
  * @param {Object} opts
