@@ -1,6 +1,6 @@
 # 代码分析
 
-本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.14.0`。
+本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.12.4`。
 
 ## 1. 项目定位
 
@@ -211,6 +211,6 @@ npm run test         # node --test "tests/**/*.test.js"
 
 ## 9. 版本与变更
 
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.14.0。
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.12.4。
 每次发布应同步更新 README 标题和 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到
 GitHub Pages。

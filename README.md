@@ -1,4 +1,4 @@
-# 戴森球计划量化计算器 v0.14.0
+# 戴森球计划量化计算器 v0.12.4
 
 基于 [dsp-calc](https://github.com/DSPCalculator/dsp-calc) 开源项目进行功能修剪和新增。
 
