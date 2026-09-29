@@ -130,3 +130,106 @@ test('optimizeProliferatorStrategy: 无生产链时返回空结果不抛错', as
     assert.ok(result.optimalScheme);
     assert.deepEqual(result.changes, []);
 });
+
+// 掩码4(透镜)配方:1 透镜 → 10 光子,1s;透镜由原矿 R 合成(无增产)。
+// min_footprint 下透镜模式把光子配方设备数减半 → 占地下降,优化器应选中 MK3透镜;
+// 透镜消耗速度不随加速提升,透镜产线占地不变。
+function makeLensGameData() {
+    return {
+        recipe_data: [
+            {_id: 0, 原料: {透镜: 1}, 产物: {光子: 10}, 设施: 0, 时间: 1, Type: 0, 增产: 4},
+            {_id: 1, 原料: {R: 1}, 产物: {透镜: 1}, 设施: 0, 时间: 1, Type: 0, 增产: 0},
+        ],
+        factory_data: {
+            '0': [{'名称': '制造台', '倍率': 1, '耗能': 6}],
+        },
+        proliferator_data: [
+            {增产剂: null, 喷涂次数: 1, 等级: 0},
+            {增产剂: '增产剂 Mk.I', 喷涂次数: 12, 等级: 1},
+            {增产剂: '增产剂 Mk.II', 喷涂次数: 24, 等级: 2},
+            {增产剂: '增产剂 Mk.III', 喷涂次数: 60, 等级: 3},
+        ],
+        proliferator_effect: [
+            {增产效果: 1.0, 加速效果: 1.0, 耗电倍率: 1.0},
+            {增产效果: 1.125, 加速效果: 1.25, 耗电倍率: 1.3},
+            {增产效果: 1.2, 加速效果: 1.5, 耗电倍率: 1.7},
+            {增产效果: 1.25, 加速效果: 2.0, 耗电倍率: 2.5},
+        ],
+    };
+}
+
+function makeLensScheme() {
+    return {
+        item_recipe_choices: {},
+        scheme_for_recipe: [
+            {'建筑': 0, '增产剂等级': 0, '增产模式': 0},
+            {'建筑': 0, '增产剂等级': 0, '增产模式': 0},
+        ],
+        selected_fuel: null,
+    };
+}
+
+function makeLensSettings(noAccelerate = false) {
+    return {
+        is_time_unit_minute: true,
+        proliferate_itself: false,
+        proliferate_no_accelerate: noAccelerate,
+        proliferate_allowed_levels: [3],
+        proliferate_flexible_levels: false,
+        mineralize_list: {R: true},
+        ore_quantities: {},
+    };
+}
+
+test('optimizeProliferatorStrategy: 掩码4配方在 min_footprint 下自动选中 MK3透镜', async () => {
+    const gd = makeLensGameData();
+    const logs = [];
+    const result = await optimizeProliferatorStrategy(
+        gd,
+        makeLensScheme(),
+        makeLensSettings(false),
+        [{id: '光子', name: '光子', count: 10000}],
+        null,
+        msg => logs.push(msg),
+        'min_footprint',
+        {}
+    );
+
+    const photon = result.optimalScheme.scheme_for_recipe[0];
+    assert.equal(photon['增产剂等级'], 3, `应选中 Mk.III,实际 ${JSON.stringify(photon)}`);
+    assert.equal(photon['增产模式'], 3, `应选中透镜模式(3),实际 ${JSON.stringify(photon)}`);
+    assert.ok(
+        logs.some(msg => msg.includes('MK3透镜')),
+        `日志应包含 MK3透镜,实际日志:\n${logs.join('\n')}`
+    );
+
+    // 引擎口径回归:同一透镜方案下,光子配方设备数应比无增产时减半
+    const {buildRecipeGraph} = await server.ssrLoadModule('/src/engine/bipartite-graph.js');
+    const acc = 2.0;
+    const graph = buildRecipeGraph(
+        [{id: '光子', name: '光子', count: 10000}],
+        gd.recipe_data, gd, result.optimalScheme, {is_time_unit_minute: true},
+        [null, 1 / 12, 1 / 24, 1 / 60]
+    );
+    const r = graph.recipes.get('0');
+    assert.ok(Math.abs(r.buildingPower.singleExecBuildNumber - (1 / acc) / 60) < 1e-9);
+    assert.ok(Math.abs(r.inputs['透镜'] - (1 / acc)) < 1e-9);
+});
+
+test('optimizeProliferatorStrategy: 限制加速模式时掩码4配方不选透镜', async () => {
+    const gd = makeLensGameData();
+    const result = await optimizeProliferatorStrategy(
+        gd,
+        makeLensScheme(),
+        makeLensSettings(true),
+        [{id: '光子', name: '光子', count: 10000}],
+        null,
+        null,
+        'min_footprint',
+        {}
+    );
+
+    const photon = result.optimalScheme.scheme_for_recipe[0];
+    assert.equal(photon['增产剂等级'], 0, `限制加速后应回退无增产剂,实际 ${JSON.stringify(photon)}`);
+    assert.equal(photon['增产模式'], 0, `限制加速后透镜模式应被排除,实际 ${JSON.stringify(photon)}`);
+});

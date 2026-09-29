@@ -299,6 +299,8 @@ function getAvailableChoices(recipe, settings = {}, gameData = null) {
   // 位掩码：bit0=可加速, bit1=可增产, bit2=特殊(透镜)
   const canAccelerate = (proliferator & 1) && !noAccelerate;
   const canExtraProduct = proliferator & 2;
+  // 透镜模式本质是加速（缩短反应时长），同样受"限制加速模式"约束
+  const canLens = (proliferator & 4) && !noAccelerate;
 
   for (let level = 1; level <= maxLevel; level++) {
     // 默认仅允许可选增产剂选中的等级；仅生产增产剂的配方在开启自由等级后允许 1..最高等级
@@ -309,6 +311,9 @@ function getAvailableChoices(recipe, settings = {}, gameData = null) {
     }
     if (canExtraProduct) {
       choices.push({ level, mode: 2, name: `MK${level}增产` });
+    }
+    if (canLens) {
+      choices.push({ level, mode: 3, name: `MK${level}透镜` });
     }
   }
 
@@ -363,10 +368,12 @@ function getFirstAvailableMode(recipe, settings) {
   const noAccelerate = settings.proliferate_no_accelerate || false;
   const canAccelerate = (proliferator & 1) && !noAccelerate;
   const canExtraProduct = proliferator & 2;
+  const canLens = (proliferator & 4) && !noAccelerate;
 
-  // 优先返回增产模式，其次加速模式
+  // 优先返回增产模式，其次加速模式，最后透镜模式
   if (canExtraProduct) return 2;
   if (canAccelerate) return 1;
+  if (canLens) return 3;
   return 0;
 }
 

@@ -1,6 +1,6 @@
 # 代码分析
 
-本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.12.5`。
+本文档以当前代码为准，说明项目的主要模块、数据流和多数据源（mod）机制。版本对应 `0.12.6`。
 
 ## 1. 项目定位
 
@@ -121,7 +121,7 @@ src/main.jsx
 - `lp-solver.js`：HiGHS WASM 求解。
 - `index.js`：`CoreEngine`，编排并映射结果（`productionByItem`/`resourceUsage`/`surplusByproducts`/
   `recipeExecutions`/`graph`/`totalFootprint` 等）。
-- `proliferator-optimizer.js`：按目标（最小电力/珍稀权重/净热值/占地）优化各物品增产/加速方案。
+- `proliferator-optimizer.js`：按目标（最小电力/珍稀权重/净热值/占地）优化各物品增产/加速/透镜方案（透镜候选见 4.2 的模式语义）。
 - `rare-ore-practicality.js`：珍稀矿实用性修正。
 - （Tarjan SCC 合并前在 `graph-utils.js`，只有优化器使用，已并入 `proliferator-optimizer.js`）
 - `debug.js`：`window.__DEBUG` 调试开关。
@@ -218,6 +218,6 @@ npm run test         # node --test "tests/**/*.test.js"
 
 ## 9. 版本与变更
 
-版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.12.5。
+版本号位于 `package.json`，构建时由 `vite.config.js` 注入 `VITE_APP_VERSION`。当前版本 0.12.6。
 每次发布应同步更新 README 标题和 `CHANGELOG.md`，并通过 GitHub Actions 将 `dist/` 发布到
 GitHub Pages。

@@ -7,7 +7,7 @@ function normalizeProliferatorChoice(choice = {}) {
 function formatProliferatorMode(choice) {
     const normalized = normalizeProliferatorChoice(choice);
     if (!normalized.level) return '不使用';
-    return normalized.mode === 2 ? '增产' : '加速';
+    return normalized.mode === 2 ? '增产' : normalized.mode === 3 ? '透镜' : '加速';
 }
 
 export function formatProliferatorChoice(level, mode) {
@@ -16,7 +16,7 @@ export function formatProliferatorChoice(level, mode) {
         '增产模式': mode,
     });
     if (!choice.level) return '不使用';
-    const modeText = choice.mode === 2 ? '增产' : '加速';
+    const modeText = choice.mode === 2 ? '增产' : choice.mode === 3 ? '透镜' : '加速';
     return `Mk.${choice.level} ${modeText}`;
 }
 

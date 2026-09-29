@@ -57,3 +57,7 @@ test('mode changes hide level-only changes but keep mode changes', () => {
         {item: '金刚石', before: '增产', after: '加速'},
     ]);
 });
+
+test('lens mode (mode 3) displays as 透镜', () => {
+    assert.equal(formatProliferatorChoice(3, 3), 'Mk.3 透镜');
+});
