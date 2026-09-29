@@ -121,6 +121,17 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
                 const sprayCost = sprayCosts?.[safeLevel] ?? defaultCosts[safeLevel] ?? 0;
 
                 if (sprayCost > 0) {
+                    // 透镜模式(proMode=3,掩码4):加速效果缩短反应时长,但原料(引力透镜)
+                    // 消耗速度不随加速提升 → 原料系数先除以加速效果,使单位产出的透镜
+                    // 消耗随加速倍数下降(喷涂在透镜上,增产剂按喷涂后的透镜量同比例计)。
+                    // 必须在喷涂成本计算前折减,否则增产剂消耗会随加速翻倍。
+                    if (proMode === 3) {
+                        const lensAccEffect = proEffect['加速效果'] || 1;
+                        for (const input of modifiedInputs) {
+                            input.count = (input.count || 0) / lensAccEffect;
+                        }
+                    }
+
                     // 增产剂喷涂成本 = 配方原料总数 × 喷涂成本(倒数)
                     let totalMaterialCount = 0;
                     for (const input of modifiedInputs) {
@@ -155,7 +166,8 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
         //   (BFS 进入顺序随需求集合漂移),同一物理解会得出不同的设备数/耗电/占地
         //   (2026-08 用户实测:需求60塑料=2厂,+60氢=4厂,而 LP 解完全相同)。
         //   正确基准:一台建筑完成一次反应占用 时间/建筑倍率 秒;加速模式(proMode=1)
-        //   真正缩短反应时长;增产模式(proMode=2)只放大产物(outputsR 已乘),不改时长。
+        //   与透镜模式(proMode=3)真正缩短反应时长;增产模式(proMode=2)只放大产物
+        //   (outputsR 已乘),不改时长。
         //   采矿类/分馏塔的实际吞吐 ≠ 名义反应速率,用 ApplyBuildingMultiplier 吞吐倍率压缩。
         let buildingPower = null;
         const factoryType = recipe.设施;
@@ -182,7 +194,8 @@ export function buildRecipeGraph(needs, recipes, gameData, schemeData, settings 
 
                     // 单次执行设备数 = 反应时长折算到需求时间单位
                     let craftSeconds = (recipe.时间 || 1) / factorySpeed;
-                    if (proMode === 1 && proLevel > 0) {
+                    // 加速模式(proMode=1)与透镜模式(proMode=3)都真正缩短反应时长
+                    if ((proMode === 1 || proMode === 3) && proLevel > 0) {
                         const maxLevel = gameData.proliferator_data.length - 1;
                         const accEffect = gameData.proliferator_effect?.[Math.min(proLevel, maxLevel)]?.['加速效果'] || 1;
                         craftSeconds /= accEffect;

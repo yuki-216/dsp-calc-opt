@@ -171,3 +171,63 @@ test('edges 投影:产物→原料物品边生成,增产剂边有标记', () => 
     assert.ok(edgeKeys.includes('铁块->铁矿'));
     assert.ok(graph.proliferatorEdgeKeys.has('齿轮->增产剂 Mk.III'));
 });
+
+test('透镜模式(掩码4):加速缩短设备时长,透镜与增产剂消耗同比例折减', () => {
+    const gd = makeGameData();
+    gd.proliferator_data = [{'增产剂': '增产剂 Mk.I'}, {'增产剂': '增产剂 Mk.II'}, {'增产剂': '增产剂 Mk.III'}, {'增产剂': '增产剂 Mk.III'}];
+    gd.proliferator_effect = [null,
+        {'增产效果': 1.125, '加速效果': 1.25, '耗电倍率': 1.3},
+        {'增产效果': 1.25, '加速效果': 1.5, '耗电倍率': 1.6},
+        {'增产效果': 1.375, '加速效果': 1.75, '耗电倍率': 1.9}];
+    // 模拟[射线接收带透镜]临界光子:原料 透镜1/120 → 光子1,时间300s
+    gd.recipe_data.push({_id: 3, 原料: {透镜: 1 / 120}, 产物: {光子: 1}, 设施: 0, 时间: 300, Type: 0, 增产: 4});
+    const scheme = makeScheme();
+    scheme.scheme_for_recipe.push({'建筑': 0, '增产剂等级': 0, '增产模式': 0});
+    scheme.item_recipe_choices = {光子: 1};
+    scheme.scheme_for_recipe[3] = {'建筑': 0, '增产剂等级': 3, '增产模式': 3};
+    const sprayCosts = [null, 1 / 12, 1 / 24, 1 / 60];
+    const graph = buildRecipeGraph(
+        [{id: '光子', name: '光子', count: 1}],
+        gd.recipe_data, gd, scheme, SETTINGS, sprayCosts
+    );
+    const r = graph.recipes.get('3');
+    const acc = 1.75;
+    // 产出不变(非增产模式),设备时长缩短为 300/1.75 秒
+    assert.equal(r.outputs['光子'], 1);
+    assert.ok(Math.abs(r.buildingPower.singleExecBuildNumber - (300 / acc) / 60) < 1e-9);
+    // 透镜消耗折减:1/120 ÷ 1.75(原料消耗速度不随加速提升)
+    assert.ok(Math.abs(r.inputs['透镜'] - (1 / 120) / acc) < 1e-9);
+    // 增产剂按折减后的透镜量喷涂,消耗速度同样不随加速提升
+    assert.ok(Math.abs(r.inputs['增产剂 Mk.III'] - ((1 / 120) / acc) * (1 / 60)) < 1e-9);
+    // 耗电倍率照常生效
+    assert.ok(Math.abs(r.buildingPower.unitPowerCost - r.inputs['电力']) < 1e-9);
+    assert.ok(r.buildingPower.unitPowerCost > 0);
+});
+
+test('透镜模式:等级越高设备数与透镜需求越少', () => {
+    const gd = makeGameData();
+    gd.proliferator_data = [{'增产剂': '增产剂 Mk.I'}, {'增产剂': '增产剂 Mk.II'}, {'增产剂': '增产剂 Mk.III'}, {'增产剂': '增产剂 Mk.III'}];
+    gd.proliferator_effect = [null,
+        {'增产效果': 1.125, '加速效果': 1.25, '耗电倍率': 1.3},
+        {'增产效果': 1.25, '加速效果': 1.5, '耗电倍率': 1.6},
+        {'增产效果': 1.375, '加速效果': 1.75, '耗电倍率': 1.9}];
+    gd.recipe_data.push({_id: 3, 原料: {透镜: 1 / 120}, 产物: {光子: 1}, 设施: 0, 时间: 300, Type: 0, 增产: 4});
+    const sprayCosts = [null, 1 / 12, 1 / 24, 1 / 60];
+    const builds = [];
+    for (const level of [1, 2, 3]) {
+        const scheme = makeScheme();
+        scheme.scheme_for_recipe.push({'建筑': 0, '增产剂等级': 0, '增产模式': 0});
+        scheme.item_recipe_choices = {光子: 1};
+        scheme.scheme_for_recipe[3] = {'建筑': 0, '增产剂等级': level, '增产模式': 3};
+        const graph = buildRecipeGraph(
+            [{id: '光子', name: '光子', count: 1}],
+            gd.recipe_data, gd, scheme, SETTINGS, sprayCosts
+        );
+        const r = graph.recipes.get('3');
+        builds.push({level, build: r.buildingPower.singleExecBuildNumber, lens: r.inputs['透镜']});
+    }
+    for (let i = 1; i < builds.length; i++) {
+        assert.ok(builds[i].build < builds[i - 1].build, `等级${builds[i].level}设备数应小于等级${builds[i - 1].level}`);
+        assert.ok(builds[i].lens < builds[i - 1].lens, `等级${builds[i].level}透镜需求应小于等级${builds[i - 1].level}`);
+    }
+});
