@@ -66,3 +66,6 @@ scheme_export.json
 
 # 雪碧图未压缩图集(vite 插件 spritesmith 的构建中间产物,运行时用的是 public/icon/*)
 icon/*.png
+
+# 个人面试材料（不提交）
+docs/面试项目介绍-*.md
