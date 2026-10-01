@@ -4,6 +4,7 @@ import {GlobalStateContext, EngineGraphDataContext} from './contexts.jsx';
 import {ItemIcon} from './ui_components.jsx';
 import {Recipe} from './recipe.jsx';
 import {projectNeedsOnlyEdges} from './dependency-graph-edges.js';
+import {compute_item_layers, filter_cycle_bridge_edges} from './dependency-graph-layout.js';
 import {persistGet, persistSet, persistRemove} from './sandbox.js';
 import './DependencyGraph.css';
 
@@ -59,7 +60,8 @@ function build_dependency_graph(game_data, item_data, scheme_data) {
 }
 
 /**
- * 依赖图布局算法：纯 Kahn 分层 + 重心法优化（图已保证无环，无需 SCC）
+ * 依赖图布局算法：Kahn 分层 + 重心法优化（副产回路桥接边分层前剔除,见 dependency-graph-layout.js;
+ * 渲染照常保留该边,只影响分层不影响连线）
  * @param {Set} items - 所有物品集合
  * @param {Array} edges - 边列表 [{from: 产物, to: 原料}, ...]
  * @param {number} canvas_width - 画布宽度
@@ -75,6 +77,11 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
 
     // 构建邻接关系（自环边跳过）
     // 边方向 {from: 产物, to: 原料}，children=下游产物，parents=上游原料
+    // 邻接基于剔除副产回路桥接边后的边集:临界光子选引力透镜配方时,
+    // 氢→临界光子→引力透镜→奇异物质→重氢→氢 构成回路,若不剔除,
+    // 环上物品及其全部下游无法分层,会被防御性默认压到层 0(2026-10 用户实测)。
+    // 该边渲染照常(跨层长边),只是不参与分层与下移优化。
+    const layering_edges = filter_cycle_bridge_edges(edges);
     const children = new Map();
     const parents = new Map();
     const in_degree = new Map();
@@ -87,7 +94,7 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         out_degree.set(item, 0);
     });
 
-    edges.forEach(({from, to}) => {
+    layering_edges.forEach(({from, to}) => {
         if (from === to) return;
         children.get(to).push(from);
         parents.get(from).push(to);
@@ -95,30 +102,8 @@ function layout_graph(items, edges, canvas_width, canvas_height, custom_first_la
         out_degree.set(to, out_degree.get(to) + 1);
     });
 
-    // 5. 物品初始层级映射（纯 Kahn：layer = 1 + max(parents' layer)，原料为 0）
-    const item_layer = new Map();
-    const remaining_in_degree = new Map(in_degree);
-    let frontier = [...items].filter(item => remaining_in_degree.get(item) === 0);
-    frontier.forEach(item => item_layer.set(item, 0));
-    let current_layer = 0;
-    while (frontier.length > 0) {
-        const next_frontier = [];
-        frontier.forEach(item => {
-            children.get(item).forEach(child => {
-                remaining_in_degree.set(child, remaining_in_degree.get(child) - 1);
-                if (remaining_in_degree.get(child) === 0) {
-                    item_layer.set(child, current_layer + 1);
-                    next_frontier.push(child);
-                }
-            });
-        });
-        current_layer++;
-        frontier = next_frontier;
-    }
-    // 防御：纯源物品或孤立节点默认层 0
-    items.forEach(item => {
-        if (!item_layer.has(item)) item_layer.set(item, 0);
-    });
+    // 5. 物品初始层级映射（Kahn：layer = 1 + max(parents' layer)，原料为 0）
+    const item_layer = compute_item_layers(items, layering_edges);
 
     // 6. 下移优化：按层级从高到低（产物在前），尝试增大层级直到遇到产物同层
     //    目标：拉大原料与产物的间距，减少引线交叉

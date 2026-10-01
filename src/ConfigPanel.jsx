@@ -2,7 +2,7 @@ import {useRef, useState} from 'react';
 import {FaFileExport, FaFileImport} from 'react-icons/fa';
 import {GAME_DATA_SOURCES, get_game_data} from './game_data.jsx';
 import {safe_parse_json} from './contexts.jsx';
-import {isSandbox, persistGet, persistSet} from './sandbox.js';
+import {persistGet, persistSet} from './sandbox.js';
 import {
     buildExportPayload, parseImportFile, validateImport, applyImport,
     default_file_name, sanitize_file_name,
@@ -12,14 +12,14 @@ import {
  * 配置管理面板：把「打开时恢复的本地缓存」导出到文件 / 从文件导入。
  *
  * 导出范围与导入语义见 config_transfer.js；面板只负责交互与提示。
- * 导入、导出都以 persistGet 为读取源——沙盒子窗口里它会读到本窗口自己的
- * sessionStorage，于是子窗口导出的是"它自己看到的配置"。
+ * 导入、导出都以 persistGet/persistSet 为读写源——沙盒子窗口里它们指向本窗口
+ * 自己的 sessionStorage：子窗口导出的是"它自己看到的配置"，导入的配置也只在本
+ * 窗口生效（刷新存活、关窗即失效，与沙盒其他写入行为一致，不另行提示）。
  */
 export function ConfigPanel() {
     const [msg, set_msg] = useState(null);   // {type: 'success'|'danger'|'warning', text}
     const [file_name, set_file_name] = useState(() => default_file_name());
     const file_ref = useRef(null);
-    const sandbox = isSandbox();
 
     /** 当前数据源（非法/缺失回退原版，与 contexts.jsx 的 getInitialSourceName 一致） */
     function current_source() {
@@ -53,10 +53,6 @@ export function ConfigPanel() {
         const file = e.target.files && e.target.files[0];
         e.target.value = '';   // 清空 value，允许重复选择同一个文件
         if (!file) return;
-        if (sandbox) {
-            set_msg({type: 'danger', text: '子窗口不支持导入配置，请在主窗口操作。'});
-            return;
-        }
         let text;
         try {
             text = await file.text();
@@ -110,9 +106,7 @@ export function ConfigPanel() {
         </button>
         <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                 onClick={() => file_ref.current && file_ref.current.click()}
-                disabled={sandbox}
-                title={sandbox ? '子窗口不支持导入配置，请在主窗口操作'
-                    : '从 JSON 文件导入配置（按配置项合并，导入后自动刷新）'}>
+                title="从 JSON 文件导入配置（按配置项合并，导入后自动刷新；子窗口内仅本窗口生效）">
             <FaFileImport/>
             <span>导入配置</span>
         </button>
